@@ -36,6 +36,13 @@ class UserOut(BaseModel):
     phone: Optional[str] = None
 
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None  # "MR" or "ADMIN"
+    password: Optional[str] = None  # leave unset to keep the current password
+
+
 # ---- Customers ----
 
 
@@ -95,6 +102,20 @@ class InvoiceOut(BaseModel):
     remarks: Optional[str] = None
     mr_name: Optional[str] = None
     customer_name: Optional[str] = None
+
+
+class InvoiceUpdate(BaseModel):
+    # Header-level corrections only -- paid_amount is deliberately not here,
+    # since it's derived from the Payments table (via POST /payments) to
+    # keep the collection history trustworthy. Editing total_amount still
+    # recomputes status/pending against whatever's already been paid.
+    invoice_number: Optional[str] = None
+    invoice_date: Optional[date] = None
+    customer_name: Optional[str] = None
+    customer_type: Optional[str] = None
+    total_amount: Optional[float] = None
+    payment_mode: Optional[str] = None
+    remarks: Optional[str] = None
 
 
 class ExtractResult(BaseModel):

@@ -209,19 +209,97 @@ async function loadPerformance() {
 async function loadUsers() {
   try {
     const users = await apiFetch("/admin/users");
-    document.getElementById("usersBody").innerHTML = users
+    document.getElementById("usersList").innerHTML = users
       .map(
         (u) => `
-      <tr>
-        <td>${escapeHtml(u.name)}</td>
-        <td class="mono">${escapeHtml(u.employee_code)}</td>
-        <td>${escapeHtml(u.role)}</td>
-        <td>${escapeHtml(u.phone || "—")}</td>
-      </tr>`
+      <div class="card" style="margin-top:10px;" id="user-${u.id}">
+        <div class="row">
+          <div>
+            <div style="font-weight:600;">${escapeHtml(u.name)}</div>
+            <div class="muted mono" style="font-size:12.5px;">${escapeHtml(u.employee_code)} · ${escapeHtml(u.phone || "no phone")}</div>
+          </div>
+          <span class="pill ${u.role === "ADMIN" ? "partial" : "paid"}">${escapeHtml(u.role)}</span>
+        </div>
+
+        <div class="edit-form" style="display:none; margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
+          <div class="field-row">
+            <div>
+              <label>Name</label>
+              <input class="e-name" value="${escapeHtml(u.name)}" />
+            </div>
+            <div>
+              <label>Phone</label>
+              <input class="e-phone" value="${escapeHtml(u.phone || "")}" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label>Role</label>
+              <select class="e-role">
+                <option value="MR" ${u.role === "MR" ? "selected" : ""}>MR</option>
+                <option value="ADMIN" ${u.role === "ADMIN" ? "selected" : ""}>Admin</option>
+              </select>
+            </div>
+            <div>
+              <label>New password</label>
+              <input class="e-password" type="password" placeholder="leave blank to keep current" />
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px;">
+            <button class="secondary" type="button" onclick="toggleUserEdit(${u.id})">Cancel</button>
+            <button type="button" onclick="saveUserEdit(${u.id})">Save changes</button>
+          </div>
+          <div class="edit-error"></div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="secondary" type="button" onclick="toggleUserEdit(${u.id})">Edit</button>
+          <button class="secondary" type="button" style="border-color:var(--unpaid); color:var(--unpaid);" onclick="deleteUser(${u.id}, '${escapeHtml(u.name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </div>`
       )
       .join("");
   } catch (err) {
     console.error(err);
+  }
+}
+
+function toggleUserEdit(userId) {
+  const card = document.getElementById(`user-${userId}`);
+  const form = card.querySelector(".edit-form");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function saveUserEdit(userId) {
+  const card = document.getElementById(`user-${userId}`);
+  const errorBox = card.querySelector(".edit-error");
+  errorBox.innerHTML = "";
+
+  const password = card.querySelector(".e-password").value;
+  const body = {
+    name: card.querySelector(".e-name").value.trim(),
+    phone: card.querySelector(".e-phone").value || null,
+    role: card.querySelector(".e-role").value,
+  };
+  if (password) body.password = password;
+
+  try {
+    await apiFetch(`/admin/users/${userId}`, { method: "PUT", body });
+    loadUsers();
+    mrOptionsLoaded = false; // role may have changed, refresh the invoice filter's MR list next time it's opened
+  } catch (err) {
+    errorBox.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function deleteUser(userId, name) {
+  if (!confirm(`Delete ${name}? This can't be undone.`)) return;
+  try {
+    await apiFetch(`/admin/users/${userId}`, { method: "DELETE" });
+    loadUsers();
+    mrOptionsLoaded = false;
+  } catch (err) {
+    alert(err.message);
   }
 }
 

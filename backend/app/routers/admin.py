@@ -116,3 +116,75 @@ def create_user(
 @router.get("/users", response_model=List[schemas.UserOut])
 def list_users(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
     return db.query(models.User).order_by(models.User.name).all()
+
+
+@router.put("/users/{user_id}", response_model=schemas.UserOut)
+def update_user(
+    user_id: int,
+    payload: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    admin_user: models.User = Depends(require_admin),
+):
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+
+    data = payload.model_dump(exclude_unset=True)
+
+    if "role" in data and data["role"] is not None:
+        new_role = data["role"]
+        if new_role not in (models.RoleEnum.MR.value, models.RoleEnum.ADMIN.value):
+            raise HTTPException(400, "role must be MR or ADMIN")
+        if target.role == models.RoleEnum.ADMIN.value and new_role != models.RoleEnum.ADMIN.value:
+            other_admins = (
+                db.query(models.User)
+                .filter(models.User.role == models.RoleEnum.ADMIN.value, models.User.id != target.id)
+                .count()
+            )
+            if other_admins == 0:
+                raise HTTPException(400, "Can't demote the only remaining Admin")
+        target.role = new_role
+
+    if "name" in data and data["name"]:
+        target.name = data["name"]
+    if "phone" in data:
+        target.phone = data["phone"]
+    if "password" in data and data["password"]:
+        target.password_hash = hash_password(data["password"])
+
+    db.commit()
+    db.refresh(target)
+    return target
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin_user: models.User = Depends(require_admin),
+):
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target.id == admin_user.id:
+        raise HTTPException(400, "You can't delete your own account while logged in as it")
+    if target.role == models.RoleEnum.ADMIN.value:
+        other_admins = (
+            db.query(models.User)
+            .filter(models.User.role == models.RoleEnum.ADMIN.value, models.User.id != target.id)
+            .count()
+        )
+        if other_admins == 0:
+            raise HTTPException(400, "Can't delete the only remaining Admin")
+
+    invoice_count = db.query(models.Invoice).filter(models.Invoice.mr_id == target.id).count()
+    if invoice_count > 0:
+        raise HTTPException(
+            400,
+            f"Can't delete {target.name} -- they have {invoice_count} invoice(s) on record. "
+            "Deleting them would break that history. Consider leaving the account in place instead.",
+        )
+
+    db.delete(target)
+    db.commit()
+    return None

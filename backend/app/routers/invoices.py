@@ -145,3 +145,80 @@ def get_invoice(
     if user.role == models.RoleEnum.MR.value and invoice.mr_id != user.id:
         raise HTTPException(403, "You can only view your own invoices")
     return _to_out(invoice)
+
+
+@router.put("/{invoice_id}", response_model=schemas.InvoiceOut)
+def update_invoice(
+    invoice_id: int,
+    payload: schemas.InvoiceUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Correct header-level details on an invoice. An MR can only edit their
+    own invoices; Admin can edit any. paid_amount isn't editable here --
+    that flows through POST /payments so the collection history stays
+    trustworthy -- but changing total_amount still recomputes status/pending
+    against whatever's already been paid."""
+    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    if user.role == models.RoleEnum.MR.value and invoice.mr_id != user.id:
+        raise HTTPException(403, "You can only edit your own invoices")
+
+    data = payload.model_dump(exclude_unset=True)
+
+    if "customer_name" in data:
+        new_name = (data.pop("customer_name") or "").strip()
+        new_type = data.pop("customer_type", None)
+        if new_name:
+            customer = (
+                db.query(models.Customer)
+                .filter(models.Customer.name.ilike(new_name))
+                .first()
+            )
+            if not customer:
+                customer = models.Customer(name=new_name, type=new_type)
+                db.add(customer)
+                db.commit()
+                db.refresh(customer)
+            invoice.customer_id = customer.id
+    else:
+        data.pop("customer_type", None)
+
+    if "invoice_number" in data:
+        invoice.invoice_number = data["invoice_number"]
+    if "invoice_date" in data:
+        invoice.invoice_date = data["invoice_date"]
+    if "payment_mode" in data:
+        invoice.payment_mode = data["payment_mode"]
+    if "remarks" in data:
+        invoice.remarks = data["remarks"]
+    if "total_amount" in data and data["total_amount"] is not None:
+        invoice.total_amount = data["total_amount"]
+        status_, pending = compute_status(invoice.total_amount, invoice.paid_amount)
+        invoice.status = status_
+        invoice.pending_amount = pending
+
+    db.commit()
+    db.refresh(invoice)
+    return _to_out(invoice)
+
+
+@router.delete("/{invoice_id}", status_code=204)
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Deletes an invoice along with its items and payment history
+    (cascades). An MR can only delete their own invoices; Admin can delete
+    any."""
+    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    if user.role == models.RoleEnum.MR.value and invoice.mr_id != user.id:
+        raise HTTPException(403, "You can only delete your own invoices")
+
+    db.delete(invoice)
+    db.commit()
+    return None

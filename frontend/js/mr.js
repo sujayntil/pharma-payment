@@ -215,32 +215,134 @@ document.getElementById("reviewForm").addEventListener("submit", async (e) => {
 
 // ---------- My invoices ----------
 
+const PAYMENT_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "NEFT", "RTGS", "Other"];
+
 async function loadMyInvoices() {
-  const body = document.getElementById("myInvoicesBody");
+  const list = document.getElementById("myInvoicesList");
   const empty = document.getElementById("myInvoicesEmpty");
   try {
     const invoices = await apiFetch("/invoices/mine");
     if (!invoices.length) {
-      body.innerHTML = "";
+      list.innerHTML = "";
       empty.style.display = "block";
       return;
     }
     empty.style.display = "none";
-    body.innerHTML = invoices
+
+    list.innerHTML = invoices
       .map(
         (i) => `
-      <tr>
-        <td class="invoice-number">${escapeHtml(i.invoice_number)}</td>
-        <td>${i.invoice_date || "—"}</td>
-        <td>${escapeHtml(i.customer_name || "—")}</td>
-        <td class="num amount">${money(i.total_amount)}</td>
-        <td class="num amount">${money(i.pending_amount)}</td>
-        <td>${statusPill(i.status)}</td>
-      </tr>`
+      <div class="card" style="margin-top:10px;" id="myinv-${i.id}">
+        <div class="row">
+          <div>
+            <div class="invoice-number" style="font-weight:600;">${escapeHtml(i.invoice_number)}</div>
+            <div class="muted" style="font-size:12.5px;">${escapeHtml(i.customer_name || "—")} · ${i.invoice_date || "no date"}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="amount" style="font-weight:600;">${money(i.total_amount)}</div>
+            ${statusPill(i.status)}
+          </div>
+        </div>
+
+        <div class="edit-form" style="display:none; margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
+          <div class="field-row">
+            <div>
+              <label>Invoice number</label>
+              <input class="e-invoice-number" value="${escapeHtml(i.invoice_number)}" />
+            </div>
+            <div>
+              <label>Invoice date</label>
+              <input class="e-invoice-date" type="date" value="${i.invoice_date || ""}" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label>Customer</label>
+              <input class="e-customer" value="${escapeHtml(i.customer_name || "")}" />
+            </div>
+            <div>
+              <label>Invoice amount (₹)</label>
+              <input class="e-amount" type="number" min="0" step="0.01" value="${i.total_amount}" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label>Payment mode</label>
+              <select class="e-mode">
+                <option value="">—</option>
+                ${PAYMENT_MODES.map((m) => `<option ${m === i.payment_mode ? "selected" : ""}>${m}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>Remarks</label>
+              <input class="e-remarks" value="${escapeHtml(i.remarks || "")}" />
+            </div>
+          </div>
+          <div class="hint">Already-paid amount isn't edited here — record payments from the Collections tab instead.</div>
+          <div class="row" style="margin-top:12px;">
+            <button class="secondary" type="button" onclick="toggleInvoiceEdit(${i.id})">Cancel</button>
+            <button type="button" onclick="saveInvoiceEdit(${i.id})">Save changes</button>
+          </div>
+          <div class="edit-error"></div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="secondary" type="button" onclick="toggleInvoiceEdit(${i.id})">Edit</button>
+          <button class="secondary" type="button" style="border-color:var(--unpaid); color:var(--unpaid);" onclick="deleteInvoice(${i.id})">Delete</button>
+        </div>
+      </div>`
       )
       .join("");
   } catch (err) {
     console.error(err);
+  }
+}
+
+function toggleInvoiceEdit(invoiceId) {
+  const card = document.getElementById(`myinv-${invoiceId}`);
+  const form = card.querySelector(".edit-form");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function saveInvoiceEdit(invoiceId) {
+  const card = document.getElementById(`myinv-${invoiceId}`);
+  const errorBox = card.querySelector(".edit-error");
+  errorBox.innerHTML = "";
+
+  const amount = parseFloat(card.querySelector(".e-amount").value);
+  if (!amount || amount <= 0) {
+    errorBox.innerHTML = `<div class="error">Enter a valid invoice amount.</div>`;
+    return;
+  }
+
+  try {
+    await apiFetch(`/invoices/${invoiceId}`, {
+      method: "PUT",
+      body: {
+        invoice_number: card.querySelector(".e-invoice-number").value.trim(),
+        invoice_date: card.querySelector(".e-invoice-date").value || null,
+        customer_name: card.querySelector(".e-customer").value.trim(),
+        total_amount: amount,
+        payment_mode: card.querySelector(".e-mode").value || null,
+        remarks: card.querySelector(".e-remarks").value || null,
+      },
+    });
+    loadMyInvoices();
+  } catch (err) {
+    errorBox.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function deleteInvoice(invoiceId) {
+  if (!confirm("Delete this invoice? This also removes its payment history and can't be undone.")) {
+    return;
+  }
+  try {
+    await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" });
+    loadMyInvoices();
+    loadDashboard();
+  } catch (err) {
+    alert(err.message);
   }
 }
 

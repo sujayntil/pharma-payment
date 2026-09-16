@@ -85,11 +85,19 @@ const previewImg = document.getElementById("previewImg");
 fileInput.addEventListener("change", () => {
   selectedFile = fileInput.files[0] || null;
   extractBtn.disabled = !selectedFile;
-  if (selectedFile) {
+  const previewFile = document.getElementById("previewFile");
+
+  if (selectedFile && selectedFile.type === "application/pdf") {
+    previewImg.style.display = "none";
+    document.getElementById("previewFileName").textContent = selectedFile.name;
+    previewFile.style.display = "block";
+  } else if (selectedFile) {
+    previewFile.style.display = "none";
     previewImg.src = URL.createObjectURL(selectedFile);
     previewImg.style.display = "block";
   } else {
     previewImg.style.display = "none";
+    previewFile.style.display = "none";
   }
 });
 
@@ -166,6 +174,7 @@ function resetUploadFlow() {
   selectedFile = null;
   currentImagePath = null;
   previewImg.style.display = "none";
+  document.getElementById("previewFile").style.display = "none";
   extractBtn.disabled = true;
   document.getElementById("uploadStep1").style.display = "block";
   document.getElementById("reviewForm").style.display = "none";

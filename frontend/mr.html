@@ -59,9 +59,10 @@
 
       <div id="uploadStep1">
         <label for="invoiceFile">Photo of the invoice</label>
-        <input type="file" id="invoiceFile" accept="image/*" capture="environment" />
-        <div class="hint">Take a clear, well-lit photo. AI will read the invoice and pre-fill the fields below for you to check.</div>
+        <input type="file" id="invoiceFile" accept="image/*,application/pdf" />
+        <div class="hint">Take a photo, choose one from your gallery, or upload a PDF. AI will read the invoice and pre-fill the fields below for you to check.</div>
         <img id="previewImg" style="display:none; max-width:220px; margin-top:12px; border-radius:8px; border:1px solid var(--line);" />
+        <div id="previewFile" class="card" style="display:none; margin-top:12px; padding:12px; font-size:13.5px;">📄 <span id="previewFileName"></span></div>
         <button id="extractBtn" style="margin-top:16px;" disabled>Extract with AI</button>
         <div id="extractError"></div>
       </div>

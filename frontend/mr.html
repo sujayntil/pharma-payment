@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MR — Pharma Sales &amp; Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mark">PS</span> Pharma Sales &amp; Collection</div>
+  <div class="who">
+    <span id="whoName"></span> · MR
+    <button class="secondary" id="logoutBtn" style="padding:6px 12px; font-size:12.5px;">Log out</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="upload">Upload Invoice</div>
+  <div class="tab" data-tab="invoices">My Invoices</div>
+  <div class="tab" data-tab="collections">My Collections</div>
+</div>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <section class="view active" id="view-dashboard">
+    <div class="card" style="margin-bottom:16px;">
+      <h1 id="greeting">Good day</h1>
+      <p class="muted">Here's how your sales and collections look.</p>
+    </div>
+
+    <div class="grid cols-4" id="dashStats">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="card">
+      <div class="section-title"><h2>Recent invoices</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Invoice</th><th>Customer</th><th class="num">Amount</th><th>Status</th></tr>
+          </thead>
+          <tbody id="recentInvoicesBody"></tbody>
+        </table>
+      </div>
+      <div id="recentEmpty" class="empty" style="display:none;">No invoices yet. Upload your first one from the "Upload Invoice" tab.</div>
+    </div>
+  </section>
+
+  <!-- UPLOAD -->
+  <section class="view" id="view-upload">
+    <div class="card">
+      <div class="section-title"><h2>Upload invoice</h2></div>
+
+      <div id="uploadStep1">
+        <label for="invoiceFile">Photo of the invoice</label>
+        <input type="file" id="invoiceFile" accept="image/*" capture="environment" />
+        <div class="hint">Take a clear, well-lit photo. AI will read the invoice and pre-fill the fields below for you to check.</div>
+        <img id="previewImg" style="display:none; max-width:220px; margin-top:12px; border-radius:8px; border:1px solid var(--line);" />
+        <button id="extractBtn" style="margin-top:16px;" disabled>Extract with AI</button>
+        <div id="extractError"></div>
+      </div>
+
+      <form id="reviewForm" style="display:none; margin-top:6px;">
+        <div class="notice" id="extractNotice" style="display:none;"></div>
+
+        <div class="field-row">
+          <div>
+            <label for="f_invoice_number">Invoice number</label>
+            <input id="f_invoice_number" required />
+          </div>
+          <div>
+            <label for="f_invoice_date">Invoice date</label>
+            <input id="f_invoice_date" type="date" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div>
+            <label for="f_customer_name">Customer</label>
+            <input id="f_customer_name" required />
+          </div>
+          <div>
+            <label for="f_customer_type">Customer type</label>
+            <select id="f_customer_type">
+              <option value="">—</option>
+              <option>Chemist</option>
+              <option>Doctor</option>
+              <option>Hospital</option>
+              <option>Distributor</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div>
+            <label for="f_total_amount">Invoice amount (₹)</label>
+            <input id="f_total_amount" type="number" min="0" step="0.01" required />
+          </div>
+          <div>
+            <label for="f_paid_amount">Paid so far (₹)</label>
+            <input id="f_paid_amount" type="number" min="0" step="0.01" value="0" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <span class="muted" style="font-size:13px;">Pending</span>
+          <span class="amount" id="f_pending" style="font-weight:600;">₹0</span>
+        </div>
+
+        <div class="field-row">
+          <div>
+            <label for="f_payment_mode">Payment mode</label>
+            <select id="f_payment_mode">
+              <option value="">—</option>
+              <option>Cash</option>
+              <option>UPI</option>
+              <option>Bank Transfer</option>
+              <option>Cheque</option>
+              <option>NEFT</option>
+              <option>RTGS</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="f_remarks">Remarks</label>
+            <input id="f_remarks" placeholder="optional" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:18px;">
+          <button type="button" class="secondary" id="cancelReviewBtn">Start over</button>
+          <button type="submit" id="confirmBtn">Confirm entry</button>
+        </div>
+        <div id="saveError"></div>
+      </form>
+
+      <div id="saveSuccess"></div>
+    </div>
+  </section>
+
+  <!-- MY INVOICES -->
+  <section class="view" id="view-invoices">
+    <div class="card">
+      <div class="section-title"><h2>My invoices</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="num">Amount</th><th class="num">Pending</th><th>Status</th></tr>
+          </thead>
+          <tbody id="myInvoicesBody"></tbody>
+        </table>
+      </div>
+      <div id="myInvoicesEmpty" class="empty" style="display:none;">No invoices yet.</div>
+    </div>
+  </section>
+
+  <!-- COLLECTIONS -->
+  <section class="view" id="view-collections">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="stat accent">
+        <div class="label">Total outstanding across your customers</div>
+        <div class="value" id="totalOutstanding">₹0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><h2>Outstanding by invoice</h2></div>
+      <div id="outstandingList"></div>
+      <div id="outstandingEmpty" class="empty" style="display:none;">Nothing outstanding — great work!</div>
+    </div>
+  </section>
+
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/mr.js"></script>
+</body>
+</html>

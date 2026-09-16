@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — Pharma Sales &amp; Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mark">PS</span> Pharma Sales &amp; Collection</div>
+  <div class="who">
+    <span id="whoName"></span> · Admin
+    <button class="secondary" id="logoutBtn" style="padding:6px 12px; font-size:12.5px;">Log out</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="invoices">Invoices</div>
+  <div class="tab" data-tab="customers">Customers</div>
+  <div class="tab" data-tab="performance">MR Performance</div>
+  <div class="tab" data-tab="users">Users</div>
+</div>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <section class="view active" id="view-dashboard">
+    <div class="grid cols-3" id="dashTotals" style="margin-bottom:16px;"></div>
+    <div class="grid cols-3" id="dashCounts" style="margin-bottom:16px;"></div>
+
+    <div class="card">
+      <div class="section-title"><h2>Outstanding above ₹50,000</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Customer</th><th>Invoice</th><th>MR</th><th class="num">Outstanding</th></tr></thead>
+          <tbody id="alertsBody"></tbody>
+        </table>
+      </div>
+      <div id="alertsEmpty" class="empty" style="display:none;">No large outstanding balances right now.</div>
+    </div>
+  </section>
+
+  <!-- INVOICES -->
+  <section class="view" id="view-invoices">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title"><h2>Filters</h2></div>
+      <div class="field-row">
+        <div>
+          <label for="filterMr">MR</label>
+          <select id="filterMr"><option value="">All MRs</option></select>
+        </div>
+        <div>
+          <label for="filterStatus">Status</label>
+          <select id="filterStatus">
+            <option value="">All statuses</option>
+            <option value="PAID">Paid</option>
+            <option value="PARTIAL">Partial</option>
+            <option value="UNPAID">Unpaid</option>
+          </select>
+        </div>
+      </div>
+      <button id="applyFilters" style="margin-top:14px;">Apply filters</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><h2>All invoices</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Invoice</th><th>Date</th><th>Customer</th><th>MR</th><th class="num">Amount</th><th class="num">Pending</th><th>Status</th></tr>
+          </thead>
+          <tbody id="invoicesBody"></tbody>
+        </table>
+      </div>
+      <div id="invoicesEmpty" class="empty" style="display:none;">No invoices match these filters.</div>
+    </div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section class="view" id="view-customers">
+    <div class="card">
+      <div class="section-title"><h2>Customers</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Phone</th><th></th></tr></thead>
+          <tbody id="customersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="ledgerCard" style="display:none; margin-top:16px;">
+      <div class="section-title">
+        <h2 id="ledgerTitle">Ledger</h2>
+        <button class="secondary" onclick="closeLedger()" style="padding:6px 12px; font-size:12.5px;">Close</button>
+      </div>
+      <div class="grid cols-3" id="ledgerStats" style="margin-bottom:14px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Invoice</th><th>Date</th><th>MR</th><th class="num">Amount</th><th>Status</th></tr></thead>
+          <tbody id="ledgerBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- MR PERFORMANCE -->
+  <section class="view" id="view-performance">
+    <div class="card">
+      <div class="section-title"><h2>MR collection performance</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>MR</th><th class="num">Sales</th><th class="num">Collected</th><th class="num">Pending</th></tr></thead>
+          <tbody id="performanceBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- USERS -->
+  <section class="view" id="view-users">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title"><h2>Add user</h2></div>
+      <form id="userForm">
+        <div class="field-row">
+          <div>
+            <label for="u_name">Name</label>
+            <input id="u_name" required />
+          </div>
+          <div>
+            <label for="u_code">Employee code</label>
+            <input id="u_code" required placeholder="e.g. MR003" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label for="u_role">Role</label>
+            <select id="u_role">
+              <option value="MR">MR</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+          <div>
+            <label for="u_phone">Phone</label>
+            <input id="u_phone" />
+          </div>
+        </div>
+        <label for="u_password">Password</label>
+        <input id="u_password" type="password" required />
+        <button type="submit" style="margin-top:14px;">Add user</button>
+        <div id="userError"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><h2>Users</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Employee code</th><th>Role</th><th>Phone</th></tr></thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

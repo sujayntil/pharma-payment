@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pharma Sales &amp; Collection — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="mark">PS</div>
+    <h1>Pharma Sales &amp; Collection</h1>
+    <p class="sub">Sign in with your employee code.</p>
+
+    <form id="loginForm">
+      <label for="employeeCode">Employee code</label>
+      <input id="employeeCode" name="employeeCode" placeholder="e.g. MR001" autocomplete="username" required />
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+
+      <button type="submit" class="block" style="margin-top: 18px;" id="loginBtn">Sign in</button>
+      <div id="loginError"></div>
+    </form>
+
+    <div class="demo-creds">
+      First time? Run <code>docker compose exec backend python seed.py</code> to create
+      demo logins, then sign in as <code>ADMIN01 / admin123</code> (Admin) or
+      <code>MR001 / mr123</code> (MR).
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  // If already logged in, skip straight to the right app.
+  if (Auth.token()) {
+    window.location.href = Auth.role() === "ADMIN" ? "admin.html" : "mr.html";
+  }
+
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById("loginError");
+    const btn = document.getElementById("loginBtn");
+    errorBox.innerHTML = "";
+    btn.disabled = true;
+    btn.textContent = "Signing in…";
+
+    try {
+      const code = document.getElementById("employeeCode").value.trim();
+      const pw = document.getElementById("password").value;
+      const data = await login(code, pw);
+      Auth.save(data.access_token, data.role, data.name, data.user_id);
+      window.location.href = data.role === "ADMIN" ? "admin.html" : "mr.html";
+    } catch (err) {
+      errorBox.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = "Sign in";
+    }
+  });
+</script>
+</body>
+</html>

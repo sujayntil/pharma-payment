@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: pharma
+      POSTGRES_PASSWORD: pharma
+      POSTGRES_DB: pharma_db
+    # No host port mapping for Postgres: the app never needs one -- the
+    # backend reaches this container over the internal Docker network via
+    # its static IP below. This also sidesteps the repeated "port already
+    # allocated" conflicts from other things on the host (or leftover
+    # containers) squatting on 5432/5433. If you want to point an external
+    # tool (psql, a DB GUI) at this database directly, add back:
+    #   ports:
+    #     - "5433:5432"
+    # and pick whatever host port is actually free at the time.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      pharma_net:
+        ipv4_address: 172.31.50.10
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharma -d pharma_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: always
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    networks:
+      pharma_net:
+
+# Fixed subnet + a static IP for the db container. On some machines
+# (VPN clients, frequent wifi/hotspot switching, some corporate endpoint
+# security software) Docker's internal DNS -- which is what normally lets
+# the backend reach the db container just by its service name "db" --
+# stops resolving names correctly, even though the containers can still
+# reach each other over plain IP. Connecting straight to a fixed IP
+# sidesteps that DNS lookup entirely, so this keeps working regardless.
+# If you don't see this problem, this section can be simplified back to
+# letting Docker auto-assign the network.
+networks:
+  pharma_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.50.0/24
+
+volumes:
+  pgdata:

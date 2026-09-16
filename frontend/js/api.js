@@ -2,7 +2,7 @@
 // Local docker-compose: leave as-is, it matches http://localhost:8000.
 // Deployed (e.g. Render): change this to your backend's live URL, e.g.
 // "https://pharma-backend.onrender.com" -- no trailing slash.
-const API_BASE = window.API_BASE || "http://localhost:8000";
+const API_BASE = window.API_BASE || "https://pharma-payment.onrender.com";
 
 const Auth = {
   save(token, role, name, userId) {

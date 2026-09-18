@@ -183,6 +183,26 @@ function resetUploadFlow() {
   document.getElementById("saveError").innerHTML = "";
 }
 
+async function saveInvoice(confirmDuplicate) {
+  const total = parseFloat(document.getElementById("f_total_amount").value) || 0;
+  const paid = parseFloat(document.getElementById("f_paid_amount").value) || 0;
+  return apiFetch("/invoices", {
+    method: "POST",
+    body: {
+      invoice_number: document.getElementById("f_invoice_number").value.trim(),
+      invoice_date: document.getElementById("f_invoice_date").value || null,
+      customer_name: document.getElementById("f_customer_name").value.trim(),
+      customer_type: document.getElementById("f_customer_type").value || null,
+      total_amount: total,
+      paid_amount: paid,
+      payment_mode: document.getElementById("f_payment_mode").value || null,
+      remarks: document.getElementById("f_remarks").value || null,
+      image_path: currentImagePath,
+      confirm_duplicate: !!confirmDuplicate,
+    },
+  });
+}
+
 document.getElementById("reviewForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = document.getElementById("confirmBtn");
@@ -191,24 +211,16 @@ document.getElementById("reviewForm").addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.textContent = "Saving…";
 
-  const total = parseFloat(document.getElementById("f_total_amount").value) || 0;
-  const paid = parseFloat(document.getElementById("f_paid_amount").value) || 0;
-
   try {
-    await apiFetch("/invoices", {
-      method: "POST",
-      body: {
-        invoice_number: document.getElementById("f_invoice_number").value.trim(),
-        invoice_date: document.getElementById("f_invoice_date").value || null,
-        customer_name: document.getElementById("f_customer_name").value.trim(),
-        customer_type: document.getElementById("f_customer_type").value || null,
-        total_amount: total,
-        paid_amount: paid,
-        payment_mode: document.getElementById("f_payment_mode").value || null,
-        remarks: document.getElementById("f_remarks").value || null,
-        image_path: currentImagePath,
-      },
-    });
+    try {
+      await saveInvoice(false);
+    } catch (err) {
+      if (err.status === 409 && confirm(err.message + "\n\nSave it anyway?")) {
+        await saveInvoice(true);
+      } else {
+        throw err;
+      }
+    }
 
     document.getElementById("saveSuccess").innerHTML =
       `<div class="notice">Invoice saved successfully.</div>`;
@@ -225,20 +237,56 @@ document.getElementById("reviewForm").addEventListener("submit", async (e) => {
 // ---------- My invoices ----------
 
 const PAYMENT_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "NEFT", "RTGS", "Other"];
+let allMyInvoices = [];
+let myInvDateFrom = null, myInvDateTo = null;
+
+renderDateFilter("invoiceDateFilter", (from, to) => {
+  myInvDateFrom = from;
+  myInvDateTo = to;
+  loadMyInvoices();
+});
 
 async function loadMyInvoices() {
+  try {
+    const params = new URLSearchParams();
+    if (myInvDateFrom) params.append("date_from", myInvDateFrom);
+    if (myInvDateTo) params.append("date_to", myInvDateTo);
+    allMyInvoices = await apiFetch(`/invoices/mine?${params.toString()}`);
+    applyInvoiceSearch();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function applyInvoiceSearch() {
+  const q = document.getElementById("invoiceSearch").value.trim().toLowerCase();
+  if (!q) {
+    renderMyInvoices(allMyInvoices);
+    return;
+  }
+  renderMyInvoices(
+    allMyInvoices.filter(
+      (i) =>
+        i.invoice_number.toLowerCase().includes(q) ||
+        (i.customer_name || "").toLowerCase().includes(q)
+    )
+  );
+}
+
+document.getElementById("invoiceSearch").addEventListener("input", applyInvoiceSearch);
+
+function renderMyInvoices(invoices) {
   const list = document.getElementById("myInvoicesList");
   const empty = document.getElementById("myInvoicesEmpty");
-  try {
-    const invoices = await apiFetch("/invoices/mine");
-    if (!invoices.length) {
-      list.innerHTML = "";
-      empty.style.display = "block";
-      return;
-    }
-    empty.style.display = "none";
+  if (!invoices.length) {
+    list.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = allMyInvoices.length ? "No invoices match your search." : "No invoices yet.";
+    return;
+  }
+  empty.style.display = "none";
 
-    list.innerHTML = invoices
+  list.innerHTML = invoices
       .map(
         (i) => `
       <div class="card" style="margin-top:10px;" id="myinv-${i.id}">
@@ -302,9 +350,6 @@ async function loadMyInvoices() {
       </div>`
       )
       .join("");
-  } catch (err) {
-    console.error(err);
-  }
 }
 
 function toggleInvoiceEdit(invoiceId) {

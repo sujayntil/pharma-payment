@@ -369,6 +369,23 @@ td.num {
   margin-top: 6px;
 }
 
+.date-filter-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.df-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.df-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
 .confidence-low {
   border-color: var(--partial) !important;
   background: var(--partial-soft);

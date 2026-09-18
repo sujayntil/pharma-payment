@@ -1,6 +1,26 @@
 Auth.requireRole("ADMIN");
 document.getElementById("whoName").textContent = Auth.name();
 
+let dashDateFrom = null, dashDateTo = null;
+let perfDateFrom = null, perfDateTo = null;
+let invDateFrom = null, invDateTo = null;
+
+renderDateFilter("dashDateFilter", (from, to) => {
+  dashDateFrom = from;
+  dashDateTo = to;
+  loadDashboard();
+});
+renderDateFilter("perfDateFilter", (from, to) => {
+  perfDateFrom = from;
+  perfDateTo = to;
+  loadPerformance();
+});
+renderDateFilter("invoicesDateFilter", (from, to) => {
+  invDateFrom = from;
+  invDateTo = to;
+  loadInvoices();
+});
+
 document.getElementById("logoutBtn").addEventListener("click", () => {
   Auth.clear();
   window.location.href = "index.html";
@@ -30,7 +50,10 @@ function showTab(name) {
 
 async function loadDashboard() {
   try {
-    const d = await apiFetch("/admin/dashboard");
+    const params = new URLSearchParams();
+    if (dashDateFrom) params.append("date_from", dashDateFrom);
+    if (dashDateTo) params.append("date_to", dashDateTo);
+    const d = await apiFetch(`/admin/dashboard?${params.toString()}`);
     document.getElementById("dashTotals").innerHTML = `
       <div class="stat accent"><div class="label">Total sales</div><div class="value">${money(d.total_sales)}</div></div>
       <div class="stat"><div class="label">Collected</div><div class="value">${money(d.collected)}</div></div>
@@ -90,6 +113,8 @@ async function ensureMrOptions() {
   }
 }
 
+let allInvoices = [];
+
 async function loadInvoices() {
   await ensureMrOptions();
   const mrId = document.getElementById("filterMr").value;
@@ -98,20 +123,50 @@ async function loadInvoices() {
   const params = new URLSearchParams();
   if (mrId) params.append("mr_id", mrId);
   if (status) params.append("status", status);
+  if (invDateFrom) params.append("date_from", invDateFrom);
+  if (invDateTo) params.append("date_to", invDateTo);
 
   try {
-    const invoices = await apiFetch(`/invoices?${params.toString()}`);
-    const body = document.getElementById("invoicesBody");
-    const empty = document.getElementById("invoicesEmpty");
-    if (!invoices.length) {
-      body.innerHTML = "";
-      empty.style.display = "block";
-      return;
-    }
-    empty.style.display = "none";
-    body.innerHTML = invoices
-      .map(
-        (i) => `
+    allInvoices = await apiFetch(`/invoices?${params.toString()}`);
+    applyAdminInvoiceSearch();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function applyAdminInvoiceSearch() {
+  const q = document.getElementById("adminInvoiceSearch").value.trim().toLowerCase();
+  if (!q) {
+    renderInvoices(allInvoices);
+    return;
+  }
+  renderInvoices(
+    allInvoices.filter(
+      (i) =>
+        i.invoice_number.toLowerCase().includes(q) ||
+        (i.customer_name || "").toLowerCase().includes(q) ||
+        (i.mr_name || "").toLowerCase().includes(q)
+    )
+  );
+}
+
+document.getElementById("adminInvoiceSearch").addEventListener("input", applyAdminInvoiceSearch);
+
+function renderInvoices(invoices) {
+  const body = document.getElementById("invoicesBody");
+  const empty = document.getElementById("invoicesEmpty");
+  if (!invoices.length) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = allInvoices.length
+      ? "No invoices match your search."
+      : "No invoices match these filters.";
+    return;
+  }
+  empty.style.display = "none";
+  body.innerHTML = invoices
+    .map(
+      (i) => `
       <tr>
         <td class="invoice-number">${escapeHtml(i.invoice_number)}</td>
         <td>${i.invoice_date || "—"}</td>
@@ -121,21 +176,40 @@ async function loadInvoices() {
         <td class="num amount">${money(i.pending_amount)}</td>
         <td>${statusPill(i.status)}</td>
       </tr>`
-      )
-      .join("");
-  } catch (err) {
-    console.error(err);
-  }
+    )
+    .join("");
 }
 
 document.getElementById("applyFilters").addEventListener("click", loadInvoices);
 
 // ---------- Customers ----------
 
+let allCustomers = [];
+
 async function loadCustomers() {
   try {
-    const customers = await apiFetch("/customers");
-    document.getElementById("customersBody").innerHTML = customers
+    allCustomers = await apiFetch("/customers");
+    renderCustomers(allCustomers);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+document.getElementById("customerSearch").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) {
+    renderCustomers(allCustomers);
+    return;
+  }
+  renderCustomers(
+    allCustomers.filter(
+      (c) => c.name.toLowerCase().includes(q) || (c.type || "").toLowerCase().includes(q)
+    )
+  );
+});
+
+function renderCustomers(customers) {
+  document.getElementById("customersBody").innerHTML = customers
       .map(
         (c) => `
       <tr>
@@ -146,10 +220,9 @@ async function loadCustomers() {
       </tr>`
       )
       .join("");
-  } catch (err) {
-    console.error(err);
-  }
 }
+
+let currentLedgerInvoices = [];
 
 async function openLedger(customerId) {
   try {
@@ -161,9 +234,27 @@ async function openLedger(customerId) {
       <div class="stat"><div class="label">Total paid</div><div class="value">${money(data.total_paid)}</div></div>
       <div class="stat accent"><div class="label">Outstanding</div><div class="value">${money(data.outstanding)}</div></div>
     `;
-    document.getElementById("ledgerBody").innerHTML = data.invoices
-      .map(
-        (i) => `
+    currentLedgerInvoices = data.invoices;
+    document.getElementById("ledgerSearch").value = "";
+    renderLedgerInvoices(currentLedgerInvoices);
+    document.getElementById("ledgerCard").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderLedgerInvoices(invoices) {
+  const body = document.getElementById("ledgerBody");
+  const empty = document.getElementById("ledgerEmpty");
+  if (!invoices.length) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+  body.innerHTML = invoices
+    .map(
+      (i) => `
       <tr>
         <td class="invoice-number">${escapeHtml(i.invoice_number)}</td>
         <td>${i.date || "—"}</td>
@@ -171,13 +262,25 @@ async function openLedger(customerId) {
         <td class="num amount">${money(i.amount)}</td>
         <td>${statusPill(i.status)}</td>
       </tr>`
-      )
-      .join("");
-    document.getElementById("ledgerCard").scrollIntoView({ behavior: "smooth" });
-  } catch (err) {
-    console.error(err);
-  }
+    )
+    .join("");
 }
+
+document.getElementById("ledgerSearch").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) {
+    renderLedgerInvoices(currentLedgerInvoices);
+    return;
+  }
+  renderLedgerInvoices(
+    currentLedgerInvoices.filter(
+      (i) =>
+        i.invoice_number.toLowerCase().includes(q) ||
+        (i.mr || "").toLowerCase().includes(q) ||
+        (i.status || "").toLowerCase().includes(q)
+    )
+  );
+});
 
 function closeLedger() {
   document.getElementById("ledgerCard").style.display = "none";
@@ -187,7 +290,10 @@ function closeLedger() {
 
 async function loadPerformance() {
   try {
-    const rows = await apiFetch("/admin/mr-performance");
+    const params = new URLSearchParams();
+    if (perfDateFrom) params.append("date_from", perfDateFrom);
+    if (perfDateTo) params.append("date_to", perfDateTo);
+    const rows = await apiFetch(`/admin/mr-performance?${params.toString()}`);
     document.getElementById("performanceBody").innerHTML = rows
       .map(
         (r) => `

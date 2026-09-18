@@ -86,6 +86,7 @@ class InvoiceCreate(BaseModel):
     image_path: Optional[str] = None
     ai_confidence: Optional[Dict] = None
     items: Optional[List[InvoiceItemIn]] = []
+    confirm_duplicate: bool = False  # set true to save anyway after seeing the duplicate warning
 
 
 class InvoiceOut(BaseModel):

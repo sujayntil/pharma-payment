@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -50,6 +51,23 @@ def create_invoice(
     """Confirm & save a reviewed invoice. Looks up (or creates) the customer
     by name, computes status/pending from total vs paid, and records the
     initial payment if any amount was already paid."""
+    if not payload.confirm_duplicate:
+        existing = (
+            db.query(models.Invoice)
+            .filter(models.Invoice.invoice_number.ilike(payload.invoice_number.strip()))
+            .first()
+        )
+        if existing:
+            other_mr = existing.mr.name if existing.mr else "someone"
+            other_customer = existing.customer.name if existing.customer else "a customer"
+            raise HTTPException(
+                409,
+                f"Invoice number '{payload.invoice_number}' was already entered by "
+                f"{other_mr} for {other_customer} (₹{existing.total_amount}). "
+                "Submit again to confirm this is intentional (e.g. a legitimately reused "
+                "number), or change the invoice number if it was a mistake.",
+            )
+
     customer = (
         db.query(models.Customer)
         .filter(models.Customer.name.ilike(payload.customer_name.strip()))
@@ -103,14 +121,17 @@ def create_invoice(
 
 @router.get("/mine", response_model=List[schemas.InvoiceOut])
 def my_invoices(
-    db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
 ):
-    invoices = (
-        db.query(models.Invoice)
-        .filter(models.Invoice.mr_id == user.id)
-        .order_by(models.Invoice.created_at.desc())
-        .all()
-    )
+    q = db.query(models.Invoice).filter(models.Invoice.mr_id == user.id)
+    if date_from:
+        q = q.filter(models.Invoice.invoice_date >= date_from)
+    if date_to:
+        q = q.filter(models.Invoice.invoice_date <= date_to)
+    invoices = q.order_by(models.Invoice.created_at.desc()).all()
     return [_to_out(i) for i in invoices]
 
 
@@ -119,6 +140,8 @@ def list_invoices(
     mr_id: Optional[int] = None,
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
@@ -129,6 +152,10 @@ def list_invoices(
         q = q.filter(models.Invoice.status == status.upper())
     if customer_id:
         q = q.filter(models.Invoice.customer_id == customer_id)
+    if date_from:
+        q = q.filter(models.Invoice.invoice_date >= date_from)
+    if date_to:
+        q = q.filter(models.Invoice.invoice_date <= date_to)
     invoices = q.order_by(models.Invoice.created_at.desc()).all()
     return [_to_out(i) for i in invoices]
 

@@ -1,7 +1,8 @@
-from typing import List
+from datetime import date
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -12,15 +13,40 @@ from ..security import hash_password
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-@router.get("/dashboard")
-def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
-    total_sales = db.query(func.coalesce(func.sum(models.Invoice.total_amount), 0)).scalar()
-    collected = db.query(func.coalesce(func.sum(models.Invoice.paid_amount), 0)).scalar()
+def _date_range_filter(date_from: Optional[date], date_to: Optional[date]):
+    """Builds the invoice_date range conditions shared by dashboard and
+    mr-performance. Both bounds are optional and inclusive."""
+    conditions = []
+    if date_from:
+        conditions.append(models.Invoice.invoice_date >= date_from)
+    if date_to:
+        conditions.append(models.Invoice.invoice_date <= date_to)
+    return conditions
 
-    total_invoices = db.query(models.Invoice).count()
-    paid = db.query(models.Invoice).filter(models.Invoice.status == "PAID").count()
-    partial = db.query(models.Invoice).filter(models.Invoice.status == "PARTIAL").count()
-    unpaid = db.query(models.Invoice).filter(models.Invoice.status == "UNPAID").count()
+
+@router.get("/dashboard")
+def dashboard(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Totals, optionally scoped to an invoice_date range. Note this scopes
+    by when the invoice was dated, not when payments came in -- an invoice
+    dated inside the range still counts its full paid_amount even if some
+    of that payment happened later."""
+    q = db.query(models.Invoice)
+    conditions = _date_range_filter(date_from, date_to)
+    if conditions:
+        q = q.filter(and_(*conditions))
+
+    total_sales = q.with_entities(func.coalesce(func.sum(models.Invoice.total_amount), 0)).scalar()
+    collected = q.with_entities(func.coalesce(func.sum(models.Invoice.paid_amount), 0)).scalar()
+
+    total_invoices = q.count()
+    paid = q.filter(models.Invoice.status == "PAID").count()
+    partial = q.filter(models.Invoice.status == "PARTIAL").count()
+    unpaid = q.filter(models.Invoice.status == "UNPAID").count()
 
     return {
         "total_sales": total_sales,
@@ -34,17 +60,31 @@ def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require
 
 
 @router.get("/mr-performance")
-def mr_performance(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
-    rows = (
-        db.query(
-            models.User.id,
-            models.User.name,
-            func.coalesce(func.sum(models.Invoice.total_amount), 0).label("sales"),
-            func.coalesce(func.sum(models.Invoice.paid_amount), 0).label("collected"),
-            func.coalesce(func.sum(models.Invoice.pending_amount), 0).label("pending"),
+def mr_performance(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    query = db.query(
+        models.User.id,
+        models.User.name,
+        func.coalesce(func.sum(models.Invoice.total_amount), 0).label("sales"),
+        func.coalesce(func.sum(models.Invoice.paid_amount), 0).label("collected"),
+        func.coalesce(func.sum(models.Invoice.pending_amount), 0).label("pending"),
+    ).outerjoin(models.Invoice, models.Invoice.mr_id == models.User.id)
+
+    conditions = _date_range_filter(date_from, date_to)
+    if conditions:
+        # outerjoin + date filter: only filter rows where an invoice exists,
+        # so MRs with zero invoices in range still show up with zeros
+        # rather than disappearing entirely.
+        query = query.filter(
+            (models.Invoice.id.is_(None)) | (and_(*conditions))
         )
-        .outerjoin(models.Invoice, models.Invoice.mr_id == models.User.id)
-        .filter(models.User.role == models.RoleEnum.MR.value)
+
+    rows = (
+        query.filter(models.User.role == models.RoleEnum.MR.value)
         .group_by(models.User.id, models.User.name)
         .order_by(models.User.name)
         .all()

@@ -439,6 +439,7 @@ async function loadOutstanding() {
             <div>
               <label>Payment mode</label>
               <select class="pay-mode">
+                <option value="">—</option>
                 <option>Cash</option><option>UPI</option><option>Bank Transfer</option>
                 <option>Cheque</option><option>NEFT</option><option>RTGS</option><option>Other</option>
               </select>
@@ -487,7 +488,7 @@ async function submitPayment(invoiceId, maxAmount) {
   try {
     await apiFetch("/payments", {
       method: "POST",
-      body: { invoice_id: invoiceId, amount, mode, transaction_reference: ref || null },
+      body: { invoice_id: invoiceId, amount, mode: mode || null, transaction_reference: ref || null },
     });
     loadOutstanding();
   } catch (err) {

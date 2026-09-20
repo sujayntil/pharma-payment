@@ -262,6 +262,7 @@ function renderLedgerInvoices(invoices) {
         <td>${i.date || "—"}</td>
         <td>${escapeHtml(i.mr || "—")}</td>
         <td class="num amount">${money(i.amount)}</td>
+        <td>${escapeHtml(i.mode || "—")}</td>
         <td>${statusPill(i.status)}</td>
       </tr>`
     )
@@ -279,7 +280,8 @@ document.getElementById("ledgerSearch").addEventListener("input", (e) => {
       (i) =>
         i.invoice_number.toLowerCase().includes(q) ||
         (i.mr || "").toLowerCase().includes(q) ||
-        (i.status || "").toLowerCase().includes(q)
+        (i.status || "").toLowerCase().includes(q) ||
+        (i.mode || "").toLowerCase().includes(q)
     )
   );
 });

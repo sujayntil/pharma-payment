@@ -1,6 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -14,7 +15,25 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 def list_customers(
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
-    return db.query(models.Customer).order_by(models.Customer.name).all()
+    rows = (
+        db.query(models.Customer, func.count(models.Invoice.id).label("invoice_count"))
+        .outerjoin(models.Invoice, models.Invoice.customer_id == models.Customer.id)
+        .group_by(models.Customer.id)
+        .order_by(models.Customer.name)
+        .all()
+    )
+    return [
+        schemas.CustomerOut(
+            id=c.id,
+            name=c.name,
+            type=c.type,
+            phone=c.phone,
+            address=c.address,
+            gstin=c.gstin,
+            invoice_count=count,
+        )
+        for c, count in rows
+    ]
 
 
 @router.post("", response_model=schemas.CustomerOut)
@@ -66,6 +85,7 @@ def customer_ledger(
                 "date": i.invoice_date,
                 "amount": i.total_amount,
                 "status": i.status,
+                "mode": i.payment_mode,
                 "mr": i.mr.name if i.mr else None,
             }
             for i in invoices

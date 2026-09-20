@@ -44,6 +44,13 @@ def add_payment(
     status_, pending = compute_status(invoice.total_amount, invoice.paid_amount)
     invoice.status = status_
     invoice.pending_amount = pending
+    if payload.mode:
+        # Keep this in sync with the most recent payment's mode -- there's
+        # no full per-payment history view anymore, so this single field is
+        # the best available signal for "how was this invoice paid," and it
+        # should reflect the latest payment, not just whatever was set when
+        # the invoice was first created.
+        invoice.payment_mode = payload.mode
 
     db.commit()
     db.refresh(invoice)

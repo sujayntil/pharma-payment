@@ -2,11 +2,16 @@
 // "installable PWA" checklist (which requires a registered service worker
 // with a fetch handler) -- it deliberately does NOT cache API responses,
 // since this app's data changes constantly and stale cached data would be
-// actively wrong. It only caches the static app shell (HTML/CSS/JS/icons),
-// and only for same-origin requests; anything going to the backend API
-// (a different origin) passes straight through to the network untouched.
+// actively wrong.
+//
+// The app shell (HTML/CSS/JS/icons) uses a NETWORK-FIRST strategy: always
+// try to fetch the latest version first, and only fall back to whatever's
+// cached if the network is genuinely unreachable (e.g. actually offline).
+// An earlier version of this file used cache-first, which could get a
+// browser permanently stuck showing an old version of the app after a
+// deploy, even on a hard refresh -- this fixes that class of bug.
 
-const CACHE_NAME = "pharma-app-shell-v1";
+const CACHE_NAME = "pharma-app-shell-v2"; // bumped to invalidate the old cache-first version
 const SHELL_FILES = [
   "index.html",
   "mr.html",
@@ -21,6 +26,7 @@ const SHELL_FILES = [
 ];
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting(); // don't wait for old tabs to close before taking over
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES)).catch(() => {})
   );
@@ -28,22 +34,29 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    Promise.all([
+      caches.keys().then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      ),
+      self.clients.claim(), // take control of already-open tabs immediately
+    ])
   );
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Only handle same-origin GET requests for the static shell; let
-  // everything else (API calls, other origins) go straight to the network.
   if (url.origin !== self.location.origin || event.request.method !== "GET") {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

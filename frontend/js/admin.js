@@ -145,7 +145,8 @@ function applyAdminInvoiceSearch() {
       (i) =>
         i.invoice_number.toLowerCase().includes(q) ||
         (i.customer_name || "").toLowerCase().includes(q) ||
-        (i.mr_name || "").toLowerCase().includes(q)
+        (i.mr_name || "").toLowerCase().includes(q) ||
+        (i.payment_mode || "").toLowerCase().includes(q)
     )
   );
 }
@@ -174,6 +175,7 @@ function renderInvoices(invoices) {
         <td>${escapeHtml(i.mr_name || "—")}</td>
         <td class="num amount">${money(i.total_amount)}</td>
         <td class="num amount">${money(i.pending_amount)}</td>
+        <td>${escapeHtml(i.payment_mode || "—")}</td>
         <td>${statusPill(i.status)}</td>
       </tr>`
     )

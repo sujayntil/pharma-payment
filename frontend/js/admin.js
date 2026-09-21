@@ -182,8 +182,6 @@ function renderInvoices(invoices) {
     .join("");
 }
 
-document.getElementById("applyFilters").addEventListener("click", loadInvoices);
-
 // ---------- Customers ----------
 
 let allCustomers = [];

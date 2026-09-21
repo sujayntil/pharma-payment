@@ -58,11 +58,11 @@
       <div class="field-row">
         <div>
           <label for="filterMr">MR</label>
-          <select id="filterMr"><option value="">All MRs</option></select>
+          <select id="filterMr" onchange="loadInvoices()"><option value="">All MRs</option></select>
         </div>
         <div>
           <label for="filterStatus">Status</label>
-          <select id="filterStatus">
+          <select id="filterStatus" onchange="loadInvoices()">
             <option value="">All statuses</option>
             <option value="PAID">Paid</option>
             <option value="PARTIAL">Partial</option>
@@ -71,7 +71,6 @@
         </div>
       </div>
       <div id="invoicesDateFilter" style="margin-top:14px;"></div>
-      <button id="applyFilters" style="margin-top:14px;">Apply filters</button>
     </div>
 
     <div class="card">

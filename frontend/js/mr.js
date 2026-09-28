@@ -402,21 +402,50 @@ async function deleteInvoice(invoiceId) {
 
 // ---------- Outstanding / collections ----------
 
+let allOutstanding = [];
+
 async function loadOutstanding() {
-  const list = document.getElementById("outstandingList");
-  const empty = document.getElementById("outstandingEmpty");
   try {
     const data = await apiFetch("/mr/outstanding");
     document.getElementById("totalOutstanding").textContent = money(data.total_outstanding);
+    allOutstanding = data.items;
+    applyCollectionsSearch();
+  } catch (err) {
+    console.error(err);
+  }
+}
 
-    if (!data.items.length) {
-      list.innerHTML = "";
-      empty.style.display = "block";
-      return;
-    }
-    empty.style.display = "none";
+document.getElementById("collectionsSearch").addEventListener("input", applyCollectionsSearch);
 
-    list.innerHTML = data.items
+function applyCollectionsSearch() {
+  const q = document.getElementById("collectionsSearch").value.trim().toLowerCase();
+  if (!q) {
+    renderOutstanding(allOutstanding);
+    return;
+  }
+  renderOutstanding(
+    allOutstanding.filter(
+      (item) =>
+        item.invoice_number.toLowerCase().includes(q) ||
+        (item.customer || "").toLowerCase().includes(q)
+    )
+  );
+}
+
+function renderOutstanding(items) {
+  const list = document.getElementById("outstandingList");
+  const empty = document.getElementById("outstandingEmpty");
+  if (!items.length) {
+    list.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = allOutstanding.length
+      ? "No outstanding invoices match your search."
+      : "Nothing outstanding — great work!";
+    return;
+  }
+  empty.style.display = "none";
+
+  list.innerHTML = items
       .map(
         (item) => `
       <div class="card" style="margin-top:10px;" id="outstanding-${item.invoice_id}">
@@ -457,9 +486,6 @@ async function loadOutstanding() {
       </div>`
       )
       .join("");
-  } catch (err) {
-    console.error(err);
-  }
 }
 
 function togglePaymentForm(invoiceId) {

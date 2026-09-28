@@ -32,10 +32,6 @@ async function loadDashboard() {
 
     document.getElementById("dashStats").innerHTML = `
       <div class="stat accent">
-        <div class="label">Total invoiced</div>
-        <div class="value">${money(d.total_amount)}</div>
-      </div>
-      <div class="stat">
         <div class="label">Total invoices</div>
         <div class="value">${d.total_invoices}</div>
       </div>

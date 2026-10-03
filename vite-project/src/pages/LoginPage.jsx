@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, User, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useAppDispatch, useAuth } from '../hooks/useAppStore';
 import { loginUser, clearError } from '../store/slices/authSlice';
-import PwaInstallButton from '../components/common/PwaInstallButton';
 
 export default function LoginPage() {
   const [employeeCode, setEmployeeCode] = useState('');
@@ -59,9 +58,6 @@ export default function LoginPage() {
             Sign in with your employee code to continue.
           </p>
         </div>
-
-        {/* PWA Install Banner */}
-        <PwaInstallButton variant="banner" className="mb-5" />
 
         {/* Error Alert */}
         {error && (
@@ -139,40 +135,8 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* Demo Credentials Helper */}
-        <div className="mt-6 pt-5 border-t border-[#d7dcd9]">
-          <div className="text-xs text-[#5b6660] font-medium mb-2.5 text-center">
-            Demo credentials for quick sign-in:
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemoFill('ADMIN01', 'admin123')}
-              className="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 border border-[#d7dcd9] rounded-md text-[11px] font-mono text-[#1c2321] transition-colors cursor-pointer text-center"
-            >
-              <div className="font-semibold">ADMIN01</div>
-              <div className="text-[10px] text-gray-500">Admin</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('MR001', 'mr123')}
-              className="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 border border-[#d7dcd9] rounded-md text-[11px] font-mono text-[#1c2321] transition-colors cursor-pointer text-center"
-            >
-              <div className="font-semibold">MR001</div>
-              <div className="text-[10px] text-gray-500">Rahul (MR)</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoFill('MR002', 'mr123')}
-              className="px-2 py-1.5 bg-gray-50 hover:bg-gray-100 border border-[#d7dcd9] rounded-md text-[11px] font-mono text-[#1c2321] transition-colors cursor-pointer text-center"
-            >
-              <div className="font-semibold">MR002</div>
-              <div className="text-[10px] text-gray-500">Neha (MR)</div>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
 }
+

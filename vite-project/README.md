@@ -28,13 +28,7 @@ Modern, mobile-responsive React application built with **Vite**, **Tailwind CSS 
    - Camera capture support for invoice uploads (`capture="environment"`).
    - Bottom-sheet modals on mobile and centered dialogs on desktop.
 
-4. **Progressive Web App (PWA) for Mobile & Desktop**:
-   - **Installable**: Full PWA support with `manifest.json`, high-resolution icons (192x192 & 512x512 maskable/any), and standalone app display.
-   - **Desktop & Android**: One-click install via the "Install App" button in the topbar or browser address bar.
-   - **iOS Safari Support**: Dedicated guide prompt assisting users through "Share -> Add to Home Screen".
-   - **Service Worker (`sw.js`)**: Network-first caching for application shell and static assets with automatic bypass for live API endpoints.
-
-5. **Configurable Backend API URL via `.env`**:
+4. **Configurable Backend API URL via `.env`**:
    - Configure `VITE_API_BASE` in `.env`:
      ```env
      VITE_API_BASE=https://pharma-payment.onrender.com
@@ -106,28 +100,6 @@ pharma-app/vite-project/
     ├── main.jsx                   # Redux Provider, BrowserRouter & React DOM mount
     └── index.css                  # Tailwind CSS imports & theme definitions
 ```
-
----
-
-## 📱 Progressive Web App (PWA) Installation Guide
-
-The application can be installed on both desktop and mobile devices to run like a native app with an independent window, app icon, and fast loading.
-
-### Desktop (Google Chrome, Microsoft Edge, Brave)
-1. Open the application in your browser.
-2. Click the **"Install App"** button located in the top navigation bar, or click the install icon (🖥️ / ➕) in your browser address bar.
-3. Confirm by clicking **"Install"**. The app will open in a standalone desktop window.
-
-### Mobile Phone - Android (Google Chrome)
-1. Open the application in Chrome.
-2. Tap the **"Install App"** button in the header (or tap Chrome's three-dot menu `⋮` and select **"Install app"** / **"Add to Home screen"**).
-3. The app icon will appear on your device's home screen and app drawer.
-
-### Mobile Phone - iOS (Apple Safari)
-1. Open the application in **Safari**.
-2. Tap the **"Install App"** button in the header (or tap the Safari **Share** icon `⎋` at the bottom of the screen).
-3. Scroll down and tap **"Add to Home Screen"** (`➕`).
-4. Tap **"Add"** in the top right corner. The app will launch in fullscreen standalone mode without browser navigation controls.
 
 ---
 

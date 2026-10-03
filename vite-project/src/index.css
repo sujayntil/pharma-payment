@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+
+  --color-primary: #2f6f4e;
+  --color-primary-dark: #1f4d36;
+  --color-primary-soft: #e3efe8;
+  --color-paid: #2f6f4e;
+  --color-paid-soft: #e3efe8;
+  --color-partial: #9a6b0c;
+  --color-partial-soft: #f6ecd6;
+  --color-unpaid: #a8403c;
+  --color-unpaid-soft: #f6e3e1;
+}
+
+:root {
+  --primary: #2f6f4e;
+  --primary-dark: #1f4d36;
+  --primary-soft: #e3efe8;
+}
+
+body {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.mono,
+.amount,
+.invoice-number {
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+/* Utilities for sleek mobile experience */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

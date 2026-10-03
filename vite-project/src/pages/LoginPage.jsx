@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, User, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useAppDispatch, useAuth } from '../hooks/useAppStore';
 import { loginUser, clearError } from '../store/slices/authSlice';
+import PwaInstallButton from '../components/common/PwaInstallButton';
 
 export default function LoginPage() {
   const [employeeCode, setEmployeeCode] = useState('');
@@ -58,6 +59,9 @@ export default function LoginPage() {
             Sign in with your employee code to continue.
           </p>
         </div>
+
+        {/* PWA Install Banner */}
+        <PwaInstallButton variant="banner" className="mb-5" />
 
         {/* Error Alert */}
         {error && (
@@ -172,4 +176,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

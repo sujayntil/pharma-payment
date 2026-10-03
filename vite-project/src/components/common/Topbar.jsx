@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut, User } from 'lucide-react';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
 import { logout } from '../../store/slices/authSlice';
+import PwaInstallButton from './PwaInstallButton';
 
 export default function Topbar() {
   const dispatch = useAppDispatch();
@@ -27,8 +28,10 @@ export default function Topbar() {
             </div>
           </div>
 
-          {/* User profile & Logout */}
+          {/* Actions: PWA Install, User Profile & Logout */}
           <div className="flex items-center gap-2 sm:gap-4">
+            <PwaInstallButton />
+
             <div className="flex items-center gap-2 text-xs sm:text-sm text-[#5b6660]">
               <div className="w-7 h-7 rounded-full bg-emerald-100 text-[#2f6f4e] flex items-center justify-center font-semibold text-xs">
                 {user?.name ? user.name.charAt(0).toUpperCase() : <User size={14} />}
@@ -63,4 +66,3 @@ export default function Topbar() {
     </header>
   );
 }
-

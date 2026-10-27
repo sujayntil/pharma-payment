@@ -117,6 +117,7 @@ class InvoiceUpdate(BaseModel):
     total_amount: Optional[float] = None
     payment_mode: Optional[str] = None
     remarks: Optional[str] = None
+    confirm_duplicate: bool = False  # set true to save anyway after the duplicate-number warning
 
 
 class ExtractResult(BaseModel):

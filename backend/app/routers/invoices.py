@@ -4,6 +4,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -23,6 +24,70 @@ def _to_out(invoice: models.Invoice) -> schemas.InvoiceOut:
     out.mr_name = invoice.mr.name if invoice.mr else None
     out.customer_name = invoice.customer.name if invoice.customer else None
     return out
+
+
+# ---------- duplicate detection (shared by create and edit) ----------
+
+
+def _norm(text) -> str:
+    return (text or "").strip().lower()
+
+
+def _find_exact_duplicate(db, number, customer_name, amount, exclude_id=None):
+    """An invoice with the same number, the same customer AND the same amount.
+
+    Matches on exact text ignoring case and surrounding spaces. It does NOT use
+    ilike on purpose: ilike treats _ and % as wildcards, so 'A_001' would
+    wrongly match 'AX001' -- and this check has no "save anyway", so a false
+    match would block a genuine invoice.
+    """
+    q = (
+        db.query(models.Invoice)
+        .join(models.Customer, models.Invoice.customer_id == models.Customer.id)
+        .filter(
+            func.lower(func.trim(models.Invoice.invoice_number)) == _norm(number),
+            func.lower(func.trim(models.Customer.name)) == _norm(customer_name),
+            func.abs(models.Invoice.total_amount - amount) < 0.005,
+        )
+    )
+    if exclude_id is not None:
+        q = q.filter(models.Invoice.id != exclude_id)
+    return q.first()
+
+
+def _find_same_number(db, number, exclude_id=None):
+    q = db.query(models.Invoice).filter(
+        func.lower(func.trim(models.Invoice.invoice_number)) == _norm(number)
+    )
+    if exclude_id is not None:
+        q = q.filter(models.Invoice.id != exclude_id)
+    return q.first()
+
+
+def _hard_block_message(existing, user, number) -> str:
+    mr = existing.mr.name if existing.mr else "someone"
+    customer = existing.customer.name if existing.customer else "a customer"
+    when = existing.invoice_date.strftime("%d %b %Y") if existing.invoice_date else "no date"
+    what_next = (
+        "Open My Invoices and use Edit on it if something needs correcting."
+        if existing.mr_id == user.id
+        else f"Ask {mr} or Admin if it needs correcting."
+    )
+    return (
+        f"Invoice {number} for {customer} (₹{existing.total_amount:,.2f}) was already "
+        f"entered by {mr} (dated {when}). It can't be entered again. {what_next}"
+    )
+
+
+def _soft_warning_message(existing, number) -> str:
+    other_mr = existing.mr.name if existing.mr else "someone"
+    other_customer = existing.customer.name if existing.customer else "a customer"
+    return (
+        f"Invoice number '{number}' was already entered by "
+        f"{other_mr} for {other_customer} (₹{existing.total_amount}). "
+        "Submit again to confirm this is intentional (e.g. a legitimately reused "
+        "number), or change the invoice number if it was a mistake."
+    )
 
 
 @router.post("/extract", response_model=schemas.ExtractResult)
@@ -51,22 +116,22 @@ def create_invoice(
     """Confirm & save a reviewed invoice. Looks up (or creates) the customer
     by name, computes status/pending from total vs paid, and records the
     initial payment if any amount was already paid."""
-    if not payload.confirm_duplicate:
-        existing = (
-            db.query(models.Invoice)
-            .filter(models.Invoice.invoice_number.ilike(payload.invoice_number.strip()))
-            .first()
+    # Same number + same customer + same amount is the same invoice entered
+    # twice. This is a hard stop: confirm_duplicate does NOT bypass it.
+    exact = _find_exact_duplicate(
+        db, payload.invoice_number, payload.customer_name, payload.total_amount
+    )
+    if exact:
+        raise HTTPException(
+            400, _hard_block_message(exact, user, payload.invoice_number.strip())
         )
+
+    # Same number but a different customer or amount can be legitimate (numbers
+    # restart each year), so that stays a warning the MR can confirm.
+    if not payload.confirm_duplicate:
+        existing = _find_same_number(db, payload.invoice_number)
         if existing:
-            other_mr = existing.mr.name if existing.mr else "someone"
-            other_customer = existing.customer.name if existing.customer else "a customer"
-            raise HTTPException(
-                409,
-                f"Invoice number '{payload.invoice_number}' was already entered by "
-                f"{other_mr} for {other_customer} (₹{existing.total_amount}). "
-                "Submit again to confirm this is intentional (e.g. a legitimately reused "
-                "number), or change the invoice number if it was a mistake.",
-            )
+            raise HTTPException(409, _soft_warning_message(existing, payload.invoice_number))
 
     customer = (
         db.query(models.Customer)
@@ -193,6 +258,29 @@ def update_invoice(
         raise HTTPException(403, "You can only edit your own invoices")
 
     data = payload.model_dump(exclude_unset=True)
+
+    # Duplicate checks run first, before anything is created or changed. They
+    # only apply when the number, customer or amount is actually being changed,
+    # so editing a remark or payment mode is never blocked.
+    new_number = data["invoice_number"] if "invoice_number" in data else invoice.invoice_number
+    current_customer = invoice.customer.name if invoice.customer else ""
+    new_customer = (data.get("customer_name") or "").strip() or current_customer
+    new_amount = data["total_amount"] if data.get("total_amount") is not None else invoice.total_amount
+
+    number_changed = _norm(new_number) != _norm(invoice.invoice_number)
+    customer_changed = _norm(new_customer) != _norm(current_customer)
+    amount_changed = abs(new_amount - (invoice.total_amount or 0)) >= 0.005
+
+    if number_changed or customer_changed or amount_changed:
+        exact = _find_exact_duplicate(
+            db, new_number, new_customer, new_amount, exclude_id=invoice.id
+        )
+        if exact:
+            raise HTTPException(400, _hard_block_message(exact, user, (new_number or "").strip()))
+    if number_changed and not payload.confirm_duplicate:
+        existing = _find_same_number(db, new_number, exclude_id=invoice.id)
+        if existing:
+            raise HTTPException(409, _soft_warning_message(existing, new_number))
 
     if "customer_name" in data:
         new_name = (data.pop("customer_name") or "").strip()

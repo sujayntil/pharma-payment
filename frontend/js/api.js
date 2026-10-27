@@ -1,8 +1,8 @@
 // Point this at wherever the FastAPI backend is running.
-// Local docker-compose: leave as-is, it matches https://pharma-payment.onrender.com.
+// Local docker-compose: leave as-is, it matches http://localhost:8000.
 // Deployed (e.g. Render): change this to your backend's live URL, e.g.
 // "https://pharma-backend.onrender.com" -- no trailing slash.
-const API_BASE = window.API_BASE || "https://pharma-payment.onrender.com";
+const API_BASE = window.API_BASE || "http://localhost:8000";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {

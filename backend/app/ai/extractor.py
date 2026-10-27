@@ -13,6 +13,7 @@ and keep the same return shape.
 import base64
 import json
 import os
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -49,6 +50,34 @@ If a field is not visible or you are unsure, use null rather than guessing.
 Amounts should be plain numbers (no currency symbols or commas).
 """
 
+# India has no daylight saving, so a fixed +05:30 offset is always correct.
+# Render's servers run on UTC, which would be "yesterday" until 05:30 IST.
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _now_ist() -> datetime:
+    return datetime.now(_IST)
+
+
+def _date_guidance(today: date) -> str:
+    """Extra instructions about dates, rebuilt for every extraction.
+
+    The model has no clock. Without this it guesses the year whenever the
+    printed year is faint, abbreviated ("26") or the photo is at an angle --
+    and its guess drifts to an older year. The date is read fresh on each
+    call, so it can never go stale while the server keeps running.
+    """
+    return (
+        "\nDate rules:\n"
+        f"- Today's date is {today.strftime('%d %B %Y')} ({today.isoformat()}).\n"
+        "- Invoices are from the last few months and an invoice date is never in the future.\n"
+        "- Dates on these invoices are written day-first (DD/MM/YYYY).\n"
+        "- If the year is faint, abbreviated (for example '26') or hard to read, choose the "
+        f"year that gives a date on or before today, normally {today.year} or the year before; "
+        f"never a year earlier than {today.year - 1} unless it is clearly printed in full.\n"
+        "- If the date cannot be read at all, return null for invoice_date.\n"
+    )
+
 
 def _empty_draft(remarks: Optional[str] = None) -> dict:
     return {
@@ -73,6 +102,7 @@ async def extract_invoice_from_image(image_bytes: bytes, media_type: str = "imag
         )
 
     b64 = base64.b64encode(image_bytes).decode()
+    prompt = EXTRACTION_PROMPT + _date_guidance(_now_ist().date())
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
@@ -84,7 +114,7 @@ async def extract_invoice_from_image(image_bytes: bytes, media_type: str = "imag
                     "contents": [
                         {
                             "parts": [
-                                {"text": EXTRACTION_PROMPT},
+                                {"text": prompt},
                                 {
                                     "inline_data": {
                                         "mime_type": media_type,
@@ -96,6 +126,8 @@ async def extract_invoice_from_image(image_bytes: bytes, media_type: str = "imag
                     ],
                     "generationConfig": {
                         "response_mime_type": "application/json",
+                        # no randomness: the same photo is read the same way every time
+                        "temperature": 0,
                     },
                 },
             )

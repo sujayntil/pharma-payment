@@ -120,6 +120,37 @@ extractBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------- Unusual-date warning ----------
+// A wrong year is easy to miss on a phone (an angled photo can make the AI
+// misread it). A date that is in the future or more than a year old is
+// highlighted with a note; saving is still allowed.
+
+// escapeHtml() leaves double quotes alone, which breaks value="..." attributes
+// (a name like A "B" Chemist would cut itself off). Use this inside attributes.
+const attrEsc = (v) => escapeHtml(v ?? "").replace(/"/g, "&quot;");
+
+function dateWarning(value) {
+  if (!value) return "";
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return "";
+  const date = new Date(parts[0], parts[1] - 1, parts[2]);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (date > today) return "This date is in the future — please check it.";
+  const yearAgo = new Date(today);
+  yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+  if (date < yearAgo) return "This date is more than a year old — please check the year.";
+  return "";
+}
+
+function applyDateWarning(input, note) {
+  if (!input || !note) return;
+  const message = dateWarning(input.value);
+  input.classList.toggle("confidence-low", !!message);
+  note.textContent = message;
+  note.style.display = message ? "block" : "none";
+}
+
 function fillReviewForm(result) {
   const confidence = result.confidence || {};
   const setField = (id, value, confKey) => {
@@ -134,6 +165,7 @@ function fillReviewForm(result) {
 
   setField("f_invoice_number", result.invoice_number, "invoice_number");
   setField("f_invoice_date", result.invoice_date);
+  applyDateWarning(document.getElementById("f_invoice_date"), document.getElementById("f_invoice_date_warn"));
   setField("f_customer_name", result.customer_name, "customer_name");
   document.getElementById("f_customer_type").value = result.customer_type || "";
   setField("f_total_amount", result.total_amount, "total_amount");
@@ -149,6 +181,9 @@ function fillReviewForm(result) {
     notice.style.display = "block";
     notice.textContent = "Review the details below, then confirm to save this invoice.";
   }
+  if (dateWarning(result.invoice_date)) {
+    notice.textContent += " The invoice date looks unusual — please check it.";
+  }
 
   updatePendingPreview();
 }
@@ -163,6 +198,12 @@ function updatePendingPreview() {
 document.getElementById("f_total_amount").addEventListener("input", updatePendingPreview);
 document.getElementById("f_paid_amount").addEventListener("input", updatePendingPreview);
 
+["input", "change"].forEach((type) =>
+  document.getElementById("f_invoice_date").addEventListener(type, () =>
+    applyDateWarning(document.getElementById("f_invoice_date"), document.getElementById("f_invoice_date_warn"))
+  )
+);
+
 document.getElementById("cancelReviewBtn").addEventListener("click", resetUploadFlow);
 
 function resetUploadFlow() {
@@ -175,6 +216,7 @@ function resetUploadFlow() {
   document.getElementById("uploadStep1").style.display = "block";
   document.getElementById("reviewForm").style.display = "none";
   document.getElementById("reviewForm").reset();
+  applyDateWarning(document.getElementById("f_invoice_date"), document.getElementById("f_invoice_date_warn"));
   document.getElementById("extractError").innerHTML = "";
   document.getElementById("saveError").innerHTML = "";
 }
@@ -301,17 +343,18 @@ function renderMyInvoices(invoices) {
           <div class="field-row">
             <div>
               <label>Invoice number</label>
-              <input class="e-invoice-number" value="${escapeHtml(i.invoice_number)}" />
+              <input class="e-invoice-number" value="${attrEsc(i.invoice_number)}" />
             </div>
             <div>
               <label>Invoice date</label>
               <input class="e-invoice-date" type="date" value="${i.invoice_date || ""}" />
+              <div class="hint date-warn e-date-warn" style="display:none;"></div>
             </div>
           </div>
           <div class="field-row">
             <div>
               <label>Customer</label>
-              <input class="e-customer" value="${escapeHtml(i.customer_name || "")}" />
+              <input class="e-customer" value="${attrEsc(i.customer_name)}" />
             </div>
             <div>
               <label>Invoice amount (₹)</label>
@@ -328,7 +371,7 @@ function renderMyInvoices(invoices) {
             </div>
             <div>
               <label>Remarks</label>
-              <input class="e-remarks" value="${escapeHtml(i.remarks || "")}" />
+              <input class="e-remarks" value="${attrEsc(i.remarks)}" />
             </div>
           </div>
           <div class="hint">Already-paid amount isn't edited here — record payments from the Collections tab instead.</div>
@@ -352,7 +395,16 @@ function toggleInvoiceEdit(invoiceId) {
   const card = document.getElementById(`myinv-${invoiceId}`);
   const form = card.querySelector(".edit-form");
   form.style.display = form.style.display === "none" ? "block" : "none";
+  applyDateWarning(form.querySelector(".e-invoice-date"), form.querySelector(".e-date-warn"));
 }
+
+["input", "change"].forEach((type) =>
+  document.getElementById("myInvoicesList").addEventListener(type, (e) => {
+    if (e.target.classList.contains("e-invoice-date")) {
+      applyDateWarning(e.target, e.target.closest("div").querySelector(".e-date-warn"));
+    }
+  })
+);
 
 async function saveInvoiceEdit(invoiceId) {
   const card = document.getElementById(`myinv-${invoiceId}`);
@@ -365,18 +417,31 @@ async function saveInvoiceEdit(invoiceId) {
     return;
   }
 
+  const body = {
+    invoice_number: card.querySelector(".e-invoice-number").value.trim(),
+    invoice_date: card.querySelector(".e-invoice-date").value || null,
+    customer_name: card.querySelector(".e-customer").value.trim(),
+    total_amount: amount,
+    payment_mode: card.querySelector(".e-mode").value || null,
+    remarks: card.querySelector(".e-remarks").value || null,
+  };
+
   try {
-    await apiFetch(`/invoices/${invoiceId}`, {
-      method: "PUT",
-      body: {
-        invoice_number: card.querySelector(".e-invoice-number").value.trim(),
-        invoice_date: card.querySelector(".e-invoice-date").value || null,
-        customer_name: card.querySelector(".e-customer").value.trim(),
-        total_amount: amount,
-        payment_mode: card.querySelector(".e-mode").value || null,
-        remarks: card.querySelector(".e-remarks").value || null,
-      },
-    });
+    try {
+      await apiFetch(`/invoices/${invoiceId}`, { method: "PUT", body });
+    } catch (err) {
+      // 409 = number already used by another invoice (can be intentional).
+      // A 400 duplicate (same number, customer and amount) is a hard stop and
+      // is shown as an error below, with no "save anyway".
+      if (err.status === 409 && confirm(err.message + "\n\nSave it anyway?")) {
+        await apiFetch(`/invoices/${invoiceId}`, {
+          method: "PUT",
+          body: { ...body, confirm_duplicate: true },
+        });
+      } else {
+        throw err;
+      }
+    }
     loadMyInvoices();
   } catch (err) {
     errorBox.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;

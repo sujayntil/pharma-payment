@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 from ..deps import require_admin
+from ..utils import compute_status
 
 router = APIRouter(prefix="/admin", tags=["admin-imports"])
 
@@ -98,16 +99,24 @@ def _same_invoice(
     invoice, customer_name: str, invoice_date, total_amount: float,
     taxable_amount: Optional[float], tax_amount: Optional[float],
 ) -> bool:
-    core_fields_match = (
+    return (
         _key(invoice.customer.name if invoice.customer else "") == _key(customer_name)
         and invoice.invoice_date == invoice_date
         and abs(float(invoice.total_amount or 0) - total_amount) < 0.01
-    )
-    if not core_fields_match or not invoice.external_key:
-        return core_fields_match
-    return (
-        abs(float(invoice.taxable_amount or 0) - float(taxable_amount or 0)) < 0.01
-        and abs(float(invoice.tax_amount or 0) - float(tax_amount or 0)) < 0.01
+        and (
+            invoice.taxable_amount is None
+            and taxable_amount is None
+            or invoice.taxable_amount is not None
+            and taxable_amount is not None
+            and abs(float(invoice.taxable_amount) - taxable_amount) < 0.01
+        )
+        and (
+            invoice.tax_amount is None
+            and tax_amount is None
+            or invoice.tax_amount is not None
+            and tax_amount is not None
+            and abs(float(invoice.tax_amount) - tax_amount) < 0.01
+        )
     )
 
 
@@ -158,6 +167,7 @@ async def import_invoices(
     result = {
         "filename": file.filename,
         "created": 0,
+        "updated": 0,
         "duplicates": 0,
         "conflicts": [],
         "row_errors": [],
@@ -169,6 +179,16 @@ async def import_invoices(
         if idx is None:
             return None
         return row[idx] if idx < len(row) else None
+
+    seen_bill_keys = set()
+
+    def note_unmapped(customer):
+        if customer.mr_id is None:
+            entry = result["unmapped_customers"].setdefault(
+                str(customer.id),
+                {"customer_id": customer.id, "customer_name": customer.name, "invoice_count": 0},
+            )
+            entry["invoice_count"] += 1
 
     try:
         for row_number, row in enumerate(rows[header_row:], start=header_row + 1):
@@ -189,16 +209,22 @@ async def import_invoices(
                     raise ValueError("date is blank")
 
                 bill_key = _bill_key(bill_no)
+                if bill_key in seen_bill_keys:
+                    result["conflicts"].append({
+                        "row": row_number,
+                        "invoice_number": bill_no,
+                        "message": "Bill number appears more than once in this upload",
+                    })
+                    continue
+                seen_bill_keys.add(bill_key)
+
                 same_number = invoice_by_key.get(bill_key, [])
-                if same_number:
-                    if any(_same_invoice(i, customer_name, invoice_date, total_amount, taxable_amount, tax_amount) for i in same_number):
-                        result["duplicates"] += 1
-                    else:
-                        result["conflicts"].append({
-                            "row": row_number,
-                            "invoice_number": bill_no,
-                            "message": "Bill number already exists with different customer, date, amount, or tax details",
-                        })
+                if len(same_number) > 1:
+                    result["conflicts"].append({
+                        "row": row_number,
+                        "invoice_number": bill_no,
+                        "message": "Multiple existing invoices use this bill number; resolve them before importing",
+                    })
                     continue
 
                 customer = customer_by_key.get(_key(customer_name))
@@ -209,6 +235,30 @@ async def import_invoices(
                     customer_by_key[_key(customer_name)] = customer
 
                 external_key = "tally:" + hashlib.sha256(bill_key.encode("utf-8")).hexdigest()
+                if same_number:
+                    invoice = same_number[0]
+                    changed = not _same_invoice(
+                        invoice, customer_name, invoice_date, total_amount,
+                        taxable_amount, tax_amount,
+                    ) or invoice.mr_id != customer.mr_id or not invoice.external_key
+                    invoice.invoice_number = bill_no
+                    invoice.invoice_date = invoice_date
+                    invoice.customer_id = customer.id
+                    invoice.mr_id = customer.mr_id
+                    invoice.total_amount = total_amount
+                    invoice.taxable_amount = taxable_amount
+                    invoice.tax_amount = tax_amount
+                    invoice.status, invoice.pending_amount = compute_status(
+                        total_amount, invoice.paid_amount
+                    )
+                    invoice.external_key = external_key
+                    if changed:
+                        result["updated"] += 1
+                        note_unmapped(customer)
+                    else:
+                        result["duplicates"] += 1
+                    continue
+
                 invoice = models.Invoice(
                     invoice_number=bill_no,
                     invoice_date=invoice_date,
@@ -226,12 +276,7 @@ async def import_invoices(
                 db.flush()
                 invoice_by_key.setdefault(bill_key, []).append(invoice)
                 result["created"] += 1
-                if customer.mr_id is None:
-                    entry = result["unmapped_customers"].setdefault(
-                        str(customer.id),
-                        {"customer_id": customer.id, "customer_name": customer.name, "invoice_count": 0},
-                    )
-                    entry["invoice_count"] += 1
+                note_unmapped(customer)
             except (TypeError, ValueError) as exc:
                 result["row_errors"].append({"row": row_number, "message": str(exc)})
         db.commit()

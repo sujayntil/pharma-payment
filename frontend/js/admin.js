@@ -309,6 +309,7 @@ function renderImportResult(result) {
   root.innerHTML = `
     <div class="import-summary" aria-label="Import summary">
       <div><span>Imported</span><strong>${result.created}</strong></div>
+      <div><span>Updated</span><strong>${result.updated || 0}</strong></div>
       <div><span>Duplicates</span><strong>${result.duplicates}</strong></div>
       <div><span>Conflicts</span><strong>${conflicts.length}</strong></div>
       <div><span>Row issues</span><strong>${errors.length}</strong></div>
@@ -330,7 +331,7 @@ document.getElementById("invoiceImportForm").addEventListener("submit", async (e
     form.append("file", fileInput.files[0]);
     const result = await apiFetch("/admin/import-invoices", { method: "POST", body: form, isForm: true });
     renderImportResult(result);
-    showImportMessage(`Import complete. ${result.created} invoice(s) added.`, "success");
+    showImportMessage(`Import complete. ${result.created} added, ${result.updated || 0} updated.`, "success");
     await loadCustomers();
     await loadDashboard();
     await loadInvoices();

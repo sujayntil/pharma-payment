@@ -100,12 +100,30 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(repeated.json()["duplicates"], 1)
         self.assertEqual(self.db.query(models.Invoice).count(), 1)
 
-    def test_conflicting_bill_number_is_reported_not_inserted(self):
+    def test_existing_bill_number_is_updated_without_losing_collections(self):
         self.upload([["01-10-2026", "A00002", "Tulsi Pharmacy", 100, 90, 10]])
+        invoice = self.db.query(models.Invoice).one()
+        invoice.paid_amount = 40
+        invoice.pending_amount = 60
+        invoice.status = "PARTIAL"
+        self.db.add(models.Payment(invoice_id=invoice.id, amount=40, collected_by=self.mr.id))
+        self.db.commit()
+
         response = self.upload([["02-10-2026", "A00002", "Another Party", 125, 110, 15]])
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["conflicts"]), 1)
+        self.assertEqual(response.json()["updated"], 1)
+        self.assertEqual(response.json()["conflicts"], [])
         self.assertEqual(self.db.query(models.Invoice).count(), 1)
+        invoice = self.db.query(models.Invoice).one()
+        self.assertEqual(invoice.invoice_date.isoformat(), "2026-10-02")
+        self.assertEqual(invoice.customer.name, "Another Party")
+        self.assertEqual(invoice.total_amount, 125)
+        self.assertEqual(invoice.taxable_amount, 110)
+        self.assertEqual(invoice.tax_amount, 15)
+        self.assertEqual(invoice.paid_amount, 40)
+        self.assertEqual(invoice.pending_amount, 85)
+        self.assertEqual(invoice.status, "PARTIAL")
+        self.assertEqual(self.db.query(models.Payment).count(), 1)
 
     def test_mapping_backfills_unassigned_invoices_and_future_imports(self):
         self.upload([["01-10-2026", "A00003", "Tulsi Pharmacy", 200, 190, 10]])

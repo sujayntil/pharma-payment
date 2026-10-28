@@ -230,14 +230,6 @@ async function loadCustomers() {
     allCustomers = await apiFetch("/customers");
     renderCustomers(allCustomers);
     renderMappingCustomers(allCustomers);
-    const options = document.getElementById("manualCustomerOptions");
-    if (options) {
-      options.replaceChildren(...allCustomers.map((customer) => {
-        const option = document.createElement("option");
-        option.value = customer.name;
-        return option;
-      }));
-    }
   } catch (err) {
     console.error(err);
   }
@@ -326,51 +318,6 @@ function renderImportResult(result) {
     ${conflicts.length ? `<div class="import-issues"><h3>Bill number conflicts</h3><ul>${conflicts.map((r) => `<li>Row ${r.row} · ${escapeHtml(r.invoice_number)} — ${escapeHtml(r.message)}</li>`).join("")}</ul></div>` : ""}
     ${errors.length ? `<div class="import-issues"><h3>Rows not imported</h3><ul>${errors.map((r) => `<li>Row ${r.row} — ${escapeHtml(r.message)}</li>`).join("")}</ul></div>` : ""}`;
 }
-
-const manualInvoicePanel = document.getElementById("manualInvoicePanel");
-document.getElementById("manualInvoiceToggle").addEventListener("click", (event) => {
-  manualInvoicePanel.hidden = !manualInvoicePanel.hidden;
-  event.currentTarget.setAttribute("aria-expanded", String(!manualInvoicePanel.hidden));
-});
-
-document.getElementById("manualInvoiceForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const button = document.getElementById("manualInvoiceSubmit");
-  const message = document.getElementById("manualInvoiceMessage");
-  button.disabled = true;
-  message.className = "notice";
-  message.textContent = "Adding invoice…";
-  const optionalAmount = (id) => {
-    const value = document.getElementById(id).value;
-    return value === "" ? null : Number(value);
-  };
-  try {
-    const invoice = await apiFetch("/admin/manual-invoice", {
-      method: "POST",
-      body: {
-        invoice_number: document.getElementById("manualInvoiceNumber").value.trim(),
-        invoice_date: document.getElementById("manualInvoiceDate").value,
-        customer_name: document.getElementById("manualInvoiceCustomer").value.trim(),
-        total_amount: Number(document.getElementById("manualInvoiceAmount").value),
-        taxable_amount: optionalAmount("manualInvoiceTaxable"),
-        tax_amount: optionalAmount("manualInvoiceTax"),
-      },
-    });
-    document.getElementById("manualInvoiceForm").reset();
-    message.className = invoice.unmapped_customer ? "notice" : "notice success";
-    message.textContent = invoice.unmapped_customer
-      ? `Invoice ${invoice.invoice_number} added. ${invoice.customer_name} has no MR mapping yet; assign one below.`
-      : `Invoice ${invoice.invoice_number} added for ${invoice.customer_name} and assigned to ${invoice.mr_name}.`;
-    await loadCustomers();
-    await loadDashboard();
-    await loadInvoices();
-  } catch (err) {
-    message.className = "notice error";
-    message.textContent = err.message;
-  } finally {
-    button.disabled = false;
-  }
-});
 
 document.getElementById("invoiceImportForm").addEventListener("submit", async (event) => {
   event.preventDefault();

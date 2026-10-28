@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 # ---- Auth ----
@@ -64,15 +64,6 @@ class CustomerOut(CustomerCreate):
 
 class CustomerMrMapping(BaseModel):
     mr_id: Optional[int] = None
-
-
-class ManualSalesBookInvoice(BaseModel):
-    invoice_number: str
-    invoice_date: date
-    customer_name: str
-    total_amount: float = Field(ge=0, allow_inf_nan=False)
-    taxable_amount: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
-    tax_amount: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 # ---- Invoices ----

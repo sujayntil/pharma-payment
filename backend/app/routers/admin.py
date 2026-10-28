@@ -31,9 +31,11 @@ def dashboard(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Tally-imported invoice totals, optionally scoped by invoice date.
-    Payments are scoped to the invoice date, not when the payment came in."""
-    q = db.query(models.Invoice).filter(models.Invoice.external_key.isnot(None))
+    """Totals, optionally scoped to an invoice_date range. Note this scopes
+    by when the invoice was dated, not when payments came in -- an invoice
+    dated inside the range still counts its full paid_amount even if some
+    of that payment happened later."""
+    q = db.query(models.Invoice)
     conditions = _date_range_filter(date_from, date_to)
     if conditions:
         q = q.filter(and_(*conditions))

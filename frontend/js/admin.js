@@ -91,14 +91,14 @@ async function loadDashboard() {
     if (dashDateTo) params.append("date_to", dashDateTo);
     const d = await apiFetch(`/admin/dashboard?${params.toString()}`);
     document.getElementById("dashTotals").innerHTML = `
-      <div class="stat accent"><div class="label">Tally sales</div><div class="value">${money(d.total_sales)}</div></div>
-      <div class="stat"><div class="label">Collected on Tally invoices</div><div class="value">${money(d.collected)}</div></div>
-      <div class="stat"><div class="label">Outstanding on Tally invoices</div><div class="value">${money(d.outstanding)}</div></div>
+      <div class="stat accent"><div class="label">Total sales</div><div class="value">${money(d.total_sales)}</div></div>
+      <div class="stat"><div class="label">Collected</div><div class="value">${money(d.collected)}</div></div>
+      <div class="stat"><div class="label">Outstanding</div><div class="value">${money(d.outstanding)}</div></div>
     `;
     document.getElementById("dashCounts").innerHTML = `
-      <div class="stat"><div class="label">Paid Tally invoices</div><div class="value">${d.paid}</div></div>
-      <div class="stat"><div class="label">Partial Tally invoices</div><div class="value">${d.partial}</div></div>
-      <div class="stat"><div class="label">Unpaid Tally invoices</div><div class="value">${d.unpaid}</div></div>
+      <div class="stat"><div class="label">Paid invoices</div><div class="value">${d.paid}</div></div>
+      <div class="stat"><div class="label">Partial invoices</div><div class="value">${d.partial}</div></div>
+      <div class="stat"><div class="label">Unpaid invoices</div><div class="value">${d.unpaid}</div></div>
     `;
 
     const alerts = await apiFetch("/admin/outstanding-alerts?threshold=50000");

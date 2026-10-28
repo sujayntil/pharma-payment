@@ -2,7 +2,6 @@
 
 import io
 import unittest
-from datetime import date
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -192,32 +191,6 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(len(response.json()), 1)
         self.assertEqual(response.json()[0]["invoice_number"], "A00007")
         self.assertEqual(response.json()[0]["amount"], 40)
-
-    def test_dashboard_sales_match_tally_rows_and_exclude_manual_invoices(self):
-        self.upload([["01-10-2026", "TALLY-100", "Tulsi Pharmacy", 100, 90, 10]])
-        customer = models.Customer(name="Manual Pharmacy", mr_id=self.mr.id)
-        self.db.add(customer)
-        self.db.flush()
-        self.db.add(models.Invoice(
-            invoice_number="MR-100",
-            invoice_date=date(2026, 10, 1),
-            customer_id=customer.id,
-            mr_id=self.mr.id,
-            total_amount=500,
-            paid_amount=0,
-            pending_amount=500,
-            status="UNPAID",
-        ))
-        self.db.commit()
-
-        response = self.client.get(
-            "/admin/dashboard?date_from=2026-10-01&date_to=2026-10-31"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["total_sales"], 100)
-        self.assertEqual(response.json()["outstanding"], 100)
-        self.assertEqual(response.json()["total_invoices"], 1)
-        self.assertEqual(response.json()["unpaid"], 1)
 
     def test_mr_manual_invoice_flow_remains_available_but_blocks_tally_duplicate(self):
         new_invoice = {

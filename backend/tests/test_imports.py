@@ -219,6 +219,31 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(response.json()["total_invoices"], 1)
         self.assertEqual(response.json()["unpaid"], 1)
 
+    def test_admin_manual_sales_book_invoice_uses_customer_assignment_and_blocks_duplicates(self):
+        customer = models.Customer(name="Tulsi Pharmacy", mr_id=self.mr.id)
+        self.db.add(customer)
+        self.db.commit()
+        payload = {
+            "invoice_number": "MANUAL-100",
+            "invoice_date": "2026-10-29",
+            "customer_name": " TULSI PHARMACY ",
+            "total_amount": 250,
+            "taxable_amount": 225,
+            "tax_amount": 25,
+        }
+
+        response = self.client.post("/admin/manual-invoice", json=payload)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["mr_name"], self.mr.name)
+        invoice = self.db.query(models.Invoice).one()
+        self.assertEqual(invoice.total_amount, 250)
+        self.assertEqual(invoice.pending_amount, 250)
+        self.assertTrue(invoice.external_key.startswith("tally:"))
+
+        duplicate = self.client.post("/admin/manual-invoice", json=payload)
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(self.db.query(models.Invoice).count(), 1)
+
     def test_mr_manual_invoice_flow_remains_available_but_blocks_tally_duplicate(self):
         new_invoice = {
             "invoice_number": "MR-001",

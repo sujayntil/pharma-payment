@@ -5,6 +5,7 @@
 | Upload a valid workbook with a customer that has no MR mapping | Invoice imports with Bill Amount as the collectible total, remains unassigned, and customer appears in the unmapped report | `test_unmapped_invoice_imported_and_repeat_is_idempotent` |
 | Upload the same weekly row again | No second invoice; row reported as a duplicate | `test_unmapped_invoice_imported_and_repeat_is_idempotent` |
 | Re-upload a bill number with changed customer/date/amount | Existing invoice details are updated from the sheet; recorded collections remain and pending is recalculated | `test_existing_bill_number_is_updated_without_losing_collections` |
+| Open dashboard with Tally and manual invoices in the same date range | Sales KPIs include Tally-imported bills and match the sheet; manual invoices remain in the app but do not inflate Tally totals | `test_dashboard_sales_match_tally_rows_and_exclude_manual_invoices` |
 | Map an imported unassigned customer to an MR | Existing unassigned invoices become visible to that MR | `test_mapping_backfills_unassigned_invoices_and_future_imports` |
 | Upload a later invoice for an already mapped customer | Invoice is assigned to the mapped MR | `test_mapping_backfills_unassigned_invoices_and_future_imports` |
 | Load customers for assignment UI | MR assignment and invoice count are returned | `test_customer_list_exposes_assignment_and_invoice_count_to_mapping_ui` |

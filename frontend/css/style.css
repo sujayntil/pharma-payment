@@ -487,9 +487,3 @@ td.num {
   padding: 1px 5px;
   border-radius: 4px;
 }
-
-/* Unusual-date warning (shown under a date that is in the future or over a year old) */
-.date-warn {
-  color: var(--partial);
-  font-weight: 500;
-}

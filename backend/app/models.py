@@ -7,9 +7,11 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Index,
     JSON,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -51,9 +53,13 @@ class Customer(Base):
     phone = Column(String)
     address = Column(String)
     gstin = Column(String)
+    mr_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = Column(DateTime, server_default=func.now())
 
     invoices = relationship("Invoice", back_populates="customer")
+    mr = relationship("User", foreign_keys=[mr_id])
 
 
 class Product(Base):
@@ -68,13 +74,27 @@ class Product(Base):
 
 class Invoice(Base):
     __tablename__ = "invoices"
+    __table_args__ = (
+        Index(
+            "uq_invoices_external_key",
+            "external_key",
+            unique=True,
+            postgresql_where=text("external_key IS NOT NULL"),
+            sqlite_where=text("external_key IS NOT NULL"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_number = Column(String, index=True, nullable=False)
+    # Set only for invoices imported from Tally. A partial unique index makes
+    # repeated uploads idempotent while leaving legacy MR-entered rows intact.
+    external_key = Column(String(160), nullable=True)
     invoice_date = Column(Date)
     customer_id = Column(Integer, ForeignKey("customers.id"))
     mr_id = Column(Integer, ForeignKey("users.id"))
     total_amount = Column(Float, nullable=False, default=0)
+    taxable_amount = Column(Float)
+    tax_amount = Column(Float)
     paid_amount = Column(Float, nullable=False, default=0)
     pending_amount = Column(Float, nullable=False, default=0)
     status = Column(String, default=StatusEnum.UNPAID.value)

@@ -43,10 +43,46 @@ function showTab(name) {
   if (name === "invoices") loadInvoices();
   if (name === "customers") loadCustomers();
   if (name === "performance") loadPerformance();
+  if (name === "import") loadImportData();
   if (name === "users") loadUsers();
 }
 
 // ---------- Dashboard ----------
+
+let seenPaymentIds = new Set();
+let paymentFeedInitialized = false;
+
+async function loadRecentPayments() {
+  const payments = await apiFetch("/admin/recent-payments?limit=20");
+  const newPayments = paymentFeedInitialized
+    ? payments.filter((payment) => !seenPaymentIds.has(payment.payment_id))
+    : [];
+  payments.forEach((payment) => seenPaymentIds.add(payment.payment_id));
+  paymentFeedInitialized = true;
+
+  const paymentBody = document.getElementById("recentPaymentsBody");
+  const paymentEmpty = document.getElementById("recentPaymentsEmpty");
+  if (paymentBody) {
+    paymentBody.innerHTML = payments.map((p) => `
+      <tr>
+        <td>${p.payment_date ? new Date(p.payment_date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}</td>
+        <td>${escapeHtml(p.customer_name || "—")}</td>
+        <td class="invoice-number">${escapeHtml(p.invoice_number)}</td>
+        <td>${escapeHtml(p.collected_by || "—")}</td>
+        <td class="num amount">${money(p.amount)}</td>
+      </tr>`).join("");
+    paymentEmpty.style.display = payments.length ? "none" : "block";
+  }
+
+  if (newPayments.length) {
+    const notice = document.getElementById("collectionNotice");
+    const first = newPayments[0];
+    notice.textContent = newPayments.length === 1
+      ? `New collection: ${money(first.amount)} recorded by ${first.collected_by || "an MR"} for ${first.customer_name || first.invoice_number}.`
+      : `${newPayments.length} new collections have been recorded. See the Recent collections list below.`;
+    notice.style.display = "block";
+  }
+}
 
 async function loadDashboard() {
   try {
@@ -85,6 +121,8 @@ async function loadDashboard() {
         )
         .join("");
     }
+
+    await loadRecentPayments();
   } catch (err) {
     console.error(err);
   }
@@ -98,10 +136,9 @@ async function ensureMrOptions() {
   if (mrOptionsLoaded) return;
   try {
     const users = await apiFetch("/admin/users");
+    mrUsers = users.filter((u) => u.role === "MR");
     const select = document.getElementById("filterMr");
-    users
-      .filter((u) => u.role === "MR")
-      .forEach((u) => {
+    mrUsers.forEach((u) => {
         const opt = document.createElement("option");
         opt.value = u.id;
         opt.textContent = u.name;
@@ -112,6 +149,8 @@ async function ensureMrOptions() {
     console.error(err);
   }
 }
+
+let mrUsers = [];
 
 let allInvoices = [];
 
@@ -190,10 +229,117 @@ async function loadCustomers() {
   try {
     allCustomers = await apiFetch("/customers");
     renderCustomers(allCustomers);
+    renderMappingCustomers(allCustomers);
   } catch (err) {
     console.error(err);
   }
 }
+
+async function loadImportData() {
+  await ensureMrOptions();
+  await loadCustomers();
+}
+
+function mrSelectOptions(selectedId) {
+  const options = [`<option value="">Unassigned</option>`].concat(
+    mrUsers.map((mr) => `<option value="${mr.id}" ${String(mr.id) === String(selectedId || "") ? "selected" : ""}>${escapeHtml(mr.name)}</option>`)
+  );
+  return options.join("");
+}
+
+function renderMappingCustomers(customers) {
+  const body = document.getElementById("mappingCustomersBody");
+  if (!body) return;
+  body.innerHTML = customers.map((c) => `
+    <tr class="${c.mr_id ? "" : "mapping-unassigned"}">
+      <td>${escapeHtml(c.name)}${c.mr_id ? "" : '<span class="mapping-badge">Needs assignment</span>'}</td>
+      <td>${escapeHtml(c.type || "—")}</td>
+      <td>${Number(c.invoice_count || 0)}</td>
+      <td><select aria-label="Assign ${escapeHtml(c.name)} to MR" onchange="saveCustomerMr(${c.id}, this.value)">${mrSelectOptions(c.mr_id)}</select></td>
+    </tr>`).join("");
+  document.getElementById("mappingCustomersEmpty").style.display = customers.length ? "none" : "block";
+  const q = document.getElementById("mappingCustomerSearch").value.trim().toLowerCase();
+  if (q) filterMappingCustomers(q);
+}
+
+function filterMappingCustomers(q) {
+  document.querySelectorAll("#mappingCustomersBody tr").forEach((row) => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+document.getElementById("mappingCustomerSearch").addEventListener("input", (event) => {
+  filterMappingCustomers(event.target.value.trim().toLowerCase());
+});
+
+async function saveCustomerMr(customerId, mrId) {
+  try {
+    await apiFetch(`/admin/customers/${customerId}/mr`, {
+      method: "PUT",
+      body: { mr_id: mrId ? Number(mrId) : null },
+    });
+    await loadCustomers();
+    await loadInvoices();
+    showImportMessage(
+      mrId
+        ? "Customer assignment saved. Unassigned invoices are now visible to the selected MR."
+        : "Customer assignment cleared. Existing invoice assignments were preserved.",
+      "success"
+    );
+  } catch (err) {
+    showImportMessage(err.message, "error");
+    await loadCustomers();
+  }
+}
+
+function showImportMessage(message, type = "") {
+  const el = document.getElementById("invoiceImportMessage");
+  if (el) {
+    el.className = type ? `notice ${type}` : "notice";
+    el.textContent = message;
+  }
+}
+
+function renderImportResult(result) {
+  const root = document.getElementById("invoiceImportResults");
+  const unmapped = result.unmapped_customers || [];
+  const conflicts = result.conflicts || [];
+  const errors = result.row_errors || [];
+  root.style.display = "block";
+  root.innerHTML = `
+    <div class="import-summary" aria-label="Import summary">
+      <div><span>Imported</span><strong>${result.created}</strong></div>
+      <div><span>Duplicates</span><strong>${result.duplicates}</strong></div>
+      <div><span>Conflicts</span><strong>${conflicts.length}</strong></div>
+      <div><span>Row issues</span><strong>${errors.length}</strong></div>
+    </div>
+    ${unmapped.length ? `<div class="import-issues"><h3>Customer needs an MR assignment</h3><p>These invoices were imported and are waiting for assignment.</p><ul>${unmapped.map((c) => `<li><strong>${escapeHtml(c.customer_name)}</strong> · ${c.invoice_count} invoice(s) <select aria-label="Assign ${escapeHtml(c.customer_name)} to MR" onchange="saveCustomerMr(${c.customer_id}, this.value)">${mrSelectOptions("")}</select></li>`).join("")}</ul></div>` : ""}
+    ${conflicts.length ? `<div class="import-issues"><h3>Bill number conflicts</h3><ul>${conflicts.map((r) => `<li>Row ${r.row} · ${escapeHtml(r.invoice_number)} — ${escapeHtml(r.message)}</li>`).join("")}</ul></div>` : ""}
+    ${errors.length ? `<div class="import-issues"><h3>Rows not imported</h3><ul>${errors.map((r) => `<li>Row ${r.row} — ${escapeHtml(r.message)}</li>`).join("")}</ul></div>` : ""}`;
+}
+
+document.getElementById("invoiceImportForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const fileInput = document.getElementById("invoiceImportFile");
+  const button = document.getElementById("invoiceImportButton");
+  if (!fileInput.files.length) return;
+  button.disabled = true;
+  showImportMessage("Importing workbook…");
+  try {
+    const form = new FormData();
+    form.append("file", fileInput.files[0]);
+    const result = await apiFetch("/admin/import-invoices", { method: "POST", body: form, isForm: true });
+    renderImportResult(result);
+    showImportMessage(`Import complete. ${result.created} invoice(s) added.`, "success");
+    await loadCustomers();
+    await loadDashboard();
+    await loadInvoices();
+  } catch (err) {
+    showImportMessage(err.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
 
 document.getElementById("customerSearch").addEventListener("input", (e) => {
   const q = e.target.value.trim().toLowerCase();
@@ -437,3 +583,6 @@ document.getElementById("userForm").addEventListener("submit", async (e) => {
 // ---------- init ----------
 
 loadDashboard();
+window.setInterval(() => {
+  if (document.visibilityState === "visible") loadRecentPayments().catch(console.error);
+}, 60_000);

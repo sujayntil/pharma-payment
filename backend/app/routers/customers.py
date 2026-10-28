@@ -30,6 +30,8 @@ def list_customers(
             phone=c.phone,
             address=c.address,
             gstin=c.gstin,
+            mr_id=c.mr_id,
+            mr_name=c.mr.name if c.mr else None,
             invoice_count=count,
         )
         for c, count in rows

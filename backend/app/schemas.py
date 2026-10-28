@@ -57,6 +57,13 @@ class CustomerCreate(BaseModel):
 class CustomerOut(CustomerCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    mr_id: Optional[int] = None
+    mr_name: Optional[str] = None
+    invoice_count: int = 0
+
+
+class CustomerMrMapping(BaseModel):
+    mr_id: Optional[int] = None
 
 
 # ---- Invoices ----
@@ -96,6 +103,8 @@ class InvoiceOut(BaseModel):
     invoice_number: str
     invoice_date: Optional[date] = None
     total_amount: float
+    taxable_amount: Optional[float] = None
+    tax_amount: Optional[float] = None
     paid_amount: float
     pending_amount: float
     status: str

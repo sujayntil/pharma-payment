@@ -51,13 +51,19 @@ def create_invoice(
     """Confirm & save a reviewed invoice. Looks up (or creates) the customer
     by name, computes status/pending from total vs paid, and records the
     initial payment if any amount was already paid."""
-    if not payload.confirm_duplicate:
-        existing = (
-            db.query(models.Invoice)
-            .filter(models.Invoice.invoice_number.ilike(payload.invoice_number.strip()))
-            .first()
-        )
-        if existing:
+    existing = (
+        db.query(models.Invoice)
+        .filter(models.Invoice.invoice_number.ilike(payload.invoice_number.strip()))
+        .first()
+    )
+    if existing:
+        if existing.external_key:
+            raise HTTPException(
+                409,
+                f"Invoice number '{payload.invoice_number}' is already present from the Tally import. "
+                "Record collections against that invoice instead of entering it again.",
+            )
+        if not payload.confirm_duplicate:
             other_mr = existing.mr.name if existing.mr else "someone"
             other_customer = existing.customer.name if existing.customer else "a customer"
             raise HTTPException(

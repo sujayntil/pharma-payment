@@ -124,6 +124,37 @@ def outstanding_alerts(
     ]
 
 
+@router.get("/recent-payments")
+def recent_payments(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Recent collection activity from the existing payment ledger."""
+    limit = min(max(limit, 1), 100)
+    rows = (
+        db.query(models.Payment, models.Invoice, models.Customer, models.User)
+        .join(models.Invoice, models.Payment.invoice_id == models.Invoice.id)
+        .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
+        .outerjoin(models.User, models.Payment.collected_by == models.User.id)
+        .order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "payment_id": payment.id,
+            "invoice_number": invoice.invoice_number,
+            "customer_name": customer.name if customer else None,
+            "amount": payment.amount,
+            "mode": payment.mode,
+            "collected_by": collector.name if collector else None,
+            "payment_date": payment.payment_date,
+        }
+        for payment, invoice, customer, collector in rows
+    ]
+
+
 @router.post("/users", response_model=schemas.UserOut)
 def create_user(
     payload: schemas.UserCreate,

@@ -2,7 +2,11 @@
 // Local docker-compose: leave as-is, it matches https://pharma-payment.onrender.com.
 // Deployed (e.g. Render): change this to your backend's live URL, e.g.
 // "https://pharma-backend.onrender.com" -- no trailing slash.
-const API_BASE = window.API_BASE || "https://pharma-payment.onrender.com";
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
+const DEFAULT_API_BASE = LOCAL_HOSTS.has(window.location.hostname)
+  ? "http://127.0.0.1:8000"
+  : "https://pharma-payment.onrender.com";
+const API_BASE = window.API_BASE || DEFAULT_API_BASE;
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {

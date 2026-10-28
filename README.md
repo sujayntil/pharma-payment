@@ -176,3 +176,25 @@ already in the code:
   `Base.metadata.create_all()` on startup, which is fine for getting going
   but won't handle schema changes on an existing database gracefully.
   Worth switching to Alembic before this holds real production data.
+
+## 8. Tally sales-book import base
+
+The Admin app can import `.xlsx` weekly sales books using the `Date`, `Bill
+No.`, `Party Name`, and `Bill Amt.` columns. `Bill Amt.` is the collection
+amount. Repeated bill numbers are skipped when their details match; conflicting
+rows are reported for review. Customers are created from party names when
+needed and can be assigned to an MR from **Import & mapping**. Unassigned
+invoices remain visible to Admins and become visible to the selected MR after
+assignment. Taxable amount and tax are retained for later reporting, while
+collections use Bill Amount. Manual MR invoice entry remains available.
+
+For an existing Neon database, `create_all()` will not add these columns. Before
+deploying this version, take a Neon branch/backup and apply the additive SQL in
+`backend/migrations/001_tally_import_base.sql` to the branch. Verify the app and
+data there before applying it to production. The migration adds nullable
+`customers.mr_id`, `invoices.external_key`, `invoices.taxable_amount`, and
+`invoices.tax_amount` columns plus indexes; it does not rewrite existing
+invoice or payment rows. Do not use production as a test database.
+
+Automated import cases are in `backend/TEST_CASES.md`; run them from
+`backend/` with `python -m unittest discover -s tests`.

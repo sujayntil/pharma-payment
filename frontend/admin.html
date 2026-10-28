@@ -26,6 +26,7 @@
   <div class="tab" data-tab="invoices">Invoices</div>
   <div class="tab" data-tab="customers">Customers</div>
   <div class="tab" data-tab="performance">MR Performance</div>
+  <div class="tab" data-tab="import">Import &amp; mapping</div>
   <div class="tab" data-tab="users">Users</div>
 </div>
 
@@ -39,6 +40,8 @@
     <div class="grid cols-3" id="dashTotals" style="margin-bottom:16px;"></div>
     <div class="grid cols-3" id="dashCounts" style="margin-bottom:16px;"></div>
 
+    <div id="collectionNotice" class="notice success" role="status" aria-live="polite" style="display:none; margin-bottom:16px;"></div>
+
     <div class="card">
       <div class="section-title"><h2>Outstanding above ₹50,000</h2></div>
       <div class="table-wrap">
@@ -48,6 +51,47 @@
         </table>
       </div>
       <div id="alertsEmpty" class="empty" style="display:none;">No large outstanding balances right now.</div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="section-title"><h2>Recent collections</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Customer</th><th>Invoice</th><th>MR</th><th class="num">Collected</th></tr></thead>
+          <tbody id="recentPaymentsBody"></tbody>
+        </table>
+      </div>
+      <div id="recentPaymentsEmpty" class="empty" style="display:none;">No collections recorded yet.</div>
+    </div>
+  </section>
+
+  <!-- TALLY IMPORT AND MAPPING -->
+  <section class="view" id="view-import">
+    <div class="page-heading">
+      <p class="eyebrow">Weekly workflow</p>
+      <h1>Import Tally sales book</h1>
+      <p class="muted">Upload an .xlsx sales book. Bill Amount becomes the collectible invoice amount; repeated bills are skipped.</p>
+    </div>
+    <div class="card">
+      <form id="invoiceImportForm" class="import-form">
+        <div>
+          <label for="invoiceImportFile">Excel workbook (.xlsx)</label>
+          <input id="invoiceImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+        </div>
+        <button type="submit" id="invoiceImportButton">Upload sales book</button>
+      </form>
+      <div id="invoiceImportMessage" role="status" aria-live="polite"></div>
+      <div id="invoiceImportResults" style="display:none;"></div>
+    </div>
+    <div class="card">
+      <div class="section-title"><div><h2>Customer to MR assignment</h2><p class="muted">Unassigned invoices stay here until a customer is assigned.</p></div></div>
+      <input id="mappingCustomerSearch" placeholder="Search customers…" aria-label="Search customers" />
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>Customer</th><th>Type</th><th>Invoices</th><th>Assigned MR</th></tr></thead>
+          <tbody id="mappingCustomersBody"></tbody>
+        </table>
+      </div>
+      <div id="mappingCustomersEmpty" class="empty" style="display:none;">No customer records found.</div>
     </div>
   </section>
 

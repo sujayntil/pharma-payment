@@ -1,9 +1,9 @@
 :root {
-  --bg: #eef1ef;
+  --bg: #f3f5f3;
   --surface: #ffffff;
   --ink: #1c2321;
   --muted: #5b6660;
-  --line: #d7dcd9;
+  --line: #d9dfdb;
   --primary: #2f6f4e;
   --primary-dark: #1f4d36;
   --primary-soft: #e3efe8;
@@ -125,7 +125,7 @@ h3 {
 }
 
 main {
-  max-width: 1080px;
+  max-width: 1220px;
   margin: 0 auto;
   padding: 22px;
 }
@@ -486,4 +486,193 @@ td.num {
   background: var(--bg);
   padding: 1px 5px;
   border-radius: 4px;
+}
+
+/* ---------- Import workflow ---------- */
+
+.notice.success {
+  background: var(--paid-soft);
+  border-color: var(--paid);
+  color: var(--primary-dark);
+}
+
+.notice.error {
+  background: var(--unpaid-soft);
+  border-color: var(--unpaid);
+  color: var(--unpaid);
+}
+
+.page-heading {
+  margin: 4px 0 18px;
+}
+
+.page-heading h1 {
+  font-size: clamp(22px, 3vw, 29px);
+  letter-spacing: -0.025em;
+}
+
+.page-heading p {
+  margin: 6px 0 0;
+  max-width: 680px;
+}
+
+.eyebrow {
+  color: var(--primary-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#view-import .card + .card {
+  margin-top: 16px;
+}
+
+.import-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.import-form label {
+  margin-top: 0;
+}
+
+.import-form input[type="file"] {
+  min-height: 42px;
+}
+
+.import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.import-summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.import-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-summary strong {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 17px;
+}
+
+.import-issues {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.import-issues h3 {
+  font-size: 14px;
+}
+
+.import-issues p,
+.import-issues ul {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.import-issues ul {
+  padding-left: 18px;
+}
+
+.import-issues li + li {
+  margin-top: 6px;
+}
+
+.import-issues select {
+  width: auto;
+  min-width: 150px;
+  margin-left: 8px;
+  padding: 6px 8px;
+}
+
+.mapping-unassigned td:first-child {
+  font-weight: 600;
+}
+
+.mapping-badge {
+  display: inline-block;
+  margin-left: 8px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--partial-soft);
+  color: #77530b;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#mappingCustomersBody select {
+  min-width: 170px;
+  padding: 7px 9px;
+}
+
+#mappingCustomerSearch {
+  max-width: 380px;
+}
+
+#recentPaymentsBody td:first-child {
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .topbar .brand {
+    font-size: 14px;
+  }
+
+  .topbar .who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .tabs {
+    padding: 0 8px;
+  }
+
+  .tab {
+    padding: 11px 10px;
+    font-size: 13px;
+  }
+
+  .import-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .import-form button {
+    width: 100%;
+  }
+
+  .import-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-title {
+    align-items: flex-start;
+    gap: 8px;
+  }
 }

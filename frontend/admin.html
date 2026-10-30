@@ -25,6 +25,7 @@
   <div class="tab active" data-tab="dashboard">Dashboard</div>
   <div class="tab" data-tab="invoices">Invoices</div>
   <div class="tab" data-tab="customers">Customers</div>
+  <div class="tab" data-tab="collections">Collections</div>
   <div class="tab" data-tab="performance">MR Performance</div>
   <div class="tab" data-tab="import">Import &amp; mapping</div>
   <div class="tab" data-tab="users">Users</div>
@@ -55,7 +56,7 @@
     <div class="card" style="margin-top:16px;">
       <div class="section-title">
         <div><h2>Recent collections</h2><p id="pushStatus" class="muted" role="status">Enable alerts on this device to get notified when an MR records a payment.</p></div>
-        <button id="enablePushButton" type="button">Enable payment alerts</button>
+        <div class="row"><button class="secondary" type="button" onclick="showTab('collections')">View all</button><button id="enablePushButton" type="button">Enable payment alerts</button></div>
       </div>
       <div class="table-wrap">
         <table>
@@ -191,6 +192,41 @@
         </table>
       </div>
       <div id="ledgerEmpty" class="empty" style="display:none;">No invoices match your search.</div>
+    </div>
+  </section>
+
+  <!-- COLLECTIONS -->
+  <section class="view" id="view-collections">
+    <div class="page-heading">
+      <p class="eyebrow">Payment ledger</p>
+      <h1>Collections</h1>
+      <p class="muted">Payments recorded against invoices, newest first.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div id="collectionsDateFilter"></div>
+      <div class="field-row" style="margin-top:14px;">
+        <div><label for="collectionMrFilter">MR</label><select id="collectionMrFilter"><option value="">All MRs</option></select></div>
+        <div><label for="collectionModeFilter">Payment mode</label><select id="collectionModeFilter"><option value="">All modes</option><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>NEFT</option><option>RTGS</option><option>Cheque</option><option>Other</option></select></div>
+      </div>
+      <label for="collectionSearch" style="margin-top:12px;">Search</label>
+      <input id="collectionSearch" placeholder="Invoice, customer, MR, or reference…" />
+    </div>
+    <div class="grid collection-stat-grid" style="margin-bottom:16px;">
+      <div class="stat accent"><div class="label">Collected in selected period</div><div class="value" id="collectionsTotal">₹0</div></div>
+      <div class="stat"><div class="label">Payment entries</div><div class="value" id="collectionsCount">0</div></div>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table id="collectionsTable">
+          <thead><tr><th>Collected at</th><th>Invoice</th><th>Customer</th><th>MR</th><th class="num">Amount</th><th>Mode</th><th>Reference</th><th></th></tr></thead>
+          <tbody id="collectionsBody"></tbody>
+        </table>
+      </div>
+      <div id="collectionsEmpty" class="empty" style="display:none;">No collections match these filters.</div>
+      <div class="row collection-pagination" style="margin-top:14px;">
+        <span id="collectionsPageLabel" class="muted"></span>
+        <div class="row"><button class="secondary" id="collectionsPrev" type="button">Previous</button><button class="secondary" id="collectionsNext" type="button">Next</button></div>
+      </div>
     </div>
   </section>
 

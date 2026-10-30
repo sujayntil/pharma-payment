@@ -56,6 +56,7 @@ if (!("PushManager" in window) || !("serviceWorker" in navigator) || !window.isS
 let dashDateFrom = null, dashDateTo = null;
 let perfDateFrom = null, perfDateTo = null;
 let invDateFrom = null, invDateTo = null;
+let collectionDateFrom = null, collectionDateTo = null;
 
 renderDateFilter("dashDateFilter", (from, to) => {
   dashDateFrom = from;
@@ -71,6 +72,12 @@ renderDateFilter("invoicesDateFilter", (from, to) => {
   invDateFrom = from;
   invDateTo = to;
   loadInvoices();
+});
+renderDateFilter("collectionsDateFilter", (from, to) => {
+  collectionDateFrom = from;
+  collectionDateTo = to;
+  collectionsOffset = 0;
+  loadCollections();
 });
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
@@ -94,6 +101,7 @@ function showTab(name) {
   if (name === "dashboard") loadDashboard();
   if (name === "invoices") loadInvoices();
   if (name === "customers") loadCustomers();
+  if (name === "collections") loadCollections();
   if (name === "performance") loadPerformance();
   if (name === "import") loadImportData();
   if (name === "users") loadUsers();
@@ -190,12 +198,15 @@ async function ensureMrOptions() {
     const users = await apiFetch("/admin/users");
     mrUsers = users.filter((u) => u.role === "MR");
     const select = document.getElementById("filterMr");
+    const collectionSelect = document.getElementById("collectionMrFilter");
     mrUsers.forEach((u) => {
+      for (const target of [select, collectionSelect]) {
         const opt = document.createElement("option");
         opt.value = u.id;
         opt.textContent = u.name;
-        select.appendChild(opt);
-      });
+        target.appendChild(opt);
+      }
+    });
     mrOptionsLoaded = true;
   } catch (err) {
     console.error(err);
@@ -272,6 +283,79 @@ function renderInvoices(invoices) {
     )
     .join("");
 }
+
+// ---------- Collections ----------
+
+const collectionsPageSize = 50;
+let collectionsOffset = 0;
+let expandedCollectionId = null;
+let collectionSearchTimer;
+
+async function loadCollections() {
+  await ensureMrOptions();
+  const params = new URLSearchParams({ limit: collectionsPageSize, offset: collectionsOffset });
+  if (collectionDateFrom) params.set("date_from", collectionDateFrom);
+  if (collectionDateTo) params.set("date_to", collectionDateTo);
+  const mrId = document.getElementById("collectionMrFilter").value;
+  const mode = document.getElementById("collectionModeFilter").value;
+  const search = document.getElementById("collectionSearch").value.trim();
+  if (mrId) params.set("mr_id", mrId);
+  if (mode) params.set("mode", mode);
+  if (search) params.set("search", search);
+
+  try {
+    const result = await apiFetch(`/admin/collections?${params}`);
+    document.getElementById("collectionsTotal").textContent = money(result.total_amount);
+    document.getElementById("collectionsCount").textContent = result.total_count;
+    document.getElementById("collectionsEmpty").style.display = result.rows.length ? "none" : "block";
+    document.getElementById("collectionsBody").innerHTML = result.rows.map((payment) => {
+      const timestamp = payment.payment_date
+        ? new Date(payment.payment_date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })
+        : "—";
+      const expanded = expandedCollectionId === payment.payment_id;
+      return `
+        <tr>
+          <td data-label="Collected at">${escapeHtml(timestamp)}</td>
+          <td data-label="Invoice" class="invoice-number">${escapeHtml(payment.invoice_number)}</td>
+          <td data-label="Customer">${escapeHtml(payment.customer_name || "—")}</td>
+          <td data-label="MR">${escapeHtml(payment.mr_name || "—")}</td>
+          <td data-label="Amount" class="num amount">${money(payment.amount)}</td>
+          <td data-label="Mode">${escapeHtml(payment.mode || "—")}</td>
+          <td data-label="Reference">${escapeHtml(payment.transaction_reference || "—")}</td>
+          <td><button class="secondary collection-detail-button" type="button" onclick="toggleCollectionDetails(${payment.payment_id})">${expanded ? "Hide" : "Details"}</button></td>
+        </tr>
+        ${expanded ? `<tr class="collection-details"><td colspan="8">Payment #${payment.payment_id} · Recorded by ${escapeHtml(payment.recorded_by || "—")} · Invoice total ${money(payment.invoice_amount)} · Remaining ${money(payment.pending_amount)}</td></tr>` : ""}`;
+    }).join("");
+
+    const first = result.total_count ? collectionsOffset + 1 : 0;
+    const last = Math.min(collectionsOffset + result.rows.length, result.total_count);
+    document.getElementById("collectionsPageLabel").textContent = `${first}–${last} of ${result.total_count}`;
+    document.getElementById("collectionsPrev").disabled = collectionsOffset === 0;
+    document.getElementById("collectionsNext").disabled = collectionsOffset + collectionsPageSize >= result.total_count;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function toggleCollectionDetails(paymentId) {
+  expandedCollectionId = expandedCollectionId === paymentId ? null : paymentId;
+  loadCollections();
+}
+
+document.getElementById("collectionMrFilter").addEventListener("change", () => { collectionsOffset = 0; loadCollections(); });
+document.getElementById("collectionModeFilter").addEventListener("change", () => { collectionsOffset = 0; loadCollections(); });
+document.getElementById("collectionSearch").addEventListener("input", () => {
+  window.clearTimeout(collectionSearchTimer);
+  collectionSearchTimer = window.setTimeout(() => { collectionsOffset = 0; loadCollections(); }, 250);
+});
+document.getElementById("collectionsPrev").addEventListener("click", () => {
+  collectionsOffset = Math.max(0, collectionsOffset - collectionsPageSize);
+  loadCollections();
+});
+document.getElementById("collectionsNext").addEventListener("click", () => {
+  collectionsOffset += collectionsPageSize;
+  loadCollections();
+});
 
 // ---------- Customers ----------
 

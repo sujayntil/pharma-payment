@@ -2,6 +2,7 @@
 
 import io
 import unittest
+from datetime import date, datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -191,6 +192,53 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(len(response.json()), 1)
         self.assertEqual(response.json()[0]["invoice_number"], "A00007")
         self.assertEqual(response.json()[0]["amount"], 40)
+
+    def test_collections_filters_and_uses_ist_date_boundaries(self):
+        customer = models.Customer(name="Collections Customer", mr_id=self.mr.id)
+        self.db.add(customer)
+        self.db.flush()
+        invoice = models.Invoice(
+            invoice_number="COLLECT-IST-01",
+            invoice_date=date(2026, 10, 30),
+            customer_id=customer.id,
+            mr_id=self.mr.id,
+            total_amount=100,
+            paid_amount=50,
+            pending_amount=50,
+            status="PARTIAL",
+        )
+        self.db.add(invoice)
+        self.db.flush()
+        before_ist_day = models.Payment(
+            invoice_id=invoice.id,
+            amount=15,
+            mode="UPI",
+            collected_by=self.mr.id,
+            payment_date=datetime(2026, 10, 30, 18, 29),
+        )
+        inside_ist_day = models.Payment(
+            invoice_id=invoice.id,
+            amount=35,
+            mode="UPI",
+            collected_by=self.mr.id,
+            payment_date=datetime(2026, 10, 30, 18, 45),
+        )
+        self.db.add_all([before_ist_day, inside_ist_day])
+        self.db.commit()
+
+        response = self.client.get("/admin/collections", params={
+            "date_from": "2026-10-31",
+            "date_to": "2026-10-31",
+            "mr_id": self.mr.id,
+            "mode": "UPI",
+            "search": "COLLECT-IST-01",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["total_count"], 1)
+        self.assertEqual(data["total_amount"], 35)
+        self.assertEqual(data["rows"][0]["payment_id"], inside_ist_day.id)
 
     def test_mr_manual_invoice_flow_remains_available_but_blocks_tally_duplicate(self):
         new_invoice = {

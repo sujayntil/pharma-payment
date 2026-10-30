@@ -1,9 +1,9 @@
-from datetime import date, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
 from ..database import get_db
@@ -12,6 +12,7 @@ from ..security import hash_password
 from ..utils import compute_status
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+_IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def _date_range_filter(date_from: Optional[date], date_to: Optional[date]):
@@ -158,6 +159,86 @@ def recent_payments(
         }
         for payment, invoice, customer, collector in rows
     ]
+
+
+@router.get("/collections")
+def collections(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    mr_id: Optional[int] = None,
+    mode: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(422, "date_from must be on or before date_to")
+
+    collector = aliased(models.User)
+    assigned_mr = aliased(models.User)
+    query = (
+        db.query(models.Payment, models.Invoice, models.Customer, collector, assigned_mr)
+        .join(models.Invoice, models.Payment.invoice_id == models.Invoice.id)
+        .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
+        .outerjoin(collector, models.Payment.collected_by == collector.id)
+        .outerjoin(assigned_mr, models.Invoice.mr_id == assigned_mr.id)
+    )
+
+    if date_from:
+        start = datetime.combine(date_from, time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
+        query = query.filter(models.Payment.payment_date >= start)
+    if date_to:
+        end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
+        query = query.filter(models.Payment.payment_date < end)
+    if mr_id:
+        query = query.filter(models.Invoice.mr_id == mr_id)
+    if mode:
+        query = query.filter(func.lower(models.Payment.mode) == mode.strip().lower())
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(
+            models.Invoice.invoice_number.ilike(term),
+            models.Customer.name.ilike(term),
+            assigned_mr.name.ilike(term),
+            collector.name.ilike(term),
+            models.Payment.transaction_reference.ilike(term),
+        ))
+
+    total_count = query.with_entities(func.count(models.Payment.id)).scalar()
+    total_amount = query.with_entities(func.coalesce(func.sum(models.Payment.amount), 0)).scalar()
+    rows = (
+        query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
+        .offset(max(offset, 0))
+        .limit(min(max(limit, 1), 100))
+        .all()
+    )
+    return {
+        "total_count": total_count,
+        "total_amount": total_amount,
+        "rows": [
+            {
+                "payment_id": payment.id,
+                "payment_date": (
+                    payment.payment_date.replace(tzinfo=timezone.utc)
+                    if payment.payment_date and payment.payment_date.tzinfo is None
+                    else payment.payment_date
+                ),
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "customer_name": customer.name if customer else None,
+                "mr_name": assigned_mr.name if assigned_mr else None,
+                "recorded_by": collector.name if collector else None,
+                "amount": payment.amount,
+                "mode": payment.mode,
+                "transaction_reference": payment.transaction_reference,
+                "invoice_amount": invoice.total_amount,
+                "pending_amount": invoice.pending_amount,
+            }
+            for payment, invoice, customer, collector, assigned_mr in rows
+        ],
+    }
 
 
 @router.post("/manual-invoices", status_code=201)

@@ -632,6 +632,16 @@ td.num {
   white-space: nowrap;
 }
 
+.collection-stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.collection-details td {
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+}
+
 @media (max-width: 720px) {
   .topbar {
     padding: 12px 14px;
@@ -674,5 +684,53 @@ td.num {
   .section-title {
     align-items: flex-start;
     gap: 8px;
+  }
+
+  #collectionsTable thead {
+    display: none;
+  }
+
+  #collectionsTable,
+  #collectionsTable tbody,
+  #collectionsTable tr,
+  #collectionsTable td {
+    display: block;
+    width: 100%;
+  }
+
+  #collectionsTable tbody tr:not(.collection-details) {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    margin-bottom: 10px;
+  }
+
+  #collectionsTable tbody td {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 6px 0;
+    border-bottom: 0;
+    text-align: right;
+    font-size: 13px;
+  }
+
+  #collectionsTable tbody td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    text-align: left;
+  }
+
+  #collectionsTable tbody td:last-child {
+    justify-content: flex-end;
+  }
+
+  #collectionsTable tbody td:last-child::before {
+    content: none;
+  }
+
+  #collectionsTable .collection-details td {
+    display: block;
+    text-align: left;
   }
 }

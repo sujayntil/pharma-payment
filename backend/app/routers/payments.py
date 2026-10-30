@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
 from ..deps import get_current_user
+from ..push import send_payment_notification
 from ..utils import compute_status
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 @router.post("")
 def add_payment(
     payload: schemas.PaymentCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
@@ -30,15 +32,14 @@ def add_payment(
             f"Payment (₹{payload.amount}) exceeds the outstanding balance (₹{invoice.pending_amount})",
         )
 
-    db.add(
-        models.Payment(
-            invoice_id=invoice.id,
-            amount=payload.amount,
-            mode=payload.mode,
-            transaction_reference=payload.transaction_reference,
-            collected_by=user.id,
-        )
+    payment = models.Payment(
+        invoice_id=invoice.id,
+        amount=payload.amount,
+        mode=payload.mode,
+        transaction_reference=payload.transaction_reference,
+        collected_by=user.id,
     )
+    db.add(payment)
 
     invoice.paid_amount = (invoice.paid_amount or 0) + payload.amount
     status_, pending = compute_status(invoice.total_amount, invoice.paid_amount)
@@ -54,6 +55,8 @@ def add_payment(
 
     db.commit()
     db.refresh(invoice)
+    if user.role == models.RoleEnum.MR.value:
+        background_tasks.add_task(send_payment_notification, payment.id)
 
     return {
         "invoice_id": invoice.id,

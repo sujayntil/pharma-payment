@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models  # noqa: F401  (ensures models are registered before create_all)
 from .database import Base, SessionLocal, engine
-from .routers import admin, auth, customers, imports, invoices, mr, payments
+from .routers import admin, auth, customers, imports, invoices, mr, notifications, payments
 
 Base.metadata.create_all(bind=engine)
 
@@ -40,6 +40,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(invoices.router)
 app.include_router(payments.router)
+app.include_router(notifications.router)
 app.include_router(customers.router)
 app.include_router(admin.router)
 app.include_router(imports.router)

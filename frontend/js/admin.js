@@ -1,6 +1,58 @@
 Auth.requireRole("ADMIN");
 document.getElementById("whoName").textContent = Auth.name();
 
+const pushButton = document.getElementById("enablePushButton");
+const pushStatus = document.getElementById("pushStatus");
+pushButton.addEventListener("click", async () => {
+  pushButton.disabled = true;
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      throw new Error("Push notifications are not supported in this browser.");
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Allow notifications in your browser settings to enable alerts.");
+
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      await apiFetch("/notifications/subscriptions", { method: "DELETE", body: { endpoint: subscription.endpoint } });
+      await subscription.unsubscribe();
+      pushStatus.textContent = "Payment alerts are disabled on this device.";
+      pushButton.textContent = "Enable payment alerts";
+    } else {
+      const { public_key: publicKey } = await apiFetch("/notifications/vapid-public-key");
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToBytes(publicKey),
+      });
+      await apiFetch("/notifications/subscriptions", { method: "POST", body: subscription.toJSON() });
+      pushStatus.textContent = "Payment alerts are enabled on this device.";
+      pushButton.textContent = "Disable payment alerts";
+    }
+  } catch (error) {
+    pushStatus.textContent = error.message;
+  } finally {
+    pushButton.disabled = false;
+  }
+});
+
+function base64UrlToBytes(value) {
+  const padded = value + "=".repeat((4 - value.length % 4) % 4);
+  return Uint8Array.from(atob(padded.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
+}
+
+if (!("PushManager" in window) || !("serviceWorker" in navigator) || !window.isSecureContext) {
+  pushButton.hidden = true;
+  pushStatus.textContent = "Push alerts need a supported browser and a secure connection. On iPhone or iPad, install this app from the Home Screen first.";
+} else {
+  navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription()).then((subscription) => {
+    if (subscription) {
+      pushStatus.textContent = "Payment alerts are enabled on this device.";
+      pushButton.textContent = "Disable payment alerts";
+    }
+  }).catch(() => {});
+}
+
 let dashDateFrom = null, dashDateTo = null;
 let perfDateFrom = null, perfDateTo = null;
 let invDateFrom = null, invDateTo = null;
@@ -65,7 +117,7 @@ async function loadRecentPayments() {
   if (paymentBody) {
     paymentBody.innerHTML = payments.map((p) => `
       <tr>
-        <td>${p.payment_date ? new Date(p.payment_date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}</td>
+        <td>${p.payment_date ? new Date(p.payment_date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }) : "—"}</td>
         <td>${escapeHtml(p.customer_name || "—")}</td>
         <td class="invoice-number">${escapeHtml(p.invoice_number)}</td>
         <td>${escapeHtml(p.collected_by || "—")}</td>

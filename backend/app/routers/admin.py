@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -149,7 +149,11 @@ def recent_payments(
             "amount": payment.amount,
             "mode": payment.mode,
             "collected_by": collector.name if collector else None,
-            "payment_date": payment.payment_date,
+            "payment_date": (
+                payment.payment_date.replace(tzinfo=timezone.utc)
+                if payment.payment_date and payment.payment_date.tzinfo is None
+                else payment.payment_date
+            ),
         }
         for payment, invoice, customer, collector in rows
     ]

@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict
 
 
 # ---- Auth ----
@@ -150,3 +150,12 @@ class PaymentCreate(BaseModel):
     amount: float
     mode: Optional[str] = None
     transaction_reference: Optional[str] = None
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: AnyHttpUrl
+    keys: dict[str, str]
+
+
+class PushSubscriptionDelete(BaseModel):
+    endpoint: AnyHttpUrl

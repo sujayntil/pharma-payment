@@ -86,6 +86,35 @@
       <div id="invoiceImportResults" style="display:none;"></div>
     </div>
     <div class="card">
+      <div class="section-title"><div><h2>Add invoice manually</h2><p class="muted">For a bill that is not in the Excel sheet. The customer’s MR assignment will be used automatically.</p></div></div>
+      <form id="manualInvoiceForm">
+        <div class="field-row">
+          <div>
+            <label for="manualInvoiceNumber">Invoice / bill number</label>
+            <input id="manualInvoiceNumber" required maxlength="120" autocomplete="off" />
+          </div>
+          <div>
+            <label for="manualInvoiceDate">Invoice date</label>
+            <input id="manualInvoiceDate" type="date" required />
+          </div>
+        </div>
+        <div class="field-row">
+          <div>
+            <label for="manualInvoiceCustomer">Customer</label>
+            <input id="manualInvoiceCustomer" list="manualInvoiceCustomers" required maxlength="255" autocomplete="off" />
+            <datalist id="manualInvoiceCustomers"></datalist>
+          </div>
+          <div>
+            <label for="manualInvoiceAmount">Bill amount (₹)</label>
+            <input id="manualInvoiceAmount" type="number" min="0.01" step="0.01" required />
+          </div>
+        </div>
+        <p class="muted">A new or unmapped customer stays unassigned. You can map it to an MR in the table below.</p>
+        <button type="submit" id="manualInvoiceButton">Add invoice</button>
+        <div id="manualInvoiceMessage" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+    <div class="card">
       <div class="section-title"><div><h2>Customer to MR assignment</h2><p class="muted">Unassigned invoices stay here until a customer is assigned.</p></div></div>
       <input id="mappingCustomerSearch" placeholder="Search customers…" aria-label="Search customers" />
       <div class="table-wrap" style="margin-top:12px;">

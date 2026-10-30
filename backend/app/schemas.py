@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
 
 # ---- Auth ----
@@ -94,6 +94,13 @@ class InvoiceCreate(BaseModel):
     ai_confidence: Optional[Dict] = None
     items: Optional[List[InvoiceItemIn]] = []
     confirm_duplicate: bool = False  # set true to save anyway after seeing the duplicate warning
+
+
+class ManualInvoiceCreate(BaseModel):
+    invoice_number: str = Field(min_length=1, max_length=120)
+    invoice_date: date
+    customer_name: str = Field(min_length=1, max_length=255)
+    total_amount: float = Field(gt=0)
 
 
 class InvoiceOut(BaseModel):

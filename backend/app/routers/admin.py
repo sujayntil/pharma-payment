@@ -9,6 +9,7 @@ from .. import models, schemas
 from ..database import get_db
 from ..deps import require_admin
 from ..security import hash_password
+from ..utils import compute_status
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -157,6 +158,65 @@ def recent_payments(
         }
         for payment, invoice, customer, collector in rows
     ]
+
+
+@router.post("/manual-invoices", status_code=201)
+def create_manual_invoice(
+    payload: schemas.ManualInvoiceCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    invoice_number = payload.invoice_number.strip()
+    customer_name = payload.customer_name.strip()
+    if not invoice_number or not customer_name:
+        raise HTTPException(422, "Invoice number and customer name are required")
+
+    existing = (
+        db.query(models.Invoice)
+        .filter(func.lower(func.trim(models.Invoice.invoice_number)) == invoice_number.lower())
+        .first()
+    )
+    if existing:
+        raise HTTPException(409, f"Invoice {invoice_number} already exists")
+
+    matching_customers = (
+        db.query(models.Customer)
+        .filter(func.lower(func.trim(models.Customer.name)) == customer_name.lower())
+        .all()
+    )
+    if len(matching_customers) > 1:
+        raise HTTPException(
+            409,
+            f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.",
+        )
+    customer = matching_customers[0] if matching_customers else None
+    if customer is None:
+        customer = models.Customer(name=customer_name)
+        db.add(customer)
+        db.flush()
+
+    status, pending = compute_status(payload.total_amount, 0)
+    invoice = models.Invoice(
+        invoice_number=invoice_number,
+        invoice_date=payload.invoice_date,
+        customer_id=customer.id,
+        mr_id=customer.mr_id,
+        total_amount=payload.total_amount,
+        paid_amount=0,
+        pending_amount=pending,
+        status=status,
+    )
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    return {
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "customer_name": customer.name,
+        "total_amount": invoice.total_amount,
+        "mr_name": customer.mr.name if customer.mr else None,
+    }
 
 
 @router.post("/users", response_model=schemas.UserOut)

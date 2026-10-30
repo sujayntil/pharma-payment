@@ -282,6 +282,7 @@ async function loadCustomers() {
     allCustomers = await apiFetch("/customers");
     renderCustomers(allCustomers);
     renderMappingCustomers(allCustomers);
+    renderManualCustomerSuggestions();
   } catch (err) {
     console.error(err);
   }
@@ -290,6 +291,16 @@ async function loadCustomers() {
 async function loadImportData() {
   await ensureMrOptions();
   await loadCustomers();
+}
+
+function renderManualCustomerSuggestions() {
+  const list = document.getElementById("manualInvoiceCustomers");
+  if (!list) return;
+  list.replaceChildren(...allCustomers.map((customer) => {
+    const option = document.createElement("option");
+    option.value = customer.name;
+    return option;
+  }));
 }
 
 function mrSelectOptions(selectedId) {
@@ -389,6 +400,39 @@ document.getElementById("invoiceImportForm").addEventListener("submit", async (e
     await loadInvoices();
   } catch (err) {
     showImportMessage(err.message, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById("manualInvoiceForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = document.getElementById("manualInvoiceButton");
+  const message = document.getElementById("manualInvoiceMessage");
+  button.disabled = true;
+  message.className = "notice";
+  message.textContent = "Adding invoice…";
+
+  try {
+    const result = await apiFetch("/admin/manual-invoices", {
+      method: "POST",
+      body: {
+        invoice_number: document.getElementById("manualInvoiceNumber").value.trim(),
+        invoice_date: document.getElementById("manualInvoiceDate").value,
+        customer_name: document.getElementById("manualInvoiceCustomer").value.trim(),
+        total_amount: Number(document.getElementById("manualInvoiceAmount").value),
+      },
+    });
+    form.reset();
+    await Promise.all([loadCustomers(), loadDashboard(), loadInvoices()]);
+    message.className = "notice success";
+    message.textContent = result.mr_name
+      ? `Invoice ${result.invoice_number} added and assigned to ${result.mr_name}.`
+      : `Invoice ${result.invoice_number} added. This customer has no MR assignment yet; assign one below.`;
+  } catch (err) {
+    message.className = "notice error";
+    message.textContent = err.message;
   } finally {
     button.disabled = false;
   }

@@ -26,6 +26,18 @@ def _date_range_filter(date_from: Optional[date], date_to: Optional[date]):
     return conditions
 
 
+def _payment_date_range_filter(date_from: Optional[date], date_to: Optional[date]):
+    """Build payment timestamp bounds for dates selected in India."""
+    conditions = []
+    if date_from:
+        start = datetime.combine(date_from, time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
+        conditions.append(models.Payment.payment_date >= start)
+    if date_to:
+        end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
+        conditions.append(models.Payment.payment_date < end)
+    return conditions
+
+
 @router.get("/dashboard")
 def dashboard(
     date_from: Optional[date] = None,
@@ -33,17 +45,21 @@ def dashboard(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Totals, optionally scoped to an invoice_date range. Note this scopes
-    by when the invoice was dated, not when payments came in -- an invoice
-    dated inside the range still counts its full paid_amount even if some
-    of that payment happened later."""
+    """Invoice KPIs plus collections received during the selected dates."""
     q = db.query(models.Invoice)
     conditions = _date_range_filter(date_from, date_to)
     if conditions:
         q = q.filter(and_(*conditions))
 
     total_sales = q.with_entities(func.coalesce(func.sum(models.Invoice.total_amount), 0)).scalar()
-    collected = q.with_entities(func.coalesce(func.sum(models.Invoice.paid_amount), 0)).scalar()
+    collected = db.query(func.coalesce(func.sum(models.Payment.amount), 0))
+    payment_conditions = _payment_date_range_filter(date_from, date_to)
+    if payment_conditions:
+        collected = collected.filter(and_(*payment_conditions))
+    collected = collected.scalar()
+
+    # Outstanding remains the balance for invoices dated in this period.
+    invoice_collected = q.with_entities(func.coalesce(func.sum(models.Invoice.paid_amount), 0)).scalar()
 
     total_invoices = q.count()
     paid = q.filter(models.Invoice.status == "PAID").count()
@@ -53,7 +69,7 @@ def dashboard(
     return {
         "total_sales": total_sales,
         "collected": collected,
-        "outstanding": total_sales - collected,
+        "outstanding": total_sales - invoice_collected,
         "total_invoices": total_invoices,
         "paid": paid,
         "partial": partial,
@@ -186,12 +202,9 @@ def collections(
         .outerjoin(assigned_mr, models.Invoice.mr_id == assigned_mr.id)
     )
 
-    if date_from:
-        start = datetime.combine(date_from, time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
-        query = query.filter(models.Payment.payment_date >= start)
-    if date_to:
-        end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
-        query = query.filter(models.Payment.payment_date < end)
+    payment_conditions = _payment_date_range_filter(date_from, date_to)
+    if payment_conditions:
+        query = query.filter(and_(*payment_conditions))
     if mr_id:
         query = query.filter(models.Invoice.mr_id == mr_id)
     if mode:

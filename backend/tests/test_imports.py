@@ -52,7 +52,10 @@ class ImportInvoicesTests(unittest.TestCase):
         self.mr = models.User(
             name="MR One", employee_code="MR001", role="MR", password_hash="x"
         )
-        self.db.add_all([self.admin, self.mr])
+        self.other_mr = models.User(
+            name="MR Two", employee_code="MR002", role="MR", password_hash="x"
+        )
+        self.db.add_all([self.admin, self.mr, self.other_mr])
         self.db.commit()
 
         app = FastAPI()
@@ -139,6 +142,15 @@ class ImportInvoicesTests(unittest.TestCase):
         later = self.upload([["02-10-2026", "A00004", "TULSI PHARMACY", 300, 285, 15]])
         self.assertEqual(later.json()["created"], 1)
         self.assertEqual(self.db.query(models.Invoice).filter_by(invoice_number="A00004").one().mr_id, self.mr.id)
+
+        reassigned = self.client.put(
+            f"/admin/customers/{customer.id}/mr", json={"mr_id": self.other_mr.id}
+        )
+        self.assertEqual(reassigned.status_code, 200)
+        invoice_mrs = {
+            invoice.mr_id for invoice in self.db.query(models.Invoice).filter_by(customer_id=customer.id)
+        }
+        self.assertEqual(invoice_mrs, {self.other_mr.id})
 
     def test_customer_list_exposes_assignment_and_invoice_count_to_mapping_ui(self):
         self.upload([["01-10-2026", "A00008", "Tulsi Pharmacy", 200, 190, 10]])
@@ -239,6 +251,12 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(data["total_count"], 1)
         self.assertEqual(data["total_amount"], 35)
         self.assertEqual(data["rows"][0]["payment_id"], inside_ist_day.id)
+
+        dashboard = self.client.get("/admin/dashboard", params={
+            "date_from": "2026-10-31", "date_to": "2026-10-31",
+        })
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.json()["collected"], 35)
 
     def test_mr_manual_invoice_flow_remains_available_but_blocks_tally_duplicate(self):
         new_invoice = {

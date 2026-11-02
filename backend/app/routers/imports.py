@@ -309,12 +309,10 @@ def map_customer_to_mr(
         if mr is None or mr.role != models.RoleEnum.MR.value:
             raise HTTPException(400, "Select a valid MR")
     customer.mr_id = mr.id if mr else None
-    # Imported invoices left unassigned become visible to the MR after mapping.
-    # Existing manually assigned invoices are preserved.
-    if mr:
-        db.query(models.Invoice).filter(
-            models.Invoice.customer_id == customer.id,
-            models.Invoice.mr_id.is_(None),
-        ).update({models.Invoice.mr_id: mr.id}, synchronize_session=False)
+    # A customer has one current MR. Keep every invoice for that customer in
+    # sync so a later reassignment is reflected in the MR portal.
+    db.query(models.Invoice).filter(
+        models.Invoice.customer_id == customer.id,
+    ).update({models.Invoice.mr_id: customer.mr_id}, synchronize_session=False)
     db.commit()
     return {"customer_id": customer.id, "mr_id": customer.mr_id, "mr_name": mr.name if mr else None}

@@ -183,6 +183,77 @@ class ImportInvoicesTests(unittest.TestCase):
         forbidden = self.client.get(f"/customers/{other.id}/ledger")
         self.assertEqual(forbidden.status_code, 404)
 
+    def test_list_pages_and_search_returns_all_matches(self):
+        alpha = models.Customer(name="Alpha Pharmacy", mr_id=self.mr.id)
+        alpha_clinic = models.Customer(name="Alpha Clinic", mr_id=self.mr.id)
+        beta = models.Customer(name="Beta Chemist", mr_id=self.mr.id)
+        self.db.add_all([alpha, alpha_clinic, beta])
+        self.db.flush()
+
+        invoices = [
+            models.Invoice(invoice_number="A101", customer_id=alpha.id, mr_id=self.mr.id, total_amount=100, paid_amount=10, pending_amount=90, status="PARTIAL", invoice_date=date(2026, 10, 1)),
+            models.Invoice(invoice_number="A102", customer_id=alpha.id, mr_id=self.mr.id, total_amount=150, paid_amount=0, pending_amount=150, status="UNPAID", invoice_date=date(2026, 10, 2)),
+            models.Invoice(invoice_number="A103", customer_id=alpha_clinic.id, mr_id=self.mr.id, total_amount=200, paid_amount=20, pending_amount=180, status="PARTIAL", invoice_date=date(2026, 10, 3)),
+            models.Invoice(invoice_number="B101", customer_id=beta.id, mr_id=self.mr.id, total_amount=300, paid_amount=30, pending_amount=270, status="PARTIAL", invoice_date=date(2026, 10, 4)),
+        ]
+        self.db.add_all(invoices)
+        self.db.flush()
+        self.db.add_all([
+            models.Payment(invoice_id=invoices[0].id, amount=10, collected_by=self.mr.id),
+            models.Payment(invoice_id=invoices[2].id, amount=20, collected_by=self.mr.id),
+            models.Payment(invoice_id=invoices[3].id, amount=30, collected_by=self.mr.id),
+        ])
+        self.db.commit()
+
+        invoice_page = self.client.get("/invoices", params={"limit": 1, "offset": 0}).json()
+        self.assertEqual(invoice_page["total"], 4)
+        self.assertEqual(len(invoice_page["items"]), 1)
+
+        invoice_search = self.client.get("/invoices", params={
+            "search": "Alpha", "limit": 1, "offset": 2,
+        }).json()
+        self.assertEqual(invoice_search["total"], 3)
+        self.assertEqual(len(invoice_search["items"]), 3)
+        self.assertIsNone(invoice_search["limit"])
+        self.assertEqual(invoice_search["offset"], 0)
+
+        customer_search = self.client.get("/customers", params={
+            "search": "Alpha", "limit": 1, "offset": 1,
+        }).json()
+        self.assertEqual(customer_search["total"], 2)
+        self.assertEqual(len(customer_search["items"]), 2)
+
+        mr_customer_search = self.client.get("/mr/customers", params={
+            "search": "Alpha", "limit": 1, "offset": 1,
+        }).json()
+        self.assertEqual(mr_customer_search["total"], 2)
+        self.assertEqual(len(mr_customer_search["items"]), 2)
+
+        ledger_page = self.client.get(f"/customers/{alpha.id}/ledger", params={
+            "limit": 1, "offset": 0,
+        }).json()
+        self.assertEqual(ledger_page["invoice_count"], 2)
+        self.assertEqual(len(ledger_page["invoices"]), 1)
+        ledger_search = self.client.get(f"/customers/{alpha.id}/ledger", params={
+            "search": "UNPAID", "limit": 1,
+        }).json()
+        self.assertEqual(ledger_search["invoice_count"], 1)
+        self.assertEqual(len(ledger_search["invoices"]), 1)
+
+        outstanding_search = self.client.get("/mr/outstanding", params={
+            "search": "Alpha", "limit": 1, "offset": 1,
+        }).json()
+        self.assertEqual(outstanding_search["total_count"], 3)
+        self.assertEqual(len(outstanding_search["items"]), 3)
+        self.assertEqual(outstanding_search["total_outstanding"], 690)
+
+        collection_search = self.client.get("/admin/collections", params={
+            "search": "Alpha", "limit": 1, "offset": 1,
+        }).json()
+        self.assertEqual(collection_search["total_count"], 2)
+        self.assertEqual(len(collection_search["rows"]), 2)
+        self.assertEqual(collection_search["total_amount"], 30)
+
     def test_invalid_rows_are_reported_without_becoming_invoices(self):
         response = self.upload([["not-a-date", "A00005", "Tulsi Pharmacy", "bad", 0, 0]])
         self.assertEqual(response.status_code, 200)

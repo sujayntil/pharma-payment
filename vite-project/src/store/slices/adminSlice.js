@@ -14,9 +14,9 @@ export const fetchAdminDashboard = createAsyncThunk(
 
 export const fetchOutstandingAlerts = createAsyncThunk(
   'admin/fetchOutstandingAlerts',
-  async (threshold = 50000, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      return await adminApi.getOutstandingAlerts(threshold);
+      return await adminApi.getOutstandingAlerts(params.threshold || 50000, params);
     } catch (err) {
       return rejectWithValue(err.detail || err.message || 'Failed to load alerts');
     }
@@ -91,6 +91,8 @@ const adminSlice = createSlice({
       unpaid: 0,
     },
     alerts: [],
+    alertCount: 0,
+    alertsLoading: false,
     mrPerformance: [],
     users: [],
 
@@ -129,9 +131,17 @@ const adminSlice = createSlice({
       });
 
     // Alerts
-    builder.addCase(fetchOutstandingAlerts.fulfilled, (state, action) => {
-      state.alerts = action.payload;
-    });
+    builder
+      .addCase(fetchOutstandingAlerts.pending, (state) => { state.alertsLoading = true; })
+      .addCase(fetchOutstandingAlerts.fulfilled, (state, action) => {
+        state.alertsLoading = false;
+        state.alerts = action.payload.items || [];
+        state.alertCount = action.payload.total ?? action.payload.length ?? 0;
+      })
+      .addCase(fetchOutstandingAlerts.rejected, (state, action) => {
+        state.alertsLoading = false;
+        state.error = action.payload;
+      });
 
     // MR Performance
     builder

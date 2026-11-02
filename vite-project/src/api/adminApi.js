@@ -23,9 +23,9 @@ export const adminApi = {
    * Get large outstanding alerts.
    * @param {number} threshold - default 50000
    */
-  async getOutstandingAlerts(threshold = 50000) {
+  async getOutstandingAlerts(threshold = 50000, params = {}) {
     const response = await axiosClient.get('/admin/outstanding-alerts', {
-      params: { threshold },
+      params: { threshold, ...params },
     });
     return response.data;
   },

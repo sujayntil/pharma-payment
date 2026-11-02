@@ -12,8 +12,8 @@ export const mrApi = {
   /**
    * Get outstanding invoices for current MR.
    */
-  async getOutstanding() {
-    const response = await axiosClient.get('/mr/outstanding');
+  async getOutstanding(params = {}) {
+    const response = await axiosClient.get('/mr/outstanding', { params });
     return response.data;
   },
 };

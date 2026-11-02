@@ -15,9 +15,9 @@ export const fetchMrDashboard = createAsyncThunk(
 
 export const fetchMrOutstanding = createAsyncThunk(
   'mr/fetchMrOutstanding',
-  async (_, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      return await mrApi.getOutstanding();
+      return await mrApi.getOutstanding(params);
     } catch (err) {
       return rejectWithValue(
         err.detail || err.message || 'Failed to load outstanding collections'
@@ -28,12 +28,9 @@ export const fetchMrOutstanding = createAsyncThunk(
 
 export const recordPayment = createAsyncThunk(
   'mr/recordPayment',
-  async (payload, { rejectWithValue, dispatch }) => {
+  async (payload, { rejectWithValue }) => {
     try {
-      const result = await paymentsApi.createPayment(payload);
-      // Re-fetch outstanding list
-      dispatch(fetchMrOutstanding());
-      return result;
+      return await paymentsApi.createPayment(payload);
     } catch (err) {
       return rejectWithValue(err.detail || err.message || 'Failed to record payment');
     }
@@ -53,6 +50,7 @@ const mrSlice = createSlice({
     },
     outstanding: [],
     totalOutstanding: 0,
+    outstandingCount: 0,
     loading: false,
     paymentLoading: false,
     paymentSuccess: false,
@@ -93,6 +91,7 @@ const mrSlice = createSlice({
         state.loading = false;
         state.outstanding = action.payload.items || [];
         state.totalOutstanding = action.payload.total_outstanding || 0;
+        state.outstandingCount = action.payload.total_count || 0;
       })
       .addCase(fetchMrOutstanding.rejected, (state, action) => {
         state.loading = false;

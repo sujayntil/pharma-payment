@@ -4,13 +4,14 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..ai.extractor import extract_invoice_from_image
 from ..database import get_db
 from ..deps import get_current_user, require_admin
-from ..utils import compute_status
+from ..utils import compute_status, page_result, query_page
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -125,10 +126,13 @@ def create_invoice(
     return _to_out(invoice)
 
 
-@router.get("/mine", response_model=List[schemas.InvoiceOut])
+@router.get("/mine")
 def my_invoices(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    search: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
@@ -137,17 +141,33 @@ def my_invoices(
         q = q.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
         q = q.filter(models.Invoice.invoice_date <= date_to)
-    invoices = q.order_by(models.Invoice.created_at.desc()).all()
-    return [_to_out(i) for i in invoices]
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        q = q.outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id).filter(
+            or_(
+                models.Invoice.invoice_number.ilike(term),
+                models.Customer.name.ilike(term),
+                models.Invoice.payment_mode.ilike(term),
+            )
+        )
+    q = q.order_by(models.Invoice.created_at.desc(), models.Invoice.id.desc())
+    paged, total, page_size, page_offset = query_page(q, limit, offset, search)
+    items = [_to_out(invoice) for invoice in paged]
+    if limit is None and offset is None and search is None:
+        return items
+    return page_result(items, total, page_size, page_offset)
 
 
-@router.get("", response_model=List[schemas.InvoiceOut])
+@router.get("")
 def list_invoices(
     mr_id: Optional[int] = None,
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    search: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
@@ -162,8 +182,24 @@ def list_invoices(
         q = q.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
         q = q.filter(models.Invoice.invoice_date <= date_to)
-    invoices = q.order_by(models.Invoice.created_at.desc()).all()
-    return [_to_out(i) for i in invoices]
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        q = q.outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id).outerjoin(
+            models.User, models.User.id == models.Invoice.mr_id
+        ).filter(
+            or_(
+                models.Invoice.invoice_number.ilike(term),
+                models.Customer.name.ilike(term),
+                models.User.name.ilike(term),
+                models.Invoice.payment_mode.ilike(term),
+            )
+        )
+    q = q.order_by(models.Invoice.created_at.desc(), models.Invoice.id.desc())
+    paged, total, page_size, page_offset = query_page(q, limit, offset, search)
+    items = [_to_out(invoice) for invoice in paged]
+    if limit is None and offset is None and search is None:
+        return items
+    return page_result(items, total, page_size, page_offset)
 
 
 @router.get("/{invoice_id}", response_model=schemas.InvoiceOut)

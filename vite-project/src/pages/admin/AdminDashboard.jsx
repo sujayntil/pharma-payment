@@ -4,6 +4,7 @@ import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
 import PaymentAlerts from '../../components/common/PaymentAlerts';
+import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import { money } from '../../utils/formatters';
 
 const Stat = ({ label, value, accent = false }) => (
@@ -22,7 +23,8 @@ const localDate = (date = new Date()) => {
 
 export default function AdminDashboard() {
   const dispatch = useAppDispatch();
-  const { dashboard, alerts, loading, dashFilters } = useAppSelector((state) => state.admin);
+  const { dashboard, alerts, alertCount, alertsLoading, dashFilters } = useAppSelector((state) => state.admin);
+  const [alertPage, setAlertPage] = useState(1);
   const [from, setFrom] = useState(dashFilters.dateFrom || '');
   const [to, setTo] = useState(dashFilters.dateTo || '');
   const [recent, setRecent] = useState([]);
@@ -33,7 +35,6 @@ export default function AdminDashboard() {
     if (dateFrom) params.date_from = dateFrom;
     if (dateTo) params.date_to = dateTo;
     dispatch(fetchAdminDashboard(params));
-    dispatch(fetchOutstandingAlerts(50000));
     adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
   };
 
@@ -42,9 +43,12 @@ export default function AdminDashboard() {
     if (dashFilters.dateFrom) params.date_from = dashFilters.dateFrom;
     if (dashFilters.dateTo) params.date_to = dashFilters.dateTo;
     dispatch(fetchAdminDashboard(params));
-    dispatch(fetchOutstandingAlerts(50000));
     adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
   }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo]);
+
+  useEffect(() => {
+    dispatch(fetchOutstandingAlerts({ threshold: 50000, limit: PAGE_SIZE, offset: (alertPage - 1) * PAGE_SIZE }));
+  }, [dispatch, alertPage]);
 
   const applyRange = (dateFrom = from, dateTo = to) => {
     setFrom(dateFrom);
@@ -101,9 +105,9 @@ export default function AdminDashboard() {
       <Paper withBorder p="md">
         <Group justify="space-between" mb="sm">
           <div><Title order={3}>Outstanding above ₹50,000</Title><Text size="sm" c="dimmed">Invoices that may need follow up.</Text></div>
-          <Badge>{alerts.length}</Badge>
+          <Badge>{alertCount}</Badge>
         </Group>
-        {loading && !alerts.length ? <Group justify="center" p="lg"><Loader /></Group> : !alerts.length ? <Text c="dimmed" py="md">No high outstanding balances.</Text> : (
+        {alertsLoading ? <Group justify="center" p="lg"><Loader /></Group> : !alerts.length ? <Text c="dimmed" py="md">No high outstanding balances.</Text> : (
           <Table.ScrollContainer minWidth={620}>
             <Table striped>
               <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>MR</Table.Th><Table.Th>Outstanding</Table.Th></Table.Tr></Table.Thead>
@@ -115,6 +119,7 @@ export default function AdminDashboard() {
             </Table>
           </Table.ScrollContainer>
         )}
+        <ListPagination total={alertCount} page={alertPage} onChange={setAlertPage} label="invoices" />
       </Paper>
 
       <Paper withBorder p="md">

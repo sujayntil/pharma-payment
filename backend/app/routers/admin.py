@@ -9,7 +9,7 @@ from .. import models, schemas
 from ..database import get_db
 from ..deps import require_admin
 from ..security import hash_password
-from ..utils import compute_status
+from ..utils import compute_status, page_result, query_page
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -122,16 +122,23 @@ def mr_performance(
 @router.get("/outstanding-alerts")
 def outstanding_alerts(
     threshold: float = 50000,
+    search: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    invoices = (
-        db.query(models.Invoice)
-        .filter(models.Invoice.pending_amount >= threshold)
-        .order_by(models.Invoice.pending_amount.desc())
-        .all()
-    )
-    return [
+    query = db.query(models.Invoice).filter(models.Invoice.pending_amount >= threshold)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(
+            models.Invoice.invoice_number.ilike(term),
+            models.Invoice.customer.has(models.Customer.name.ilike(term)),
+            models.Invoice.mr.has(models.User.name.ilike(term)),
+        ))
+    query = query.order_by(models.Invoice.pending_amount.desc(), models.Invoice.id.desc())
+    invoices, total, page_size, page_offset = query_page(query, limit, offset, search)
+    items = [
         {
             "invoice_number": i.invoice_number,
             "customer": i.customer.name if i.customer else None,
@@ -140,6 +147,9 @@ def outstanding_alerts(
         }
         for i in invoices
     ]
+    if limit is None and offset is None and search is None:
+        return items
+    return page_result(items, total, page_size, page_offset)
 
 
 @router.get("/recent-payments")
@@ -221,15 +231,19 @@ def collections(
 
     total_count = query.with_entities(func.count(models.Payment.id)).scalar()
     total_amount = query.with_entities(func.coalesce(func.sum(models.Payment.amount), 0)).scalar()
-    rows = (
-        query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
-        .offset(max(offset, 0))
-        .limit(min(max(limit, 1), 100))
-        .all()
-    )
+    ordered = query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
+    if search and search.strip():
+        rows = ordered.all()
+        page_size, page_offset = None, 0
+    else:
+        page_size = min(max(limit, 1), 100)
+        page_offset = max(offset, 0)
+        rows = ordered.offset(page_offset).limit(page_size).all()
     return {
         "total_count": total_count,
         "total_amount": total_amount,
+        "limit": page_size,
+        "offset": page_offset,
         "rows": [
             {
                 "payment_id": payment.id,

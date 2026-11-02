@@ -20,7 +20,7 @@ export default function MrUploadInvoice({ onDone }) {
   const reset = () => { if (previewUrl) URL.revokeObjectURL(previewUrl); setFile(null); setPreviewUrl(''); setForm(blank); setError(''); setDuplicate(''); setConfirmDuplicate(false); dispatch(clearExtractResult()); };
   const save = async (confirmed = false) => { setBusy(true); setError(''); const payload = { invoice_number: String(form.invoice_number).trim(), invoice_date: form.invoice_date || null, customer_name: String(form.customer_name).trim(), customer_type: form.customer_type || null, total_amount: Number(form.total_amount), paid_amount: Number(form.paid_amount || 0), payment_mode: form.payment_mode || null, remarks: form.remarks || null, image_path: extractResult?.image_path || null, ai_confidence: extractResult?.confidence || null };
     const action = await dispatch(createNewInvoice({ data: payload, confirmDuplicate: confirmed })); setBusy(false);
-    if (createNewInvoice.fulfilled.match(action)) { setConfirmDuplicate(false); notifications.show({ color: 'green', title: 'Invoice saved', message: `${payload.invoice_number} added to your invoices.` }); dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding()); reset(); onDone?.(); }
+    if (createNewInvoice.fulfilled.match(action)) { setConfirmDuplicate(false); notifications.show({ color: 'green', title: 'Invoice saved', message: `${payload.invoice_number} added to your invoices.` }); dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); reset(); onDone?.(); }
     else if (action.payload?.status === 409 && !confirmed) { setDuplicate(action.payload.message); setConfirmDuplicate(true); }
     else setError(action.payload?.message || 'Could not save invoice.');
   };

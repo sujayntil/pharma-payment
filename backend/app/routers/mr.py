@@ -1,16 +1,20 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from .. import models
 from ..database import get_db
 from ..deps import get_current_user
+from ..utils import page_result, query_page
 
 router = APIRouter(prefix="/mr", tags=["mr"])
 
 
 @router.get("/customers")
 def customers(
+    search: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
     """Return only customers currently assigned to this representative."""
@@ -38,13 +42,19 @@ def customers(
         .correlate(models.Customer)
         .scalar_subquery()
     )
-    rows = (
-        db.query(models.Customer, invoice_count, invoiced, outstanding, latest_invoice)
-        .filter(models.Customer.mr_id == user.id)
-        .order_by(models.Customer.name)
-        .all()
+    query = db.query(models.Customer, invoice_count, invoiced, outstanding, latest_invoice).filter(
+        models.Customer.mr_id == user.id
     )
-    return [
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(
+            models.Customer.name.ilike(term),
+            models.Customer.type.ilike(term),
+            models.Customer.phone.ilike(term),
+        ))
+    query = query.order_by(models.Customer.name, models.Customer.id)
+    rows, total, page_size, page_offset = query_page(query, limit, offset, search)
+    items = [
         {
             "id": customer.id,
             "name": customer.name,
@@ -57,6 +67,9 @@ def customers(
         }
         for customer, count, total, pending, latest in rows
     ]
+    if limit is None and offset is None and search is None:
+        return items
+    return page_result(items, total, page_size, page_offset)
 
 
 @router.get("/dashboard")
@@ -96,18 +109,32 @@ def dashboard(
 
 @router.get("/outstanding")
 def outstanding(
+    search: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
-    q = db.query(models.Invoice).filter(
+    base = db.query(models.Invoice).filter(
         models.Invoice.mr_id == user.id, models.Invoice.pending_amount > 0
     )
-    total_outstanding = q.with_entities(
+    total_outstanding = base.with_entities(
         func.coalesce(func.sum(models.Invoice.pending_amount), 0)
     ).scalar()
-    items = q.order_by(models.Invoice.pending_amount.desc()).all()
+    query = base
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(
+            models.Invoice.invoice_number.ilike(term),
+            models.Invoice.customer.has(models.Customer.name.ilike(term)),
+        ))
+    query = query.order_by(models.Invoice.pending_amount.desc(), models.Invoice.id.desc())
+    items, total_count, page_size, page_offset = query_page(query, limit, offset, search)
 
     return {
         "total_outstanding": total_outstanding,
+        "total_count": total_count,
+        "limit": page_size,
+        "offset": page_offset,
         "items": [
             {
                 "invoice_id": i.id,

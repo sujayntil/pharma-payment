@@ -37,12 +37,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoFill = (code, pass) => {
-    setEmployeeCode(code);
-    setPassword(pass);
-    dispatch(clearError());
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#f4f6f4]">
       <div className="w-full max-w-md bg-white border border-[#d7dcd9] rounded-2xl p-6 sm:p-8 shadow-sm">

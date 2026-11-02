@@ -30,6 +30,30 @@ export const adminApi = {
     return response.data;
   },
 
+  async getCollections(params = {}) {
+    const response = await axiosClient.get('/admin/collections', { params });
+    return response.data;
+  },
+
+  async importInvoices(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await axiosClient.post('/admin/import-invoices', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async mapCustomer(customerId, mrId) {
+    const response = await axiosClient.put(`/admin/customers/${customerId}/mr`, { mr_id: mrId || null });
+    return response.data;
+  },
+
+  async createManualInvoice(data) {
+    const response = await axiosClient.post('/admin/manual-invoices', data);
+    return response.data;
+  },
+
   /**
    * Get list of users (Admin and MRs).
    */

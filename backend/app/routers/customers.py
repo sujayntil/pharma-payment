@@ -62,6 +62,8 @@ def customer_ledger(
     )
     if not customer:
         raise HTTPException(404, "Customer not found")
+    if user.role == models.RoleEnum.MR.value and customer.mr_id != user.id:
+        raise HTTPException(404, "Customer not found")
 
     invoices = (
         db.query(models.Invoice)

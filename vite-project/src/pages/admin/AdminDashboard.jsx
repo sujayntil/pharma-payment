@@ -1,201 +1,138 @@
-import { useEffect, useCallback } from 'react';
-import {
-  TrendingUp,
-  CheckCircle,
-  AlertTriangle,
-  Receipt,
-  Clock,
-  ShieldAlert,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
-import {
-  fetchAdminDashboard,
-  fetchOutstandingAlerts,
-  setDashFilters,
-} from '../../store/slices/adminSlice';
-import StatCard from '../../components/common/StatCard';
-import DateFilter from '../../components/common/DateFilter';
-import EmptyState from '../../components/common/EmptyState';
+import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
+import PaymentAlerts from '../../components/common/PaymentAlerts';
 import { money } from '../../utils/formatters';
+
+const Stat = ({ label, value, accent = false }) => (
+  <Paper withBorder p="md" bg={accent ? 'green.0' : undefined}>
+    <Text size="sm" c="dimmed">{label}</Text>
+    <Title order={2} mt={4}>{value}</Title>
+  </Paper>
+);
+
+const localDate = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function AdminDashboard() {
   const dispatch = useAppDispatch();
-  const { dashboard, alerts, loading, dashFilters } = useAppSelector(
-    (state) => state.admin
-  );
+  const { dashboard, alerts, loading, dashFilters } = useAppSelector((state) => state.admin);
+  const [from, setFrom] = useState(dashFilters.dateFrom || '');
+  const [to, setTo] = useState(dashFilters.dateTo || '');
+  const [recent, setRecent] = useState([]);
+  const [error, setError] = useState('');
 
-  const loadData = useCallback(
-    (dateFrom = dashFilters.dateFrom, dateTo = dashFilters.dateTo) => {
-      const params = {};
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      dispatch(fetchAdminDashboard(params));
-      dispatch(fetchOutstandingAlerts(50000));
-    },
-    [dashFilters.dateFrom, dashFilters.dateTo, dispatch]
-  );
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleDateApply = (from, to) => {
-    dispatch(setDashFilters({ dateFrom: from, dateTo: to }));
-    loadData(from, to);
+  const load = (dateFrom = from, dateTo = to) => {
+    const params = {};
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    dispatch(fetchAdminDashboard(params));
+    dispatch(fetchOutstandingAlerts(50000));
+    adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
   };
 
+  useEffect(() => {
+    const params = {};
+    if (dashFilters.dateFrom) params.date_from = dashFilters.dateFrom;
+    if (dashFilters.dateTo) params.date_to = dashFilters.dateTo;
+    dispatch(fetchAdminDashboard(params));
+    dispatch(fetchOutstandingAlerts(50000));
+    adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
+  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo]);
+
+  const applyRange = (dateFrom = from, dateTo = to) => {
+    setFrom(dateFrom);
+    setTo(dateTo);
+    dispatch(setDashFilters({ dateFrom: dateFrom || null, dateTo: dateTo || null }));
+    load(dateFrom, dateTo);
+  };
+
+  const preset = (days) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - days + 1);
+    applyRange(localDate(start), localDate(end));
+  };
+
+  const clearRange = () => applyRange('', '');
+
   return (
-    <div className="space-y-6">
-      {/* Date Filter Card */}
-      <div className="bg-white border border-[#d7dcd9] rounded-2xl p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#1c2321]">
-              Executive Dashboard
-            </h1>
-            <p className="mt-0.5 text-xs sm:text-sm text-[#5b6660]">
-              Real-time sales, collection KPIs, and outstanding tracking across all MRs.
-            </p>
-          </div>
-        </div>
-        <DateFilter onApply={handleDateApply} />
-      </div>
+    <Stack gap="md">
+      <Group justify="space-between" align="end">
+        <div><Title order={1}>Dashboard</Title><Text c="dimmed">Sales, collections, and balances at a glance.</Text></div>
+        <Badge variant="light" size="lg">Admin view</Badge>
+      </Group>
 
-      {/* Financial Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="Total Sales"
-          value={money(dashboard?.total_sales)}
-          accent={true}
-          icon={TrendingUp}
-        />
-        <StatCard
-          label="Total Collected"
-          value={money(dashboard?.collected)}
-          icon={CheckCircle}
-        />
-        <StatCard
-          label="Total Outstanding"
-          value={money(dashboard?.outstanding)}
-          icon={AlertTriangle}
-        />
-      </div>
+      <Paper withBorder p="md">
+        <Stack gap="sm">
+          <Group>
+            <Button variant="default" onClick={clearRange}>All time</Button>
+            <Button variant="default" onClick={() => preset(1)}>Today</Button>
+            <Button variant="default" onClick={() => preset(30)}>Last 30 days</Button>
+          </Group>
+          <Group align="end">
+            <TextInput type="date" label="From" value={from} onChange={(event) => setFrom(event.currentTarget.value)} />
+            <TextInput type="date" label="To" value={to} onChange={(event) => setTo(event.currentTarget.value)} />
+            <Button onClick={() => applyRange()}>Apply dates</Button>
+          </Group>
+        </Stack>
+      </Paper>
 
-      {/* Invoice Status Breakdown */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="Paid Invoices"
-          value={dashboard?.paid ?? 0}
-          icon={Receipt}
-          subtext="Fully collected"
-        />
-        <StatCard
-          label="Partial Invoices"
-          value={dashboard?.partial ?? 0}
-          icon={Clock}
-          subtext="Partially settled"
-        />
-        <StatCard
-          label="Unpaid Invoices"
-          value={dashboard?.unpaid ?? 0}
-          icon={AlertTriangle}
-          subtext="Awaiting collection"
-        />
-      </div>
+      {error && <Alert color="red">{error}</Alert>}
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+        <Stat label="Tally sales" value={money(dashboard?.total_sales)} accent />
+        <Stat label="Collected in selected dates" value={money(dashboard?.collected)} />
+        <Stat label="Outstanding on selected invoices" value={money(dashboard?.outstanding)} />
+      </SimpleGrid>
+      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <Stat label="Paid invoices" value={dashboard?.paid ?? 0} />
+        <Stat label="Partially paid" value={dashboard?.partial ?? 0} />
+        <Stat label="Unpaid invoices" value={dashboard?.unpaid ?? 0} />
+      </SimpleGrid>
 
-      {/* Outstanding Alerts (> ₹50,000) */}
-      <div className="bg-white border border-[#d7dcd9] rounded-2xl p-5 sm:p-6 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-[#f6ecd6] text-[#9a6b0c]">
-              <ShieldAlert size={18} />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-[#1c2321]">
-                High Value Alerts (Above ₹50,000)
-              </h2>
-              <p className="text-xs text-[#5b6660]">
-                Critical pending accounts requiring immediate follow-up.
-              </p>
-            </div>
-          </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
-            {alerts?.length || 0} Accounts
-          </span>
-        </div>
+      <Paper withBorder p="md"><PaymentAlerts /></Paper>
 
-        {loading && (!alerts || alerts.length === 0) ? (
-          <div className="py-8 text-center text-xs text-[#5b6660]">
-            Checking outstanding alerts…
-          </div>
-        ) : !alerts || alerts.length === 0 ? (
-          <EmptyState
-            icon={CheckCircle}
-            title="No high outstanding balances"
-            description="There are currently no customer invoices with pending amounts exceeding ₹50,000."
-          />
-        ) : (
-          <div>
-            {/* Desktop Table View */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[#d7dcd9] text-xs font-semibold text-[#5b6660]">
-                    <th className="py-3 px-3">Customer</th>
-                    <th className="py-3 px-3">Invoice</th>
-                    <th className="py-3 px-3">MR</th>
-                    <th className="py-3 px-3 text-right">Outstanding Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#d7dcd9]">
-                  {alerts.map((item, idx) => (
-                    <tr
-                      key={item.invoice_id || idx}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="py-3 px-3 font-semibold text-[#1c2321]">
-                        {item.customer || '—'}
-                      </td>
-                      <td className="py-3 px-3 font-mono text-[#5b6660]">
-                        {item.invoice_number}
-                      </td>
-                      <td className="py-3 px-3 text-[#1c2321]">
-                        {item.mr || '—'}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#a8403c]">
-                        {money(item.pending_amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Card List View */}
-            <div className="sm:hidden space-y-3">
-              {alerts.map((item, idx) => (
-                <div
-                  key={item.invoice_id || idx}
-                  className="p-3.5 bg-gray-50/70 rounded-xl border border-[#d7dcd9] flex items-center justify-between"
-                >
-                  <div>
-                    <div className="font-semibold text-xs text-[#1c2321]">
-                      {item.customer || '—'}
-                    </div>
-                    <div className="text-[11px] text-[#5b6660] font-mono mt-0.5">
-                      Inv: {item.invoice_number} · MR: {item.mr || '—'}
-                    </div>
-                  </div>
-                  <div className="font-mono text-xs font-bold text-[#a8403c]">
-                    {money(item.pending_amount)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      <Paper withBorder p="md">
+        <Group justify="space-between" mb="sm">
+          <div><Title order={3}>Outstanding above ₹50,000</Title><Text size="sm" c="dimmed">Invoices that may need follow up.</Text></div>
+          <Badge>{alerts.length}</Badge>
+        </Group>
+        {loading && !alerts.length ? <Group justify="center" p="lg"><Loader /></Group> : !alerts.length ? <Text c="dimmed" py="md">No high outstanding balances.</Text> : (
+          <Table.ScrollContainer minWidth={620}>
+            <Table striped>
+              <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>MR</Table.Th><Table.Th>Outstanding</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>{alerts.map((item, index) => (
+                <Table.Tr key={`${item.invoice_number}-${index}`}>
+                  <Table.Td>{item.customer || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td>{item.mr || '—'}</Table.Td><Table.Td fw={700} c="red">{money(item.pending_amount)}</Table.Td>
+                </Table.Tr>
+              ))}</Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         )}
-      </div>
-    </div>
+      </Paper>
+
+      <Paper withBorder p="md">
+        <Title order={3} mb="sm">Recent collections</Title>
+        {recent.length ? (
+          <Table.ScrollContainer minWidth={600}>
+            <Table striped>
+              <Table.Thead><Table.Tr><Table.Th>When</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Collected</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>{recent.map((item) => (
+                <Table.Tr key={item.payment_id}>
+                  <Table.Td>{item.payment_date ? new Date(item.payment_date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }) : '—'}</Table.Td>
+                  <Table.Td>{item.customer_name || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td>{item.collected_by || '—'}</Table.Td><Table.Td fw={700}>{money(item.amount)}</Table.Td>
+                </Table.Tr>
+              ))}</Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        ) : <Text c="dimmed" py="md">No collections recorded yet.</Text>}
+      </Paper>
+    </Stack>
   );
 }
-

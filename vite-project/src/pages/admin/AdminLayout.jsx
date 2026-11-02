@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
+import { Center, Loader } from '@mantine/core';
 import { IconChartBar, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet } from '@tabler/icons-react';
 import AppFrame from '../../components/common/AppFrame';
-import AdminDashboard from './AdminDashboard';
-import AdminInvoices from './AdminInvoices';
-import AdminCustomers from './AdminCustomers';
-import AdminPerformance from './AdminPerformance';
-import AdminUsers from './AdminUsers';
-import AdminCollections from './AdminCollections';
-import AdminImport from './AdminImport';
+
+const AdminDashboard = lazy(() => import('./AdminDashboard'));
+const AdminInvoices = lazy(() => import('./AdminInvoices'));
+const AdminCustomers = lazy(() => import('./AdminCustomers'));
+const AdminPerformance = lazy(() => import('./AdminPerformance'));
+const AdminUsers = lazy(() => import('./AdminUsers'));
+const AdminCollections = lazy(() => import('./AdminCollections'));
+const AdminImport = lazy(() => import('./AdminImport'));
 
 const ADMIN_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: IconChartBar },
@@ -25,6 +27,7 @@ export default function AdminLayout() {
   return (
     <AppFrame items={ADMIN_TABS} active={activeTab} onChange={setActiveTab}>
       <main>
+        <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
         {activeTab === 'dashboard' && <AdminDashboard />}
         {activeTab === 'invoices' && <AdminInvoices />}
         {activeTab === 'customers' && <AdminCustomers />}
@@ -32,6 +35,7 @@ export default function AdminLayout() {
         {activeTab === 'import' && <AdminImport />}
         {activeTab === 'performance' && <AdminPerformance />}
         {activeTab === 'users' && <AdminUsers />}
+        </Suspense>
       </main>
     </AppFrame>
   );

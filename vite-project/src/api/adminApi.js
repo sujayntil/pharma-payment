@@ -35,6 +35,11 @@ export const adminApi = {
     return response.data;
   },
 
+  async getRecentPayments(limit = 20) {
+    const response = await axiosClient.get('/admin/recent-payments', { params: { limit } });
+    return response.data;
+  },
+
   async importInvoices(file) {
     const form = new FormData();
     form.append('file', file);

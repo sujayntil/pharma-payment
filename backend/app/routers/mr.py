@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -7,6 +7,56 @@ from ..database import get_db
 from ..deps import get_current_user
 
 router = APIRouter(prefix="/mr", tags=["mr"])
+
+
+@router.get("/customers")
+def customers(
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
+):
+    """Return only customers currently assigned to this representative."""
+    invoice_count = (
+        select(func.count(models.Invoice.id))
+        .where(models.Invoice.customer_id == models.Customer.id)
+        .correlate(models.Customer)
+        .scalar_subquery()
+    )
+    invoiced = (
+        select(func.coalesce(func.sum(models.Invoice.total_amount), 0))
+        .where(models.Invoice.customer_id == models.Customer.id)
+        .correlate(models.Customer)
+        .scalar_subquery()
+    )
+    outstanding = (
+        select(func.coalesce(func.sum(models.Invoice.pending_amount), 0))
+        .where(models.Invoice.customer_id == models.Customer.id)
+        .correlate(models.Customer)
+        .scalar_subquery()
+    )
+    latest_invoice = (
+        select(func.max(models.Invoice.invoice_date))
+        .where(models.Invoice.customer_id == models.Customer.id)
+        .correlate(models.Customer)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(models.Customer, invoice_count, invoiced, outstanding, latest_invoice)
+        .filter(models.Customer.mr_id == user.id)
+        .order_by(models.Customer.name)
+        .all()
+    )
+    return [
+        {
+            "id": customer.id,
+            "name": customer.name,
+            "type": customer.type,
+            "phone": customer.phone,
+            "invoice_count": count,
+            "total_invoiced": total,
+            "outstanding": pending,
+            "latest_invoice_date": latest,
+        }
+        for customer, count, total, pending, latest in rows
+    ]
 
 
 @router.get("/dashboard")

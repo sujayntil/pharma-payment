@@ -1,6 +1,10 @@
 import axiosClient from './axiosClient';
 
 export const customersApi = {
+  async getMyCustomers() {
+    const response = await axiosClient.get('/mr/customers');
+    return response.data;
+  },
   /**
    * Get all customers.
    */

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   AppShell,
   Avatar,
+  Box,
   Burger,
   Button,
   Divider,
@@ -57,10 +58,10 @@ export default function AppFrame({ items, active, onChange, children }) {
               <UnstyledButton aria-label="Open user menu">
                 <Group gap="xs">
                   <Avatar color="green" radius="xl">{initials}</Avatar>
-                  <div className="hidden sm:block">
+                  <Box visibleFrom="sm">
                     <Text size="sm" fw={600}>{user?.name || 'User'}</Text>
                     <Text size="xs" c="dimmed">{role === 'ADMIN' ? 'Administrator' : 'Medical representative'}</Text>
-                  </div>
+                  </Box>
                   <IconChevronDown size={15} />
                 </Group>
               </UnstyledButton>

@@ -18,6 +18,7 @@ from app.routers.admin import router as admin_router
 from app.routers.customers import router as customers_router
 from app.routers.imports import router
 from app.routers.invoices import router as invoices_router
+from app.routers.mr import router as mr_router
 
 
 def workbook_bytes(rows, include_tax=True):
@@ -63,6 +64,7 @@ class ImportInvoicesTests(unittest.TestCase):
         app.include_router(admin_router)
         app.include_router(invoices_router)
         app.include_router(customers_router)
+        app.include_router(mr_router)
 
         def db_override():
             yield self.db
@@ -159,6 +161,27 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(response.json()[0]["invoice_count"], 1)
         self.assertIsNone(response.json()[0]["mr_id"])
         self.assertIsNone(response.json()[0]["mr_name"])
+
+    def test_mr_customer_directory_is_scoped_and_summarized(self):
+        assigned = models.Customer(name="MR One Customer", mr_id=self.mr.id)
+        other = models.Customer(name="MR Two Customer", mr_id=self.other_mr.id)
+        self.db.add_all([assigned, other])
+        self.db.flush()
+        self.db.add(models.Invoice(
+            invoice_number="MR-CUSTOMER-01", customer_id=assigned.id,
+            mr_id=self.mr.id, total_amount=100, paid_amount=25,
+            pending_amount=75, status="PARTIAL", invoice_date=date(2026, 10, 31),
+        ))
+        self.db.commit()
+
+        response = self.client.get("/mr/customers")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["name"] for row in response.json()], ["MR One Customer"])
+        self.assertEqual(response.json()[0]["invoice_count"], 1)
+        self.assertEqual(response.json()[0]["outstanding"], 75)
+
+        forbidden = self.client.get(f"/customers/{other.id}/ledger")
+        self.assertEqual(forbidden.status_code, 404)
 
     def test_invalid_rows_are_reported_without_becoming_invoices(self):
         response = self.upload([["not-a-date", "A00005", "Tulsi Pharmacy", "bad", 0, 0]])

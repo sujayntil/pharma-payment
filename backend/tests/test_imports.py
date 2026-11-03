@@ -183,6 +183,49 @@ class ImportInvoicesTests(unittest.TestCase):
         forbidden = self.client.get(f"/customers/{other.id}/ledger")
         self.assertEqual(forbidden.status_code, 404)
 
+    def test_mr_invoice_list_filters_by_date_and_status(self):
+        customer = models.Customer(name="Filter Customer", mr_id=self.mr.id)
+        self.db.add(customer)
+        self.db.flush()
+        self.db.add_all([
+            models.Invoice(invoice_number="FILTER-PAID", customer_id=customer.id, mr_id=self.mr.id, total_amount=100, paid_amount=100, pending_amount=0, status="PAID", invoice_date=date(2026, 10, 1)),
+            models.Invoice(invoice_number="FILTER-PARTIAL", customer_id=customer.id, mr_id=self.mr.id, total_amount=200, paid_amount=50, pending_amount=150, status="PARTIAL", invoice_date=date(2026, 10, 2)),
+            models.Invoice(invoice_number="FILTER-UNPAID", customer_id=customer.id, mr_id=self.mr.id, total_amount=300, paid_amount=0, pending_amount=300, status="UNPAID", invoice_date=date(2026, 10, 3)),
+            models.Invoice(invoice_number="OTHER-MR", customer_id=customer.id, mr_id=self.other_mr.id, total_amount=400, paid_amount=400, pending_amount=0, status="PAID", invoice_date=date(2026, 10, 2)),
+        ])
+        self.db.commit()
+
+        response = self.client.get("/invoices/mine", params={
+            "date_from": "2026-10-02", "date_to": "2026-10-03", "status": "UNPAID",
+            "limit": 50, "offset": 0,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 1)
+        self.assertEqual([row["invoice_number"] for row in response.json()["items"]], ["FILTER-UNPAID"])
+
+    def test_mr_customer_ledger_filters_rows_and_totals_by_date_and_status(self):
+        customer = models.Customer(name="Ledger Filter Customer", mr_id=self.mr.id)
+        self.db.add(customer)
+        self.db.flush()
+        self.db.add_all([
+            models.Invoice(invoice_number="LEDGER-PAID", customer_id=customer.id, mr_id=self.mr.id, total_amount=100, paid_amount=100, pending_amount=0, status="PAID", invoice_date=date(2026, 10, 1)),
+            models.Invoice(invoice_number="LEDGER-PARTIAL", customer_id=customer.id, mr_id=self.mr.id, total_amount=200, paid_amount=50, pending_amount=150, status="PARTIAL", invoice_date=date(2026, 10, 2)),
+            models.Invoice(invoice_number="LEDGER-UNPAID", customer_id=customer.id, mr_id=self.mr.id, total_amount=300, paid_amount=0, pending_amount=300, status="UNPAID", invoice_date=date(2026, 10, 3)),
+        ])
+        self.db.commit()
+
+        response = self.client.get(f"/customers/{customer.id}/ledger", params={
+            "date_from": "2026-10-02", "date_to": "2026-10-03", "status": "UNPAID",
+            "limit": 50, "offset": 0,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_invoiced"], 300)
+        self.assertEqual(response.json()["total_paid"], 0)
+        self.assertEqual(response.json()["outstanding"], 300)
+        self.assertEqual([row["invoice_number"] for row in response.json()["invoices"]], ["LEDGER-UNPAID"])
+
     def test_list_pages_and_search_returns_all_matches(self):
         alpha = models.Customer(name="Alpha Pharmacy", mr_id=self.mr.id)
         alpha_clinic = models.Customer(name="Alpha Clinic", mr_id=self.mr.id)

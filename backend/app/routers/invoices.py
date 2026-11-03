@@ -130,17 +130,24 @@ def create_invoice(
 def my_invoices(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    status: Optional[str] = None,
     search: Optional[str] = None,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(422, "date_from must be on or before date_to")
+    if status and status.upper() not in {"PAID", "PARTIAL", "UNPAID"}:
+        raise HTTPException(422, "status must be PAID, PARTIAL, or UNPAID")
     q = db.query(models.Invoice).filter(models.Invoice.mr_id == user.id)
     if date_from:
         q = q.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
         q = q.filter(models.Invoice.invoice_date <= date_to)
+    if status:
+        q = q.filter(models.Invoice.status == status.upper())
     if search and search.strip():
         term = f"%{search.strip()}%"
         q = q.outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id).filter(

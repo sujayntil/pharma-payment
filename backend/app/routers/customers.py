@@ -144,6 +144,7 @@ def customer_ledger(
     search: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    status: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db),
@@ -159,11 +160,15 @@ def customer_ledger(
 
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "date_from must be on or before date_to")
+    if status and status.upper() not in {"PAID", "PARTIAL", "UNPAID"}:
+        raise HTTPException(422, "status must be PAID, PARTIAL, or UNPAID")
     invoice_query = db.query(models.Invoice).filter(models.Invoice.customer_id == customer_id)
     if date_from:
         invoice_query = invoice_query.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
         invoice_query = invoice_query.filter(models.Invoice.invoice_date <= date_to)
+    if status:
+        invoice_query = invoice_query.filter(models.Invoice.status == status.upper())
     if search and search.strip():
         term = f"%{search.strip()}%"
         invoice_query = invoice_query.filter(or_(
@@ -180,6 +185,8 @@ def customer_ledger(
         totals_query = totals_query.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
         totals_query = totals_query.filter(models.Invoice.invoice_date <= date_to)
+    if status:
+        totals_query = totals_query.filter(models.Invoice.status == status.upper())
     total_invoiced, total_paid = totals_query.one()
     invoice_query = invoice_query.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
     invoices, invoice_count, page_size, page_offset = query_page(

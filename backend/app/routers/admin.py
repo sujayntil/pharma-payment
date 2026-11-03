@@ -262,9 +262,55 @@ def collections(
                 "transaction_reference": payment.transaction_reference,
                 "invoice_amount": invoice.total_amount,
                 "pending_amount": invoice.pending_amount,
+                "invoice_status": invoice.status,
             }
             for payment, invoice, customer, collector, assigned_mr in rows
         ],
+    }
+
+
+@router.put("/invoices/{invoice_id}/collection-status")
+def override_collection_status(
+    invoice_id: int,
+    payload: schemas.CollectionStatusUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    status = payload.status.upper()
+    if status not in (models.StatusEnum.PAID.value, models.StatusEnum.UNPAID.value):
+        raise HTTPException(422, "status must be PAID or UNPAID")
+    invoice = db.get(models.Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+
+    old_value = {
+        "status": invoice.status,
+        "paid_amount": invoice.paid_amount,
+        "pending_amount": invoice.pending_amount,
+    }
+    if status == models.StatusEnum.PAID.value:
+        invoice.paid_amount = invoice.total_amount
+        invoice.pending_amount = 0
+    else:
+        invoice.paid_amount = 0
+        invoice.pending_amount = invoice.total_amount
+    invoice.status = status
+    db.add(models.AuditLog(
+        action="admin_collection_status_override",
+        user_id=user.id,
+        old_value=old_value,
+        new_value={
+            "status": invoice.status,
+            "paid_amount": invoice.paid_amount,
+            "pending_amount": invoice.pending_amount,
+        },
+    ))
+    db.commit()
+    return {
+        "invoice_id": invoice.id,
+        "status": invoice.status,
+        "paid_amount": invoice.paid_amount,
+        "pending_amount": invoice.pending_amount,
     }
 
 
@@ -275,9 +321,9 @@ def create_manual_invoice(
     user: models.User = Depends(require_admin),
 ):
     invoice_number = payload.invoice_number.strip()
-    customer_name = payload.customer_name.strip()
-    if not invoice_number or not customer_name:
-        raise HTTPException(422, "Invoice number and customer name are required")
+    customer_name = (payload.customer_name or "").strip()
+    if not invoice_number or (not payload.customer_id and not customer_name):
+        raise HTTPException(422, "Invoice number and customer are required")
 
     existing = (
         db.query(models.Invoice)
@@ -287,17 +333,17 @@ def create_manual_invoice(
     if existing:
         raise HTTPException(409, f"Invoice {invoice_number} already exists")
 
-    matching_customers = (
+    customer = db.get(models.Customer, payload.customer_id) if payload.customer_id else None
+    if payload.customer_id and not customer:
+        raise HTTPException(404, "Customer not found")
+    matching_customers = [] if customer else (
         db.query(models.Customer)
         .filter(func.lower(func.trim(models.Customer.name)) == customer_name.lower())
         .all()
     )
     if len(matching_customers) > 1:
-        raise HTTPException(
-            409,
-            f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.",
-        )
-    customer = matching_customers[0] if matching_customers else None
+        raise HTTPException(409, f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.")
+    customer = customer or (matching_customers[0] if matching_customers else None)
     if customer is None:
         customer = models.Customer(name=customer_name)
         db.add(customer)

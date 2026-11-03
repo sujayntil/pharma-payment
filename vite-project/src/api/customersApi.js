@@ -21,5 +21,14 @@ export const customersApi = {
     const response = await axiosClient.get(`/customers/${customerId}/ledger`, { params });
     return response.data;
   },
+
+  async updateCustomer(customerId, data) {
+    const response = await axiosClient.put(`/customers/${customerId}`, data);
+    return response.data;
+  },
+
+  async deleteCustomer(customerId) {
+    await axiosClient.delete(`/customers/${customerId}`);
+  },
 };
 

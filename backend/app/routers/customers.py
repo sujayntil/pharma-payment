@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,8 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 @router.get("")
 def list_customers(
     search: str | None = None,
+    mr_id: int | None = None,
+    customer_type: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
@@ -27,6 +30,10 @@ def list_customers(
             models.Customer.type.ilike(term),
             models.Customer.phone.ilike(term),
         ))
+    if mr_id:
+        q = q.filter(models.Customer.mr_id == mr_id)
+    if customer_type and customer_type.strip():
+        q = q.filter(models.Customer.type.ilike(f"%{customer_type.strip()}%"))
     q = (
         q
         .outerjoin(models.Invoice, models.Invoice.customer_id == models.Customer.id)
@@ -66,10 +73,77 @@ def create_customer(
     return customer
 
 
+@router.put("/{customer_id}", response_model=schemas.CustomerOut)
+def update_customer(
+    customer_id: int,
+    payload: schemas.CustomerUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    customer = db.get(models.Customer, customer_id)
+    if not customer:
+        raise HTTPException(404, "Customer not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data and data["name"]:
+        name = data["name"].strip()
+        duplicate = db.query(models.Customer).filter(
+            func.lower(func.trim(models.Customer.name)) == name.lower(),
+            models.Customer.id != customer.id,
+        ).first()
+        if duplicate:
+            raise HTTPException(409, f"Customer name '{name}' already exists")
+        customer.name = name
+    for field in ("type", "phone", "address", "gstin"):
+        if field in data:
+            setattr(customer, field, data[field] or None)
+    if "mr_id" in data:
+        if data["mr_id"] is not None:
+            mr = db.get(models.User, data["mr_id"])
+            if not mr or mr.role != models.RoleEnum.MR.value:
+                raise HTTPException(422, "mr_id must refer to an MR")
+        customer.mr_id = data["mr_id"]
+        db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id).update(
+            {models.Invoice.mr_id: customer.mr_id}, synchronize_session=False
+        )
+    db.commit()
+    db.refresh(customer)
+    return schemas.CustomerOut(
+        id=customer.id,
+        name=customer.name,
+        type=customer.type,
+        phone=customer.phone,
+        address=customer.address,
+        gstin=customer.gstin,
+        mr_id=customer.mr_id,
+        mr_name=customer.mr.name if customer.mr else None,
+        invoice_count=db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id).count(),
+    )
+
+
+@router.delete("/{customer_id}", status_code=204)
+def delete_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    customer = db.get(models.Customer, customer_id)
+    if not customer:
+        raise HTTPException(404, "Customer not found")
+    invoice_count = db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id).count()
+    if invoice_count:
+        raise HTTPException(400, "Customer has invoices and cannot be deleted. Keep the record to preserve its ledger.")
+    db.delete(customer)
+    db.commit()
+    return None
+
+
 @router.get("/{customer_id}/ledger")
 def customer_ledger(
     customer_id: int,
     search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db),
@@ -83,7 +157,13 @@ def customer_ledger(
     if user.role == models.RoleEnum.MR.value and customer.mr_id != user.id:
         raise HTTPException(404, "Customer not found")
 
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(422, "date_from must be on or before date_to")
     invoice_query = db.query(models.Invoice).filter(models.Invoice.customer_id == customer_id)
+    if date_from:
+        invoice_query = invoice_query.filter(models.Invoice.invoice_date >= date_from)
+    if date_to:
+        invoice_query = invoice_query.filter(models.Invoice.invoice_date <= date_to)
     if search and search.strip():
         term = f"%{search.strip()}%"
         invoice_query = invoice_query.filter(or_(
@@ -92,11 +172,16 @@ def customer_ledger(
             models.Invoice.status.ilike(term),
             models.Invoice.mr.has(models.User.name.ilike(term)),
         ))
-    total_invoiced, total_paid = db.query(
+    totals_query = db.query(
         func.coalesce(func.sum(models.Invoice.total_amount), 0),
         func.coalesce(func.sum(models.Invoice.paid_amount), 0),
-    ).filter(models.Invoice.customer_id == customer_id).one()
-    invoice_query = invoice_query.order_by(models.Invoice.invoice_date, models.Invoice.id)
+    ).filter(models.Invoice.customer_id == customer_id)
+    if date_from:
+        totals_query = totals_query.filter(models.Invoice.invoice_date >= date_from)
+    if date_to:
+        totals_query = totals_query.filter(models.Invoice.invoice_date <= date_to)
+    total_invoiced, total_paid = totals_query.one()
+    invoice_query = invoice_query.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
     invoices, invoice_count, page_size, page_offset = query_page(
         invoice_query, limit, offset, search
     )

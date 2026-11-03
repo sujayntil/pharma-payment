@@ -66,6 +66,15 @@ class CustomerMrMapping(BaseModel):
     mr_id: Optional[int] = None
 
 
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    type: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    gstin: Optional[str] = None
+    mr_id: Optional[int] = None
+
+
 # ---- Invoices ----
 
 
@@ -99,7 +108,8 @@ class InvoiceCreate(BaseModel):
 class ManualInvoiceCreate(BaseModel):
     invoice_number: str = Field(min_length=1, max_length=120)
     invoice_date: date
-    customer_name: str = Field(min_length=1, max_length=255)
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     total_amount: float = Field(gt=0)
 
 
@@ -157,6 +167,10 @@ class PaymentCreate(BaseModel):
     amount: float
     mode: Optional[str] = None
     transaction_reference: Optional[str] = None
+
+
+class CollectionStatusUpdate(BaseModel):
+    status: str
 
 
 class PushSubscriptionCreate(BaseModel):

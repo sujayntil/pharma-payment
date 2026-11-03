@@ -1,27 +1,38 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Drawer, Group, Loader, Paper, ScrollArea, SimpleGrid, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Drawer, Group, Loader, Modal, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, TextInput, Select, Title } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
+import { adminApi } from '../../api/adminApi';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import { money } from '../../utils/formatters';
 
+const emptyCustomer = { name: '', type: '', phone: '', address: '', gstin: '', mr_id: '' };
+
 export default function AdminCustomers() {
-  const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [search, setSearch] = useState(''); const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [ledgerPage, setLedgerPage] = useState(1);
-  const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [error, setError] = useState('');
+  const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
+  const [search, setSearch] = useState(''); const [filters, setFilters] = useState({ mrId: '', type: '' }); const [applied, setApplied] = useState({ mrId: '', type: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
+  const [selected, setSelected] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [ledgerDates, setLedgerDates] = useState({ from: '', to: '' }); const [ledgerApplied, setLedgerApplied] = useState({ from: '', to: '' }); const [ledgerPage, setLedgerPage] = useState(1);
+  const [editing, setEditing] = useState(null); const [customerForm, setCustomerForm] = useState(emptyCustomer); const [deleting, setDeleting] = useState(null);
+  const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    adminApi.getUsers().then((users) => { if (active) setMrs(users.filter((user) => user.role === 'MR')); }).catch((err) => { if (active) setError(err.detail || err.message); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
     const timer = setTimeout(async () => {
       setLoading(true); setError('');
       try {
-        const result = await customersApi.getCustomers({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, ...(search.trim() && { search: search.trim() }) });
+        const result = await customersApi.getCustomers({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, ...(search.trim() && { search: search.trim() }), ...(applied.mrId && { mr_id: applied.mrId }), ...(applied.type.trim() && { customer_type: applied.type.trim() }) });
         if (active) { setCustomers(result.items); setTotal(result.total); }
       } catch (err) { if (active) setError(err.detail || err.message); }
       finally { if (active) setLoading(false); }
     }, search ? 250 : 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [page, search]);
+  }, [applied, page, refresh, search]);
 
   useEffect(() => {
     if (!selected) return undefined;
@@ -29,22 +40,33 @@ export default function AdminCustomers() {
     const timer = setTimeout(async () => {
       setLedgerLoading(true); setError('');
       try {
-        const result = await customersApi.getCustomerLedger(selected.id, { limit: PAGE_SIZE, offset: (ledgerPage - 1) * PAGE_SIZE, ...(ledgerSearch.trim() && { search: ledgerSearch.trim() }) });
+        const result = await customersApi.getCustomerLedger(selected.id, { limit: PAGE_SIZE, offset: (ledgerPage - 1) * PAGE_SIZE, ...(ledgerSearch.trim() && { search: ledgerSearch.trim() }), ...(ledgerApplied.from && { date_from: ledgerApplied.from }), ...(ledgerApplied.to && { date_to: ledgerApplied.to }) });
         if (active) setLedger(result);
       } catch (err) { if (active) setError(err.detail || err.message); }
       finally { if (active) setLedgerLoading(false); }
     }, ledgerSearch ? 250 : 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [ledgerPage, ledgerSearch, selected]);
+  }, [ledgerApplied, ledgerPage, ledgerSearch, selected]);
 
-  const openLedger = (customer) => { setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerPage(1); };
-  return <div><Group justify="space-between" mb="md"><div><Title order={1}>Customers</Title><Text c="dimmed">Browse customer records and open their invoice ledgers.</Text></div><Badge variant="light" size="lg">{total} customers</Badge></Group>
-    <Paper withBorder p="md"><TextInput mb="md" leftSection={<IconSearch size={16} />} placeholder="Search by name, type or phone" value={search} onChange={(event) => { setSearch(event.currentTarget.value); setPage(1); }} />{error && <Alert color="red" mb="md">{error}</Alert>}{loading ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match your search.</Text> : <ScrollArea><Table miw={650} highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.phone || '—'}</Table.Td><Table.Td>{customer.mr_name || '—'}</Table.Td><Table.Td><Button size="xs" variant="light" onClick={() => openLedger(customer)}>View ledger</Button></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
+  const openLedger = (customer) => { setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerDates({ from: '', to: '' }); setLedgerApplied({ from: '', to: '' }); setLedgerPage(1); };
+  const openEdit = (customer) => { setEditing(customer); setCustomerForm({ name: customer.name, type: customer.type || '', phone: customer.phone || '', address: customer.address || '', gstin: customer.gstin || '', mr_id: customer.mr_id ? String(customer.mr_id) : '' }); };
+  const saveCustomer = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { await customersApi.updateCustomer(editing.id, { ...customerForm, name: customerForm.name.trim(), type: customerForm.type.trim() || null, phone: customerForm.phone.trim() || null, address: customerForm.address.trim() || null, gstin: customerForm.gstin.trim() || null, mr_id: customerForm.mr_id ? Number(customerForm.mr_id) : null }); setEditing(null); setNotice('Customer details saved.'); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
+  const deleteCustomer = async () => { setBusy(true); setError(''); try { await customersApi.deleteCustomer(deleting.id); setDeleting(null); setNotice('Customer deleted.'); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
+  const applyFilters = () => { setPage(1); setApplied(filters); };
+  const clearFilters = () => { const next = { mrId: '', type: '' }; setFilters(next); setApplied(next); setSearch(''); setPage(1); };
+  const applyLedgerDates = () => { setLedgerPage(1); setLedgerApplied(ledgerDates); };
+
+  return <Stack gap="md"><Group justify="space-between" align="end"><div><Title order={1}>Customers</Title><Text c="dimmed">Browse, filter, and maintain customer records.</Text></div><Badge variant="light" size="lg">{total} customers</Badge></Group>
+    {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
+    <Paper withBorder p="md"><Stack gap="sm"><Group align="end" grow wrap="wrap"><Select label="Assigned MR" clearable searchable data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={filters.mrId || null} onChange={(value) => setFilters({ ...filters, mrId: value || '' })} /><TextInput label="Customer type" placeholder="Chemist, Doctor…" value={filters.type} onChange={(event) => setFilters({ ...filters, type: event.currentTarget.value })} /><Button onClick={applyFilters}>Apply filters</Button><Button variant="subtle" onClick={clearFilters}>Clear</Button></Group><TextInput leftSection={<IconSearch size={16} />} placeholder="Search by name, type or phone" value={search} onChange={(event) => { setSearch(event.currentTarget.value); setPage(1); }} /></Stack></Paper>
+    <Paper withBorder p="md">{loading ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match these filters.</Text> : <ScrollArea><Table miw={760} highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.phone || '—'}</Table.Td><Table.Td>{customer.mr_name || 'Unassigned'}</Table.Td><Table.Td><Group gap="xs" wrap="nowrap"><Button size="xs" variant="light" onClick={() => openLedger(customer)}>Ledger</Button><Button size="xs" variant="default" onClick={() => openEdit(customer)}>Edit</Button><Button size="xs" variant="light" color="red" onClick={() => setDeleting(customer)}>Delete</Button></Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(search.trim())} label="customers" />
     </Paper>
-    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(720px, 100%)" title={`Ledger — ${selected?.name || ''}`}>
-      {ledger && <><SimpleGrid cols={{ base: 1, sm: 3 }} mb="md"><Paper withBorder p="sm"><Text size="xs" c="dimmed">Total invoiced</Text><Text fw={700}>{money(ledger.total_invoiced)}</Text></Paper><Paper withBorder p="sm"><Text size="xs" c="dimmed">Total paid</Text><Text fw={700}>{money(ledger.total_paid)}</Text></Paper><Paper withBorder p="sm"><Text size="xs" c="dimmed">Outstanding</Text><Text fw={700} c="red">{money(ledger.outstanding)}</Text></Paper></SimpleGrid><TextInput mb="md" leftSection={<IconSearch size={16} />} placeholder="Search this customer's invoices" value={ledgerSearch} onChange={(event) => { setLedgerSearch(event.currentTarget.value); setLedgerPage(1); }} />{error && <Alert color="red" mb="md">{error}</Alert>}</>}
-      {ledgerLoading || !ledger ? <Group justify="center" p="xl"><Loader /></Group> : !ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match this search.</Text> : <><ScrollArea><Table miw={560}><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>MR</Table.Th><Table.Th>Amount</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id}><Table.Td>{invoice.invoice_number}</Table.Td><Table.Td>{invoice.date || '—'}</Table.Td><Table.Td>{invoice.mr || '—'}</Table.Td><Table.Td>{money(invoice.amount)}</Table.Td><Table.Td>{invoice.mode || '—'}</Table.Td><Table.Td><Badge color={invoice.status === 'PAID' ? 'green' : invoice.status === 'PARTIAL' ? 'yellow' : 'red'}>{invoice.status}</Badge></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea><ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(ledgerSearch.trim())} label="invoices" /></>}
+    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(760px, 100%)" title={`Ledger — ${selected?.name || ''}`}>
+      {ledger && <><SimpleGrid cols={{ base: 1, sm: 3 }} mb="md"><Paper withBorder p="sm"><Text size="xs" c="dimmed">Invoiced in selected dates</Text><Text fw={700}>{money(ledger.total_invoiced)}</Text></Paper><Paper withBorder p="sm"><Text size="xs" c="dimmed">Collected in selected dates</Text><Text fw={700}>{money(ledger.total_paid)}</Text></Paper><Paper withBorder p="sm"><Text size="xs" c="dimmed">Outstanding in selected dates</Text><Text fw={700} c="red">{money(ledger.outstanding)}</Text></Paper></SimpleGrid><Group align="end" grow wrap="wrap" mb="md"><TextInput type="date" label="From date" value={ledgerDates.from} onChange={(event) => setLedgerDates({ ...ledgerDates, from: event.currentTarget.value })} /><TextInput type="date" label="To date" value={ledgerDates.to} onChange={(event) => setLedgerDates({ ...ledgerDates, to: event.currentTarget.value })} /><Button onClick={applyLedgerDates}>Apply dates</Button><Button variant="subtle" onClick={() => { setLedgerDates({ from: '', to: '' }); setLedgerApplied({ from: '', to: '' }); setLedgerPage(1); }}>All dates</Button></Group><TextInput mb="md" leftSection={<IconSearch size={16} />} placeholder="Search this customer's invoices" value={ledgerSearch} onChange={(event) => { setLedgerSearch(event.currentTarget.value); setLedgerPage(1); }} /></>}
+      {ledgerLoading || !ledger ? <Group justify="center" p="xl"><Loader /></Group> : !ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : <><ScrollArea><Table miw={600}><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>MR</Table.Th><Table.Th>Amount</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id}><Table.Td>{invoice.invoice_number}</Table.Td><Table.Td>{invoice.date || '—'}</Table.Td><Table.Td>{invoice.mr || '—'}</Table.Td><Table.Td>{money(invoice.amount)}</Table.Td><Table.Td>{invoice.mode || '—'}</Table.Td><Table.Td><Badge color={invoice.status === 'PAID' ? 'green' : invoice.status === 'PARTIAL' ? 'yellow' : 'red'}>{invoice.status}</Badge></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea><ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(ledgerSearch.trim())} label="invoices" /></>}
     </Drawer>
-  </div>;
+    <Modal opened={!!editing} onClose={() => setEditing(null)} title={`Edit ${editing?.name || 'customer'}`} centered><form onSubmit={saveCustomer}><Stack><TextInput label="Customer name" required value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.currentTarget.value })} /><TextInput label="Customer type" value={customerForm.type} onChange={(event) => setCustomerForm({ ...customerForm, type: event.currentTarget.value })} /><Select label="Assigned MR" clearable searchable data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={customerForm.mr_id || null} onChange={(value) => setCustomerForm({ ...customerForm, mr_id: value || '' })} /><TextInput label="Phone" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.currentTarget.value })} /><TextInput label="Address" value={customerForm.address} onChange={(event) => setCustomerForm({ ...customerForm, address: event.currentTarget.value })} /><TextInput label="GSTIN" value={customerForm.gstin} onChange={(event) => setCustomerForm({ ...customerForm, gstin: event.currentTarget.value })} /><Button type="submit" loading={busy}>Save customer</Button></Stack></form></Modal>
+    <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete customer" centered><Stack><Alert color="red">Delete {deleting?.name}? Customers with invoices cannot be deleted, so their ledger history stays protected.</Alert><Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" loading={busy} onClick={deleteCustomer}>Delete customer</Button></Group></Stack></Modal>
+  </Stack>;
 }

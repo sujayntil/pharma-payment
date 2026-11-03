@@ -59,6 +59,11 @@ export const adminApi = {
     return response.data;
   },
 
+  async overrideCollectionStatus(invoiceId, status) {
+    const response = await axiosClient.put(`/admin/invoices/${invoiceId}/collection-status`, { status });
+    return response.data;
+  },
+
   /**
    * Get list of users (Admin and MRs).
    */

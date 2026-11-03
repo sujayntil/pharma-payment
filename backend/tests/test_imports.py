@@ -254,6 +254,109 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(len(collection_search["rows"]), 2)
         self.assertEqual(collection_search["total_amount"], 30)
 
+    def test_admin_maintenance_keeps_customer_invoice_and_ledger_consistent(self):
+        customer = models.Customer(name="Original Chemist", type="Chemist", mr_id=self.mr.id)
+        removable = models.Customer(name="Unused Customer", type="Doctor")
+        self.db.add_all([customer, removable])
+        self.db.flush()
+        older = models.Invoice(
+            invoice_number="ADMIN-OLD", customer_id=customer.id, mr_id=self.mr.id,
+            invoice_date=date(2026, 10, 1), total_amount=100, paid_amount=25,
+            pending_amount=75, status="PARTIAL",
+        )
+        latest = models.Invoice(
+            invoice_number="ADMIN-LATEST", customer_id=customer.id, mr_id=self.mr.id,
+            invoice_date=date(2026, 10, 5), total_amount=200, paid_amount=0,
+            pending_amount=200, status="UNPAID",
+        )
+        self.db.add_all([older, latest])
+        self.db.flush()
+        self.db.add(models.Payment(invoice_id=older.id, amount=25, collected_by=self.mr.id))
+        self.db.commit()
+
+        filtered = self.client.get("/customers", params={"mr_id": self.mr.id, "customer_type": "chemist"})
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual([row["name"] for row in filtered.json()], ["Original Chemist"])
+
+        updated = self.client.put(f"/customers/{customer.id}", json={
+            "name": "Updated Chemist", "type": "Distributor", "phone": "9000000000",
+            "mr_id": self.other_mr.id,
+        })
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["name"], "Updated Chemist")
+        self.assertEqual(self.db.get(models.Invoice, latest.id).mr_id, self.other_mr.id)
+        self.app.dependency_overrides[get_current_user] = lambda: self.other_mr
+
+        blocked_delete = self.client.delete(f"/customers/{customer.id}")
+        self.assertEqual(blocked_delete.status_code, 400)
+        self.assertEqual(self.client.delete(f"/customers/{removable.id}").status_code, 204)
+
+        invoices = self.client.get("/invoices", params={"limit": 50}).json()
+        self.assertEqual([row["invoice_number"] for row in invoices["items"]], ["ADMIN-LATEST", "ADMIN-OLD"])
+
+        ledger = self.client.get(f"/customers/{customer.id}/ledger", params={
+            "date_from": "2026-10-05", "date_to": "2026-10-05", "limit": 50,
+        })
+        self.assertEqual(ledger.status_code, 200)
+        self.assertEqual(ledger.json()["total_invoiced"], 200)
+        self.assertEqual(ledger.json()["outstanding"], 200)
+        self.assertEqual([row["invoice_number"] for row in ledger.json()["invoices"]], ["ADMIN-LATEST"])
+
+        marked_paid = self.client.put(
+            f"/admin/invoices/{latest.id}/collection-status", json={"status": "PAID"}
+        )
+        self.assertEqual(marked_paid.status_code, 200)
+        self.assertEqual(marked_paid.json()["pending_amount"], 0)
+        self.assertEqual(self.db.get(models.Invoice, latest.id).status, "PAID")
+
+        marked_unpaid = self.client.put(
+            f"/admin/invoices/{latest.id}/collection-status", json={"status": "UNPAID"}
+        )
+        self.assertEqual(marked_unpaid.status_code, 200)
+        self.assertEqual(marked_unpaid.json()["pending_amount"], 200)
+        self.assertEqual(self.db.query(models.AuditLog).filter_by(action="admin_collection_status_override").count(), 2)
+
+    def test_manual_invoice_uses_selected_existing_customer_id(self):
+        first = models.Customer(name="Same Name", mr_id=self.mr.id)
+        second = models.Customer(name="Same Name")
+        self.db.add_all([first, second])
+        self.db.commit()
+
+        response = self.client.post("/admin/manual-invoices", json={
+            "invoice_number": "SELECTED-CUSTOMER", "invoice_date": "2026-10-30",
+            "customer_id": first.id, "total_amount": 250,
+        })
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.db.query(models.Invoice).one().customer_id, first.id)
+
+    def test_admin_can_edit_and_delete_invoice(self):
+        customer = models.Customer(name="Invoice Customer", mr_id=self.mr.id)
+        self.db.add(customer)
+        self.db.flush()
+        invoice = models.Invoice(
+            invoice_number="EDIT-DELETE-01", customer_id=customer.id, mr_id=self.mr.id,
+            invoice_date=date(2026, 10, 1), total_amount=100, paid_amount=40,
+            pending_amount=60, status="PARTIAL",
+        )
+        self.db.add(invoice)
+        self.db.flush()
+        self.db.add(models.Payment(invoice_id=invoice.id, amount=40, collected_by=self.mr.id))
+        self.db.commit()
+        self.app.dependency_overrides[get_current_user] = lambda: self.admin
+
+        updated = self.client.put(f"/invoices/{invoice.id}", json={
+            "invoice_number": "EDIT-DELETE-UPDATED", "invoice_date": "2026-10-06",
+            "total_amount": 125, "payment_mode": "UPI", "remarks": "Corrected by admin",
+        })
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["pending_amount"], 85)
+        self.assertEqual(updated.json()["status"], "PARTIAL")
+
+        self.assertEqual(self.client.delete(f"/invoices/{invoice.id}").status_code, 204)
+        self.assertEqual(self.db.query(models.Invoice).count(), 0)
+        self.assertEqual(self.db.query(models.Payment).count(), 0)
+
     def test_invalid_rows_are_reported_without_becoming_invoices(self):
         response = self.upload([["not-a-date", "A00005", "Tulsi Pharmacy", "bad", 0, 0]])
         self.assertEqual(response.status_code, 200)

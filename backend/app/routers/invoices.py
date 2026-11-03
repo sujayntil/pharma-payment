@@ -150,7 +150,7 @@ def my_invoices(
                 models.Invoice.payment_mode.ilike(term),
             )
         )
-    q = q.order_by(models.Invoice.created_at.desc(), models.Invoice.id.desc())
+    q = q.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
     paged, total, page_size, page_offset = query_page(q, limit, offset, search)
     items = [_to_out(invoice) for invoice in paged]
     if limit is None and offset is None and search is None:
@@ -194,7 +194,7 @@ def list_invoices(
                 models.Invoice.payment_mode.ilike(term),
             )
         )
-    q = q.order_by(models.Invoice.created_at.desc(), models.Invoice.id.desc())
+    q = q.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
     paged, total, page_size, page_offset = query_page(q, limit, offset, search)
     items = [_to_out(invoice) for invoice in paged]
     if limit is None and offset is None and search is None:
@@ -255,7 +255,14 @@ def update_invoice(
         data.pop("customer_type", None)
 
     if "invoice_number" in data:
-        invoice.invoice_number = data["invoice_number"]
+        invoice_number = data["invoice_number"].strip()
+        duplicate = db.query(models.Invoice).filter(
+            models.Invoice.id != invoice.id,
+            models.Invoice.invoice_number.ilike(invoice_number),
+        ).first()
+        if duplicate:
+            raise HTTPException(409, f"Invoice number '{invoice_number}' already exists")
+        invoice.invoice_number = invoice_number
     if "invoice_date" in data:
         invoice.invoice_date = data["invoice_date"]
     if "payment_mode" in data:

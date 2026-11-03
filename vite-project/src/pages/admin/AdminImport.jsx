@@ -11,7 +11,7 @@ export default function AdminImport() {
   const [file, setFile] = useState(null); const [customers, setCustomers] = useState([]); const [customerTotal, setCustomerTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState(null); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [manualOpen, setManualOpen] = useState(false); const [customerLoading, setCustomerLoading] = useState(true);
-  const [manual, setManual] = useState({ invoice_number: '', invoice_date: today, customer_name: '', total_amount: '' });
+  const [manual, setManual] = useState({ invoice_number: '', invoice_date: today, customer_id: '', total_amount: '' }); const [manualCustomerSearch, setManualCustomerSearch] = useState(''); const [manualCustomers, setManualCustomers] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -32,9 +32,21 @@ export default function AdminImport() {
     return () => { active = false; clearTimeout(timer); };
   }, [page, refresh, search]);
 
+  useEffect(() => {
+    if (!manualOpen) return undefined;
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await customersApi.getCustomers({ limit: PAGE_SIZE, ...(manualCustomerSearch.trim() && { search: manualCustomerSearch.trim() }) });
+        if (active) setManualCustomers(data.items);
+      } catch (err) { if (active) setError(err.detail || err.message); }
+    }, manualCustomerSearch ? 250 : 0);
+    return () => { active = false; clearTimeout(timer); };
+  }, [manualCustomerSearch, manualOpen]);
+
   const upload = async () => { if (!file) return; setBusy(true); setMessage(''); setError(''); try { const data = await adminApi.importInvoices(file); setResult(data); setMessage(`Import complete: ${data.created} added, ${data.updated || 0} updated.`); setFile(null); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
   const map = async (customerId, value) => { try { await adminApi.mapCustomer(customerId, value ? Number(value) : null); setMessage('Customer assignment saved.'); setRefresh((count) => count + 1); } catch (err) { setError(err.detail || err.message); } };
-  const createManual = async () => { setBusy(true); setError(''); try { await adminApi.createManualInvoice({ ...manual, total_amount: Number(manual.total_amount) }); setMessage(`Invoice ${manual.invoice_number} added.`); setManualOpen(false); setManual({ invoice_number: '', invoice_date: today, customer_name: '', total_amount: '' }); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
+  const createManual = async () => { setBusy(true); setError(''); try { await adminApi.createManualInvoice({ ...manual, customer_id: Number(manual.customer_id), total_amount: Number(manual.total_amount) }); setMessage(`Invoice ${manual.invoice_number} added.`); setManualOpen(false); setManual({ invoice_number: '', invoice_date: today, customer_id: '', total_amount: '' }); setManualCustomerSearch(''); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
 
   return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>Import & mapping</Title><Text c="dimmed">Bring in the weekly Tally sales book and assign each customer to an MR.</Text></div><Button leftSection={<IconPlus size={16} />} onClick={() => setManualOpen(true)}>Add invoice</Button></Group>
     {error && <Alert color="red">{error}</Alert>}{message && <Alert color="green">{message}</Alert>}
@@ -42,6 +54,6 @@ export default function AdminImport() {
     <Paper withBorder p="md"><Group justify="space-between" mb="md"><div><Title order={3}>Customer to MR assignment</Title><Text size="sm" c="dimmed">Changing an MR updates all invoices for that customer.</Text></div><TextInput placeholder="Search customers" leftSection={<IconSearch size={16} />} value={search} onChange={(event) => { setSearch(event.currentTarget.value); setPage(1); }} /></Group>{customerLoading ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match your search.</Text> : <Table.ScrollContainer minWidth={680}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Invoices</Table.Th><Table.Th>Assigned MR</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.invoice_count || 0}</Table.Td><Table.Td><Select size="xs" clearable placeholder="Unassigned" data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={customer.mr_id ? String(customer.mr_id) : null} onChange={(value) => map(customer.id, value)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={customerTotal} page={page} onChange={setPage} searchActive={Boolean(search.trim())} label="customers" />
     </Paper>
-    <Modal opened={manualOpen} onClose={() => setManualOpen(false)} title="Add invoice manually" centered><Stack><TextInput required label="Invoice / bill number" value={manual.invoice_number} onChange={(e) => setManual({ ...manual, invoice_number: e.currentTarget.value })} /><TextInput required type="date" label="Invoice date" value={manual.invoice_date} onChange={(e) => setManual({ ...manual, invoice_date: e.currentTarget.value })} /><TextInput required label="Customer" value={manual.customer_name} onChange={(e) => setManual({ ...manual, customer_name: e.currentTarget.value })} /><NumberInput required min={0.01} decimalScale={2} label="Bill amount (₹)" value={manual.total_amount} onChange={(value) => setManual({ ...manual, total_amount: value })} /><Button loading={busy} disabled={!manual.invoice_number || !manual.customer_name || !manual.invoice_date || !manual.total_amount} onClick={createManual}>Add invoice</Button></Stack></Modal>
+    <Modal opened={manualOpen} onClose={() => setManualOpen(false)} title="Add invoice manually" centered><Stack><TextInput required label="Invoice / bill number" value={manual.invoice_number} onChange={(e) => setManual({ ...manual, invoice_number: e.currentTarget.value })} /><TextInput required type="date" label="Invoice date" value={manual.invoice_date} onChange={(e) => setManual({ ...manual, invoice_date: e.currentTarget.value })} /><Select required searchable clearable label="Customer" placeholder="Search existing customers" nothingFoundMessage="No customers found" data={manualCustomers.map((customer) => ({ value: String(customer.id), label: customer.name }))} value={manual.customer_id || null} searchValue={manualCustomerSearch} onSearchChange={setManualCustomerSearch} onChange={(value) => setManual({ ...manual, customer_id: value || '' })} /><NumberInput required min={0.01} decimalScale={2} label="Bill amount (₹)" value={manual.total_amount} onChange={(value) => setManual({ ...manual, total_amount: value })} /><Button loading={busy} disabled={!manual.invoice_number || !manual.customer_id || !manual.invoice_date || !manual.total_amount} onClick={createManual}>Add invoice</Button></Stack></Modal>
   </Stack>;
 }

@@ -1,6 +1,11 @@
 import axiosClient from './axiosClient';
 
 export const authApi = {
+  async getCurrentUser() {
+    const response = await axiosClient.get('/auth/me');
+    return response.data;
+  },
+
   /**
    * Log in with employee code (as username) and password.
    * @param {string} employeeCode

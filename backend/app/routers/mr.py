@@ -158,6 +158,7 @@ def outstanding(
             {
                 "invoice_id": i.id,
                 "invoice_number": i.invoice_number,
+                "invoice_date": i.invoice_date,
                 "customer": i.customer.name if i.customer else None,
                 "pending_amount": i.pending_amount,
                 "status": i.status,

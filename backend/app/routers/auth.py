@@ -4,9 +4,15 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
+from ..deps import get_current_user
 from ..security import create_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.get("/me", response_model=schemas.UserOut)
+def current_user(user: models.User = Depends(get_current_user)):
+    return user
 
 
 @router.post("/login", response_model=schemas.Token)

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AppShell,
@@ -18,14 +18,28 @@ import {
 } from '@mantine/core';
 import { IconChevronDown, IconLogout, IconPill } from '@tabler/icons-react';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
-import { logout } from '../../store/slices/authSlice';
+import { logout, setUserData } from '../../store/slices/authSlice';
+import { authApi } from '../../api/authApi';
 
 export default function AppFrame({ items, active, onChange, children }) {
   const [opened, setOpened] = useState(false);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { user, role } = useAuth();
-  const initials = (user?.name || 'U').slice(0, 1).toUpperCase();
+  const userId = user?.id;
+  const userName = user?.name;
+  const initials = user?.name?.trim().slice(0, 1).toUpperCase() || '';
+
+  useEffect(() => {
+    if (!userId || userName) return undefined;
+    let active = true;
+    authApi.getCurrentUser()
+      .then((profile) => {
+        if (active) dispatch(setUserData(profile));
+      })
+      .catch(() => { /* Keep the session on transient profile-load errors. */ });
+    return () => { active = false; };
+  }, [dispatch, userId, userName]);
 
   const choose = (id) => {
     onChange(id);

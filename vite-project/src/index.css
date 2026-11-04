@@ -17,3 +17,15 @@ textarea {
   font: inherit;
 }
 
+/* iOS Safari zooms the page when focusing controls whose text is under 16px. */
+@supports (-webkit-touch-callout: none) {
+  @media (hover: none) and (pointer: coarse) and (max-width: 767px) {
+    .mantine-Input-input,
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+

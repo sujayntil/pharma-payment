@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -110,10 +112,18 @@ def dashboard(
 @router.get("/outstanding")
 def outstanding(
     search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    sort_order: str = "amount",
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(422, "date_from must be on or before date_to")
+    if sort_order not in {"amount", "oldest", "newest"}:
+        raise HTTPException(422, "sort_order must be amount, oldest, or newest")
+
     base = db.query(models.Invoice).filter(
         models.Invoice.mr_id == user.id, models.Invoice.pending_amount > 0
     )
@@ -121,13 +131,22 @@ def outstanding(
         func.coalesce(func.sum(models.Invoice.pending_amount), 0)
     ).scalar()
     query = base
+    if date_from:
+        query = query.filter(models.Invoice.invoice_date >= date_from)
+    if date_to:
+        query = query.filter(models.Invoice.invoice_date <= date_to)
     if search and search.strip():
         term = f"%{search.strip()}%"
         query = query.filter(or_(
             models.Invoice.invoice_number.ilike(term),
             models.Invoice.customer.has(models.Customer.name.ilike(term)),
         ))
-    query = query.order_by(models.Invoice.pending_amount.desc(), models.Invoice.id.desc())
+    if sort_order == "amount":
+        query = query.order_by(models.Invoice.pending_amount.desc(), models.Invoice.id.desc())
+    else:
+        date_sort = models.Invoice.invoice_date.asc() if sort_order == "oldest" else models.Invoice.invoice_date.desc()
+        id_sort = models.Invoice.id.asc() if sort_order == "oldest" else models.Invoice.id.desc()
+        query = query.order_by(date_sort.nullslast(), id_sort)
     items, total_count, page_size, page_offset = query_page(query, limit, offset, search)
 
     return {

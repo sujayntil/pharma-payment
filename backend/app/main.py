@@ -45,15 +45,9 @@ async def overdue_reminder_scheduler():
 
 @asynccontextmanager
 async def lifespan(_app):
-    task = asyncio.create_task(overdue_reminder_scheduler())
-    try:
-        yield
-    finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    # Outstanding reminders remain visible in the dashboard, but their push
+    # scheduler is paused. Payment notifications are sent by the payments router.
+    yield
 
 
 app = FastAPI(title="Pharma Sales & Collection Management System", lifespan=lifespan)

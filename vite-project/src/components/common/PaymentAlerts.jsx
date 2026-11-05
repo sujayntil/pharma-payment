@@ -44,5 +44,5 @@ export default function PaymentAlerts() {
     } finally { setBusy(false); }
   };
 
-  return <Group justify="space-between" align="center"><div><Text fw={600}>Payment and overdue alerts</Text><Text size="sm" c="dimmed">{message || (subscription ? 'This device will get MR payment and 40-day outstanding reminders.' : supported ? 'Get MR payment and 40-day outstanding reminders.' : 'Push notifications require a supported browser and secure connection.')}</Text></div><Button disabled={!supported} loading={busy} variant={subscription ? 'default' : 'light'} leftSection={subscription ? <IconBellOff size={16} /> : <IconBell size={16} />} onClick={toggle}>{subscription ? 'Disable alerts' : 'Enable alerts'}</Button></Group>;
+  return <Group justify="space-between" align="center"><div><Text fw={600}>Payment collection alerts</Text><Text size="sm" c="dimmed">{message || (subscription ? 'This device will be notified when a payment is recorded.' : supported ? 'Get notified when a payment is recorded.' : 'Push notifications require a supported browser and secure connection.')}</Text></div><Button disabled={!supported} loading={busy} variant={subscription ? 'default' : 'light'} leftSection={subscription ? <IconBellOff size={16} /> : <IconBell size={16} />} onClick={toggle}>{subscription ? 'Disable alerts' : 'Enable alerts'}</Button></Group>;
 }

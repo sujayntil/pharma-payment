@@ -57,20 +57,30 @@ export default function AdminDashboard() {
     dispatch(fetchOutstandingAlerts({ threshold: 50000, limit: PAGE_SIZE, offset: (alertPage - 1) * PAGE_SIZE }));
   }, [dispatch, alertPage]);
 
-  const applyRange = (dateFrom = from, dateTo = to) => {
+  const selectRange = (dateFrom, dateTo) => {
     setFrom(dateFrom);
     setTo(dateTo);
-    dispatch(setDashFilters({ dateFrom: dateFrom || null, dateTo: dateTo || null }));
   };
 
   const preset = (days) => {
+    if (!days) return selectRange('', '');
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - days + 1);
-    applyRange(localDate(start), localDate(end));
+    selectRange(localDate(start), localDate(end));
   };
 
-  const clearRange = () => applyRange('', '');
+  const applyFilters = () => {
+    dispatch(setDashFilters({ dateFrom: from || null, dateTo: to || null }));
+    setAppliedCustomerType(customerType);
+  };
+
+  const clearFilters = () => {
+    selectRange('', '');
+    setCustomerType('');
+    setAppliedCustomerType('');
+    dispatch(setDashFilters({ dateFrom: null, dateTo: null }));
+  };
 
   return (
     <Stack gap="md">
@@ -82,14 +92,13 @@ export default function AdminDashboard() {
       <Paper withBorder p="md">
         <Stack gap="sm">
           <Group>
-            <Button variant="default" onClick={clearRange}>All time</Button>
+            <Button variant="default" onClick={() => preset(0)}>All time</Button>
             <Button variant="default" onClick={() => preset(1)}>Today</Button>
             <Button variant="default" onClick={() => preset(30)}>Last 30 days</Button>
           </Group>
           <Group align="end">
             <TextInput type="date" label="From" value={from} onChange={(event) => setFrom(event.currentTarget.value)} />
             <TextInput type="date" label="To" value={to} onChange={(event) => setTo(event.currentTarget.value)} />
-            <Button onClick={() => applyRange()}>Apply dates</Button>
           </Group>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             <Select label="Sales by customer type" data={[
@@ -98,11 +107,11 @@ export default function AdminDashboard() {
               { value: 'doctor', label: 'Doctor' },
               { value: 'other', label: 'Other' },
             ]} placeholder="All customer types" clearable value={customerType || null} onChange={(value) => setCustomerType(value || '')} />
-            <Group align="end" grow>
-              <Button onClick={() => setAppliedCustomerType(customerType)}>Apply type</Button>
-              <Button variant="subtle" onClick={() => { setCustomerType(''); setAppliedCustomerType(''); }}>Clear</Button>
-            </Group>
           </SimpleGrid>
+          <Group justify="flex-end">
+            <Button onClick={applyFilters}>Apply filters</Button>
+            <Button variant="subtle" onClick={clearFilters}>Clear filters</Button>
+          </Group>
         </Stack>
       </Paper>
 

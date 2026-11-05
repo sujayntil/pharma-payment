@@ -1,4 +1,4 @@
-"""Admin import of Tally's weekly sales-book XLSX files."""
+"""Admin import of Tally's weekly sales-book Excel files."""
 
 import hashlib
 import math
@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from openpyxl import load_workbook
+import xlrd
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -128,15 +129,30 @@ async def import_invoices(
 ):
     """Import the sales-book header rows; the invoice's Bill Amt is collectible."""
     filename = (file.filename or "").lower()
-    if not filename.endswith(".xlsx"):
-        raise HTTPException(400, "Upload an Excel .xlsx file")
+    if not filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(400, "Upload an Excel .xlsx or .xls file")
     content = await file.read(12 * 1024 * 1024 + 1)
     if len(content) > 12 * 1024 * 1024:
         raise HTTPException(413, "Excel file must be 12 MB or smaller")
     try:
-        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
-        sheet = workbook.active
-        rows = list(sheet.iter_rows(values_only=True))
+        if filename.endswith(".xls"):
+            workbook = xlrd.open_workbook(file_contents=content)
+            sheet = workbook.sheet_by_index(0)
+            rows = [
+                [
+                    xlrd.xldate_as_datetime(cell.value, workbook.datemode)
+                    if cell.ctype == xlrd.XL_CELL_DATE
+                    else None
+                    if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK)
+                    else cell.value
+                    for cell in sheet.row(row_index)
+                ]
+                for row_index in range(sheet.nrows)
+            ]
+        else:
+            workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+            sheet = workbook.active
+            rows = list(sheet.iter_rows(values_only=True))
         header_row, columns = _find_header(rows)
     except (ValueError, OSError, KeyError) as exc:
         raise HTTPException(400, f"Could not read this sales book: {exc}") from exc

@@ -417,8 +417,8 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertIsNone(invoice.taxable_amount)
         self.assertIsNone(invoice.tax_amount)
 
-    def test_non_xlsx_upload_is_rejected(self):
-        response = self.upload([], filename="sales.xls")
+    def test_unsupported_upload_format_is_rejected(self):
+        response = self.upload([], filename="sales.csv")
         self.assertEqual(response.status_code, 400)
 
     def test_recent_collection_feed_uses_existing_payment_ledger(self):

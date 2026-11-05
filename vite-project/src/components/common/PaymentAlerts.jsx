@@ -29,7 +29,7 @@ export default function PaymentAlerts() {
         await notificationsApi.remove(current.endpoint);
         await current.unsubscribe();
         setSubscription(null);
-        setMessage('Payment alerts are disabled on this device.');
+        setMessage('Payment and 40-day outstanding alerts are disabled on this device.');
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') throw new Error('Allow notifications in browser settings, then enable alerts again.');
@@ -37,12 +37,12 @@ export default function PaymentAlerts() {
         const created = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(publicKey) });
         await notificationsApi.save(created.toJSON());
         setSubscription(created);
-        setMessage('Payment alerts are enabled on this device.');
+        setMessage('Payment and 40-day outstanding alerts are enabled on this device.');
       }
     } catch (error) {
       setMessage(error.response?.data?.detail || error.message || 'Could not update notification settings.');
     } finally { setBusy(false); }
   };
 
-  return <Group justify="space-between" align="center"><div><Text fw={600}>Payment alerts</Text><Text size="sm" c="dimmed">{message || (subscription ? 'This device will be notified when an MR records a payment.' : supported ? 'Get notified when an MR records a payment.' : 'Push notifications require a supported browser and secure connection.')}</Text></div><Button disabled={!supported} loading={busy} variant={subscription ? 'default' : 'light'} leftSection={subscription ? <IconBellOff size={16} /> : <IconBell size={16} />} onClick={toggle}>{subscription ? 'Disable alerts' : 'Enable alerts'}</Button></Group>;
+  return <Group justify="space-between" align="center"><div><Text fw={600}>Payment and overdue alerts</Text><Text size="sm" c="dimmed">{message || (subscription ? 'This device will get MR payment and 40-day outstanding reminders.' : supported ? 'Get MR payment and 40-day outstanding reminders.' : 'Push notifications require a supported browser and secure connection.')}</Text></div><Button disabled={!supported} loading={busy} variant={subscription ? 'default' : 'light'} leftSection={subscription ? <IconBellOff size={16} /> : <IconBell size={16} />} onClick={toggle}>{subscription ? 'Disable alerts' : 'Enable alerts'}</Button></Group>;
 }

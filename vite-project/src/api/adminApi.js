@@ -30,6 +30,11 @@ export const adminApi = {
     return response.data;
   },
 
+  async getOverdueAlerts() {
+    const response = await axiosClient.get('/admin/overdue-alerts');
+    return response.data;
+  },
+
   async getCollections(params = {}) {
     const response = await axiosClient.get('/admin/collections', { params });
     return response.data;

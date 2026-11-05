@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Group, Loader, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
@@ -27,24 +27,31 @@ export default function AdminDashboard() {
   const [alertPage, setAlertPage] = useState(1);
   const [from, setFrom] = useState(dashFilters.dateFrom || '');
   const [to, setTo] = useState(dashFilters.dateTo || '');
+  const [customerType, setCustomerType] = useState('');
+  const [appliedCustomerType, setAppliedCustomerType] = useState('');
   const [recent, setRecent] = useState([]);
   const [error, setError] = useState('');
-
-  const load = (dateFrom = from, dateTo = to) => {
-    const params = {};
-    if (dateFrom) params.date_from = dateFrom;
-    if (dateTo) params.date_to = dateTo;
-    dispatch(fetchAdminDashboard(params));
-    adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
-  };
+  const [overdue, setOverdue] = useState([]);
+  const [overdueLoading, setOverdueLoading] = useState(true);
+  const [overdueError, setOverdueError] = useState('');
 
   useEffect(() => {
     const params = {};
     if (dashFilters.dateFrom) params.date_from = dashFilters.dateFrom;
     if (dashFilters.dateTo) params.date_to = dashFilters.dateTo;
+    if (appliedCustomerType) params.customer_type = appliedCustomerType;
     dispatch(fetchAdminDashboard(params));
     adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
-  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo]);
+  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo, appliedCustomerType]);
+
+  useEffect(() => {
+    let active = true;
+    adminApi.getOverdueAlerts()
+      .then((items) => { if (active) setOverdue(items); })
+      .catch((err) => { if (active) setOverdueError(err.detail || err.message); })
+      .finally(() => { if (active) setOverdueLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     dispatch(fetchOutstandingAlerts({ threshold: 50000, limit: PAGE_SIZE, offset: (alertPage - 1) * PAGE_SIZE }));
@@ -54,7 +61,6 @@ export default function AdminDashboard() {
     setFrom(dateFrom);
     setTo(dateTo);
     dispatch(setDashFilters({ dateFrom: dateFrom || null, dateTo: dateTo || null }));
-    load(dateFrom, dateTo);
   };
 
   const preset = (days) => {
@@ -85,6 +91,18 @@ export default function AdminDashboard() {
             <TextInput type="date" label="To" value={to} onChange={(event) => setTo(event.currentTarget.value)} />
             <Button onClick={() => applyRange()}>Apply dates</Button>
           </Group>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <Select label="Sales by customer type" data={[
+              { value: 'distributor', label: 'Distributor' },
+              { value: 'chemist', label: 'Chemist' },
+              { value: 'doctor', label: 'Doctor' },
+              { value: 'other', label: 'Other' },
+            ]} placeholder="All customer types" clearable value={customerType || null} onChange={(value) => setCustomerType(value || '')} />
+            <Group align="end" grow>
+              <Button onClick={() => setAppliedCustomerType(customerType)}>Apply type</Button>
+              <Button variant="subtle" onClick={() => { setCustomerType(''); setAppliedCustomerType(''); }}>Clear</Button>
+            </Group>
+          </SimpleGrid>
         </Stack>
       </Paper>
 
@@ -120,6 +138,26 @@ export default function AdminDashboard() {
           </Table.ScrollContainer>
         )}
         <ListPagination total={alertCount} page={alertPage} onChange={setAlertPage} label="invoices" />
+      </Paper>
+
+      <Paper withBorder p="md">
+        <Group justify="space-between" mb="sm">
+          <div><Title order={3}>Outstanding for 40+ days</Title><Text size="sm" c="dimmed">From invoice date; reminders repeat every two days while the balance remains unpaid.</Text></div>
+          <Badge color={overdue.length ? 'red' : 'gray'}>{overdue.length} customers</Badge>
+        </Group>
+        {overdueError && <Alert color="red" mb="sm">{overdueError}</Alert>}
+        {overdueLoading ? <Group justify="center" p="lg"><Loader /></Group> : !overdue.length ? <Text c="dimmed" py="md">No customers have invoices outstanding for 40 days or more.</Text> : (
+          <Table.ScrollContainer minWidth={760}>
+            <Table striped highlightOnHover>
+              <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Oldest invoice</Table.Th><Table.Th>Days overdue</Table.Th><Table.Th>MR</Table.Th><Table.Th>Overdue invoices</Table.Th><Table.Th>40+ day balance</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>{overdue.map((item) => (
+                <Table.Tr key={item.customer_id}>
+                  <Table.Td fw={600}>{item.customer}</Table.Td><Table.Td>{item.oldest_invoice_number}<Text size="xs" c="dimmed">{item.oldest_invoice_date}</Text></Table.Td><Table.Td>{item.days_overdue}</Table.Td><Table.Td>{item.mr || '—'}</Table.Td><Table.Td>{item.invoice_count}</Table.Td><Table.Td fw={700} c="red">{money(item.overdue_amount)}</Table.Td>
+                </Table.Tr>
+              ))}</Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
       </Paper>
 
       <Paper withBorder p="md">

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased
 from .. import models, schemas
 from ..database import get_db
 from ..deps import require_admin
+from ..overdue import overdue_customer_summaries
 from ..security import hash_password
 from ..utils import compute_status, page_result, query_page
 
@@ -42,17 +43,38 @@ def _payment_date_range_filter(date_from: Optional[date], date_to: Optional[date
 def dashboard(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    customer_type: Optional[str] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     """Invoice KPIs plus collections received during the selected dates."""
-    q = db.query(models.Invoice)
+    customer_type = (customer_type or "").strip().lower()
+    if customer_type not in {"", "distributor", "chemist", "doctor", "other"}:
+        raise HTTPException(422, "customer_type must be distributor, chemist, doctor, or other")
+
+    def apply_type_filter(query):
+        if customer_type == "other":
+            normalized_type = func.lower(func.trim(func.coalesce(models.Customer.type, "")))
+            return query.filter(
+                or_(models.Customer.id.is_(None), ~normalized_type.in_(("distributor", "chemist", "doctor")))
+            )
+        if customer_type:
+            return query.filter(func.lower(func.trim(models.Customer.type)) == customer_type)
+        return query
+
+    q = apply_type_filter(
+        db.query(models.Invoice).outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
+    )
     conditions = _date_range_filter(date_from, date_to)
     if conditions:
         q = q.filter(and_(*conditions))
 
     total_sales = q.with_entities(func.coalesce(func.sum(models.Invoice.total_amount), 0)).scalar()
-    collected = db.query(func.coalesce(func.sum(models.Payment.amount), 0))
+    collected = apply_type_filter(
+        db.query(func.coalesce(func.sum(models.Payment.amount), 0))
+        .join(models.Invoice, models.Payment.invoice_id == models.Invoice.id)
+        .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
+    )
     payment_conditions = _payment_date_range_filter(date_from, date_to)
     if payment_conditions:
         collected = collected.filter(and_(*payment_conditions))
@@ -75,6 +97,15 @@ def dashboard(
         "partial": partial,
         "unpaid": unpaid,
     }
+
+
+@router.get("/overdue-alerts")
+def overdue_alerts(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Customers with at least one invoice unpaid for 40 days or more."""
+    return overdue_customer_summaries(db)
 
 
 @router.get("/mr-performance")

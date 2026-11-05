@@ -211,6 +211,7 @@ def customer_ledger(
                 "invoice_number": i.invoice_number,
                 "date": i.invoice_date,
                 "amount": i.total_amount,
+                "pending_amount": i.pending_amount,
                 "status": i.status,
                 "mode": i.payment_mode,
                 "mr": i.mr.name if i.mr else None,

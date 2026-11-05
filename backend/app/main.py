@@ -1,4 +1,7 @@
+import asyncio
+import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +9,10 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models  # noqa: F401  (ensures models are registered before create_all)
 from .database import Base, SessionLocal, engine
+from .overdue import process_due_overdue_reminders
 from .routers import admin, auth, customers, imports, invoices, mr, notifications, payments
+
+log = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,7 +33,30 @@ if os.getenv("SEED_ON_STARTUP", "").lower() == "true":
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app = FastAPI(title="Pharma Sales & Collection Management System")
+
+async def overdue_reminder_scheduler():
+    while True:
+        try:
+            await asyncio.to_thread(process_due_overdue_reminders)
+        except Exception:
+            log.exception("Overdue reminder scheduler failed")
+        await asyncio.sleep(6 * 60 * 60)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    task = asyncio.create_task(overdue_reminder_scheduler())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(title="Pharma Sales & Collection Management System", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

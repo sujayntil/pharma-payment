@@ -17,8 +17,8 @@ pushButton.addEventListener("click", async () => {
     if (subscription) {
       await apiFetch("/notifications/subscriptions", { method: "DELETE", body: { endpoint: subscription.endpoint } });
       await subscription.unsubscribe();
-      pushStatus.textContent = "Payment alerts are disabled on this device.";
-      pushButton.textContent = "Enable payment alerts";
+      pushStatus.textContent = "Payment and 40-day outstanding alerts are disabled on this device.";
+      pushButton.textContent = "Enable admin alerts";
     } else {
       const { public_key: publicKey } = await apiFetch("/notifications/vapid-public-key");
       subscription = await registration.pushManager.subscribe({
@@ -26,8 +26,8 @@ pushButton.addEventListener("click", async () => {
         applicationServerKey: base64UrlToBytes(publicKey),
       });
       await apiFetch("/notifications/subscriptions", { method: "POST", body: subscription.toJSON() });
-      pushStatus.textContent = "Payment alerts are enabled on this device.";
-      pushButton.textContent = "Disable payment alerts";
+      pushStatus.textContent = "Payment and 40-day outstanding alerts are enabled on this device.";
+      pushButton.textContent = "Disable admin alerts";
     }
   } catch (error) {
     pushStatus.textContent = error.message;
@@ -47,13 +47,14 @@ if (!("PushManager" in window) || !("serviceWorker" in navigator) || !window.isS
 } else {
   navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription()).then((subscription) => {
     if (subscription) {
-      pushStatus.textContent = "Payment alerts are enabled on this device.";
-      pushButton.textContent = "Disable payment alerts";
+      pushStatus.textContent = "Payment and 40-day outstanding alerts are enabled on this device.";
+      pushButton.textContent = "Disable admin alerts";
     }
   }).catch(() => {});
 }
 
 let dashDateFrom = null, dashDateTo = null;
+let dashCustomerType = "";
 let perfDateFrom = null, perfDateTo = null;
 let invDateFrom = null, invDateTo = null;
 let collectionDateFrom = null, collectionDateTo = null;
@@ -78,6 +79,16 @@ renderDateFilter("collectionsDateFilter", (from, to) => {
   collectionDateTo = to;
   collectionsOffset = 0;
   loadCollections();
+});
+
+document.getElementById("dashboardTypeApply").addEventListener("click", () => {
+  dashCustomerType = document.getElementById("dashboardCustomerType").value;
+  loadDashboard();
+});
+document.getElementById("dashboardTypeClear").addEventListener("click", () => {
+  document.getElementById("dashboardCustomerType").value = "";
+  dashCustomerType = "";
+  loadDashboard();
 });
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
@@ -149,6 +160,7 @@ async function loadDashboard() {
     const params = new URLSearchParams();
     if (dashDateFrom) params.append("date_from", dashDateFrom);
     if (dashDateTo) params.append("date_to", dashDateTo);
+    if (dashCustomerType) params.append("customer_type", dashCustomerType);
     const d = await apiFetch(`/admin/dashboard?${params.toString()}`);
     document.getElementById("dashTotals").innerHTML = `
       <div class="stat accent"><div class="label">Total sales</div><div class="value">${money(d.total_sales)}</div></div>
@@ -181,6 +193,19 @@ async function loadDashboard() {
         )
         .join("");
     }
+
+    const overdue = await apiFetch("/admin/overdue-alerts");
+    const overdueBody = document.getElementById("overdueAlertsBody");
+    const overdueEmpty = document.getElementById("overdueAlertsEmpty");
+    overdueBody.innerHTML = overdue.map((customer) => `
+      <tr>
+        <td>${escapeHtml(customer.customer)}</td>
+        <td><span class="invoice-number">${escapeHtml(customer.oldest_invoice_number)}</span><br /><span class="muted">${customer.oldest_invoice_date}</span></td>
+        <td>${customer.days_overdue}</td>
+        <td>${escapeHtml(customer.mr || "—")}</td>
+        <td class="num amount">${money(customer.overdue_amount)}</td>
+      </tr>`).join("");
+    overdueEmpty.style.display = overdue.length ? "none" : "block";
 
     await loadRecentPayments();
   } catch (err) {
@@ -550,24 +575,52 @@ function renderCustomers(customers) {
 }
 
 let currentLedgerInvoices = [];
+let currentLedgerCustomerId = null;
+let activeLedgerPaymentId = null;
+let currentLedgerTotals = null;
 
 async function openLedger(customerId) {
   try {
     const data = await apiFetch(`/customers/${customerId}/ledger`);
+    currentLedgerCustomerId = customerId;
+    activeLedgerPaymentId = null;
+    currentLedgerTotals = {
+      total_invoiced: data.total_invoiced,
+      total_paid: data.total_paid,
+      outstanding: data.outstanding,
+    };
     document.getElementById("ledgerCard").style.display = "block";
     document.getElementById("ledgerTitle").textContent = `Ledger — ${data.customer.name}`;
+    currentLedgerInvoices = data.invoices;
+    document.getElementById("ledgerSearch").value = "";
+    document.getElementById("ledgerActionMessage").style.display = "none";
+    renderCustomerLedger(data);
+    document.getElementById("ledgerCard").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderCustomerLedger(data) {
+  if (data.total_invoiced !== undefined) {
+    currentLedgerTotals = {
+      total_invoiced: data.total_invoiced,
+      total_paid: data.total_paid,
+      outstanding: data.outstanding,
+    };
     document.getElementById("ledgerStats").innerHTML = `
       <div class="stat"><div class="label">Total invoiced</div><div class="value">${money(data.total_invoiced)}</div></div>
       <div class="stat"><div class="label">Total paid</div><div class="value">${money(data.total_paid)}</div></div>
       <div class="stat accent"><div class="label">Outstanding</div><div class="value">${money(data.outstanding)}</div></div>
     `;
-    currentLedgerInvoices = data.invoices;
-    document.getElementById("ledgerSearch").value = "";
-    renderLedgerInvoices(currentLedgerInvoices);
-    document.getElementById("ledgerCard").scrollIntoView({ behavior: "smooth" });
-  } catch (err) {
-    console.error(err);
   }
+  const q = document.getElementById("ledgerSearch").value.trim().toLowerCase();
+  renderLedgerInvoices(q ? currentLedgerInvoices.filter((i) =>
+    i.invoice_number.toLowerCase().includes(q) ||
+    (i.mr || "").toLowerCase().includes(q) ||
+    (i.status || "").toLowerCase().includes(q) ||
+    (i.mode || "").toLowerCase().includes(q)
+  ) : currentLedgerInvoices);
 }
 
 function renderLedgerInvoices(invoices) {
@@ -579,37 +632,90 @@ function renderLedgerInvoices(invoices) {
     return;
   }
   empty.style.display = "none";
-  body.innerHTML = invoices
-    .map(
-      (i) => `
+  body.innerHTML = invoices.map((i) => `
       <tr>
         <td class="invoice-number">${escapeHtml(i.invoice_number)}</td>
         <td>${i.date || "—"}</td>
         <td>${escapeHtml(i.mr || "—")}</td>
         <td class="num amount">${money(i.amount)}</td>
         <td>${escapeHtml(i.mode || "—")}</td>
-        <td>${statusPill(i.status)}</td>
+        <td>${statusPill(i.status)}${Number(i.pending_amount) > 0 ? `<br /><button type="button" class="ledger-collect-button" onclick="toggleLedgerPayment(${i.invoice_id})">Record collection</button>` : ""}</td>
       </tr>`
-    )
-    .join("");
+      + (activeLedgerPaymentId === i.invoice_id ? `
+      <tr class="ledger-payment-row"><td colspan="6">
+        <div class="ledger-payment-panel" id="ledger-payment-${i.invoice_id}">
+          <div class="field-row">
+            <div><label>Amount received (₹)</label><input class="ledger-pay-amount" type="number" min="0.01" max="${i.pending_amount}" step="0.01" required /></div>
+            <div><label>Payment mode</label><select class="ledger-pay-mode"><option value="">—</option><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option><option>NEFT</option><option>RTGS</option><option>Other</option></select></div>
+          </div>
+          <label>Reference / UTR number (optional)</label>
+          <input class="ledger-pay-reference" placeholder="e.g. UPI123456" />
+          <div class="row" style="margin-top:12px; justify-content:flex-start;">
+            <button type="button" class="secondary" onclick="toggleLedgerPayment(${i.invoice_id})">Cancel</button>
+            <button type="button" class="ledger-pay-save" onclick="submitLedgerPayment(${i.invoice_id}, ${Number(i.pending_amount)})">Save collection</button>
+          </div>
+          <div class="ledger-pay-error"></div>
+        </div>
+      </td></tr>` : "")
+  ).join("");
 }
 
 document.getElementById("ledgerSearch").addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  if (!q) {
-    renderLedgerInvoices(currentLedgerInvoices);
+  if (currentLedgerCustomerId) renderCustomerLedger({ invoices: currentLedgerInvoices });
+});
+
+function toggleLedgerPayment(invoiceId) {
+  activeLedgerPaymentId = activeLedgerPaymentId === invoiceId ? null : invoiceId;
+  renderCustomerLedger({ invoices: currentLedgerInvoices });
+}
+
+async function submitLedgerPayment(invoiceId, maxAmount) {
+  const panel = document.getElementById(`ledger-payment-${invoiceId}`);
+  const saveButton = panel.querySelector(".ledger-pay-save");
+  const amount = Number(panel.querySelector(".ledger-pay-amount").value);
+  const error = panel.querySelector(".ledger-pay-error");
+  error.innerHTML = "";
+  if (!Number.isFinite(amount) || amount <= 0 || amount > maxAmount + 0.01) {
+    error.innerHTML = `<div class="error">Enter an amount up to the pending balance of ${money(maxAmount)}.</div>`;
     return;
   }
-  renderLedgerInvoices(
-    currentLedgerInvoices.filter(
-      (i) =>
-        i.invoice_number.toLowerCase().includes(q) ||
-        (i.mr || "").toLowerCase().includes(q) ||
-        (i.status || "").toLowerCase().includes(q) ||
-        (i.mode || "").toLowerCase().includes(q)
-    )
-  );
-});
+  saveButton.disabled = true;
+  try {
+    const result = await apiFetch("/payments", {
+      method: "POST",
+      body: {
+        invoice_id: invoiceId,
+        amount,
+        mode: panel.querySelector(".ledger-pay-mode").value || null,
+        transaction_reference: panel.querySelector(".ledger-pay-reference").value.trim() || null,
+      },
+    });
+    const invoice = currentLedgerInvoices.find((item) => item.invoice_id === invoiceId);
+    if (invoice) {
+      currentLedgerTotals.total_paid += result.paid_amount - (invoice.paid_amount || 0);
+      currentLedgerTotals.outstanding = currentLedgerTotals.total_invoiced - currentLedgerTotals.total_paid;
+      Object.assign(invoice, result);
+    }
+    activeLedgerPaymentId = null;
+    renderCustomerLedger({ ...currentLedgerTotals, invoices: currentLedgerInvoices });
+    const message = document.getElementById("ledgerActionMessage");
+    message.className = "notice success";
+    message.textContent = "Collection recorded and customer balance updated.";
+    message.style.display = "block";
+    try {
+      const data = await apiFetch(`/customers/${currentLedgerCustomerId}/ledger`);
+      currentLedgerInvoices = data.invoices;
+      renderCustomerLedger(data);
+    } catch (refreshError) {
+      console.warn("Payment was saved; the ledger will refresh on the next load.", refreshError);
+    }
+    await Promise.allSettled([loadDashboard(), loadCollections()]);
+  } catch (err) {
+    error.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
+  } finally {
+    saveButton.disabled = false;
+  }
+}
 
 function closeLedger() {
   document.getElementById("ledgerCard").style.display = "none";

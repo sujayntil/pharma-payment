@@ -239,6 +239,16 @@ textarea:focus {
   gap: 12px;
 }
 
+.dashboard-sales-filter {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.dashboard-filter-actions {
+  justify-content: flex-start;
+}
+
 button,
 .btn {
   display: inline-flex;
@@ -642,7 +652,31 @@ td.num {
   font-size: 13px;
 }
 
+.ledger-collect-button {
+  margin-top: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ledger-payment-row td {
+  background: var(--bg);
+}
+
+.ledger-payment-panel {
+  max-width: 560px;
+  padding: 8px;
+}
+
 @media (max-width: 720px) {
+  .dashboard-sales-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-filter-actions {
+    justify-content: flex-start;
+  }
+
   .topbar {
     padding: 12px 14px;
     gap: 10px;

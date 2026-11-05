@@ -11,6 +11,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import relationship
@@ -167,3 +168,20 @@ class AuditLog(Base):
     timestamp = Column(DateTime, server_default=func.now())
     old_value = Column(JSON)
     new_value = Column(JSON)
+
+
+class CustomerOverdueReminder(Base):
+    __tablename__ = "customer_overdue_reminders"
+    __table_args__ = (
+        UniqueConstraint(
+            "customer_id", "anchor_invoice_id", "reminder_date",
+            name="uq_customer_overdue_reminder_schedule",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    anchor_invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    reminder_date = Column(Date, nullable=False)
+    attempted_at = Column(DateTime)
+    sent_at = Column(DateTime)

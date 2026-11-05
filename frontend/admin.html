@@ -37,6 +37,22 @@
   <section class="view active" id="view-dashboard">
     <div class="card" style="margin-bottom:16px;">
       <div id="dashDateFilter"></div>
+      <div class="field-row dashboard-sales-filter">
+        <div>
+          <label for="dashboardCustomerType">Sales by customer type</label>
+          <select id="dashboardCustomerType">
+            <option value="">All customer types</option>
+            <option value="distributor">Distributor</option>
+            <option value="chemist">Chemist</option>
+            <option value="doctor">Doctor</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="row dashboard-filter-actions">
+          <button id="dashboardTypeApply" type="button">Apply</button>
+          <button id="dashboardTypeClear" class="secondary" type="button">Clear</button>
+        </div>
+      </div>
     </div>
     <div class="grid cols-3" id="dashTotals" style="margin-bottom:16px;"></div>
     <div class="grid cols-3" id="dashCounts" style="margin-bottom:16px;"></div>
@@ -55,8 +71,20 @@
     </div>
     <div class="card" style="margin-top:16px;">
       <div class="section-title">
-        <div><h2>Recent collections</h2><p id="pushStatus" class="muted" role="status">Enable alerts on this device to get notified when an MR records a payment.</p></div>
-        <div class="row"><button class="secondary" type="button" onclick="showTab('collections')">View all</button><button id="enablePushButton" type="button">Enable payment alerts</button></div>
+        <div><h2>Outstanding for 40+ days</h2><p class="muted">Reminders are sent when an invoice reaches 40 days, then every 2 days while it remains outstanding.</p></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Customer</th><th>Oldest invoice</th><th>Days overdue</th><th>MR</th><th class="num">40+ day balance</th></tr></thead>
+          <tbody id="overdueAlertsBody"></tbody>
+        </table>
+      </div>
+      <div id="overdueAlertsEmpty" class="empty" style="display:none;">No customer has an invoice outstanding for 40 days or more.</div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="section-title">
+        <div><h2>Recent collections</h2><p id="pushStatus" class="muted" role="status">Enable alerts on this device for MR payments and 40-day outstanding reminders.</p></div>
+        <div class="row"><button class="secondary" type="button" onclick="showTab('collections')">View all</button><button id="enablePushButton" type="button">Enable admin alerts</button></div>
       </div>
       <div class="table-wrap">
         <table>
@@ -184,6 +212,7 @@
         <button class="secondary" onclick="closeLedger()" style="padding:6px 12px; font-size:12.5px;">Close</button>
       </div>
       <div class="grid cols-3" id="ledgerStats" style="margin-bottom:14px;"></div>
+      <div id="ledgerActionMessage" class="notice" role="status" aria-live="polite" style="display:none; margin-bottom:14px;"></div>
       <input id="ledgerSearch" placeholder="Search by invoice number, MR, or status…" style="margin-bottom:14px;" />
       <div class="table-wrap">
         <table>

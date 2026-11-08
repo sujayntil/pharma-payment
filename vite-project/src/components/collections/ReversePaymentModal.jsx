@@ -17,7 +17,7 @@ const REASONS = ['Cheque bounced', 'Wrong amount', 'Wrong invoice', 'Duplicate e
  */
 export default function ReversePaymentModal({ payment, onClose, onSaved }) {
   return (
-    <Modal opened={!!payment} onClose={onClose} title={`Reverse payment · ${payment?.invoice_number || ''}`} centered>
+    <Modal opened={!!payment} onClose={onClose} title={`Reverse payment · ${payment?.invoice_number || ''}`} centered zIndex={250}>
       {payment && <ReverseForm key={payment.payment_id} payment={payment} onClose={onClose} onSaved={onSaved} />}
     </Modal>
   );

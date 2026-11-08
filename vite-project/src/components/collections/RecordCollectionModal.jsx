@@ -22,7 +22,9 @@ export default function RecordCollectionModal({ invoice, customer, onClose, onSa
   const opened = !!target || !!customer;
   const title = target ? `Record collection · ${target.invoiceNumber || ''}` : `Record collection · ${customer?.name || ''}`;
   return (
-    <Modal opened={opened} onClose={onClose} title={title} centered>
+    // zIndex 250: above the invoice panel and ledger drawers (200) so it never
+    // opens behind them, and below dropdown lists (300) so Payment mode still works.
+    <Modal opened={opened} onClose={onClose} title={title} centered zIndex={250}>
       {/* Remounting per invoice resets the form without effects. */}
       {target
         ? <CollectionForm key={target.invoiceId} target={target} onClose={onClose} onSaved={onSaved} />

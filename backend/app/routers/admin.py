@@ -484,66 +484,68 @@ def reverse_payment(
     }
 
 
-# Disabled: "Add Invoice" is removed everywhere (Dashboard, Workspace, Import
-# page). Re-enable if needed: uncomment this route and the "Add invoice"
-# button/modal in vite-project/src/pages/admin/AdminImport.jsx.
-# @router.post("/manual-invoices", status_code=201)
-# def create_manual_invoice(
-#     payload: schemas.ManualInvoiceCreate,
-#     db: Session = Depends(get_db),
-#     user: models.User = Depends(require_admin),
-# ):
-#     invoice_number = payload.invoice_number.strip()
-#     customer_name = (payload.customer_name or "").strip()
-#     if not invoice_number or (not payload.customer_id and not customer_name):
-#         raise HTTPException(422, "Invoice number and customer are required")
-#
-#     existing = (
-#         db.query(models.Invoice)
-#         .filter(func.lower(func.trim(models.Invoice.invoice_number)) == invoice_number.lower())
-#         .first()
-#     )
-#     if existing:
-#         raise HTTPException(409, f"Invoice {invoice_number} already exists")
-#
-#     customer = db.get(models.Customer, payload.customer_id) if payload.customer_id else None
-#     if payload.customer_id and not customer:
-#         raise HTTPException(404, "Customer not found")
-#     matching_customers = [] if customer else (
-#         db.query(models.Customer)
-#         .filter(func.lower(func.trim(models.Customer.name)) == customer_name.lower())
-#         .all()
-#     )
-#     if len(matching_customers) > 1:
-#         raise HTTPException(409, f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.")
-#     customer = customer or (matching_customers[0] if matching_customers else None)
-#     if customer is None:
-#         customer = models.Customer(name=customer_name)
-#         db.add(customer)
-#         db.flush()
-#
-#     status, pending = compute_status(payload.total_amount, 0)
-#     invoice = models.Invoice(
-#         invoice_number=invoice_number,
-#         invoice_date=payload.invoice_date,
-#         customer_id=customer.id,
-#         mr_id=customer.mr_id,
-#         total_amount=payload.total_amount,
-#         paid_amount=0,
-#         pending_amount=pending,
-#         status=status,
-#     )
-#     db.add(invoice)
-#     db.commit()
-#     db.refresh(invoice)
-#
-#     return {
-#         "invoice_id": invoice.id,
-#         "invoice_number": invoice.invoice_number,
-#         "customer_name": customer.name,
-#         "total_amount": invoice.total_amount,
-#         "mr_name": customer.mr.name if customer.mr else None,
-#     }
+# Admin "Add invoice" (Import & mapping). Re-enabled: Add Invoice stays
+# removed for MRs only (see invoices.py).
+@router.post("/manual-invoices", status_code=201)
+def create_manual_invoice(
+    payload: schemas.ManualInvoiceCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    invoice_number = payload.invoice_number.strip()
+    customer_name = (payload.customer_name or "").strip()
+    if not invoice_number or (not payload.customer_id and not customer_name):
+        raise HTTPException(422, "Invoice number and customer are required")
+
+    existing = (
+        db.query(models.Invoice)
+        .filter(func.lower(func.trim(models.Invoice.invoice_number)) == invoice_number.lower())
+        .first()
+    )
+    if existing:
+        raise HTTPException(409, f"Invoice {invoice_number} already exists")
+
+    customer = db.get(models.Customer, payload.customer_id) if payload.customer_id else None
+    if payload.customer_id and not customer:
+        raise HTTPException(404, "Customer not found")
+    matching_customers = [] if customer else (
+        db.query(models.Customer)
+        .filter(func.lower(func.trim(models.Customer.name)) == customer_name.lower())
+        .all()
+    )
+    if len(matching_customers) > 1:
+        raise HTTPException(409, f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.")
+    customer = customer or (matching_customers[0] if matching_customers else None)
+    if customer is None:
+        customer = models.Customer(name=customer_name)
+        db.add(customer)
+        db.flush()
+
+    status, pending = compute_status(payload.total_amount, 0)
+    invoice = models.Invoice(
+        invoice_number=invoice_number,
+        invoice_date=payload.invoice_date,
+        customer_id=customer.id,
+        mr_id=customer.mr_id,
+        total_amount=payload.total_amount,
+        paid_amount=0,
+        pending_amount=pending,
+        status=status,
+    )
+    db.add(invoice)
+    db.flush()
+    # Invoice history: "Invoice created" (by this Admin).
+    log_event(db, invoice.id, models.InvoiceEventType.CREATED.value, user, amount=invoice.total_amount)
+    db.commit()
+    db.refresh(invoice)
+
+    return {
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "customer_name": customer.name,
+        "total_amount": invoice.total_amount,
+        "mr_name": customer.mr.name if customer.mr else None,
+    }
 
 
 @router.post("/users", response_model=schemas.UserOut)

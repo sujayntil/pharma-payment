@@ -165,23 +165,17 @@ class EndToEndFlow(unittest.TestCase):
         self.call(self.admin, "PUT", f"/admin/customers/{by_name['Shree Distributors']}/mr", json={"mr_id": self.neha["id"]})
         self.call(self.admin, "PUT", f"/admin/customers/{by_name['Tulsi Pharmacy']}/mr", json={"mr_id": self.admin["id"]}, expect=400)
 
-        # Disabled: Add Invoice is commented out, so the route is gone.
-        # manual = self.call(self.admin, "POST", "/admin/manual-invoices", expect=201, json={
-        #     "invoice_number": "T102", "invoice_date": str(TODAY), "customer_id": by_name["Tulsi Pharmacy"], "total_amount": 3000})
-        # self.assertEqual(manual["mr_name"], "Rahul")
-        # self.call(self.admin, "POST", "/admin/manual-invoices", expect=409, json={
-        #     "invoice_number": "T102", "invoice_date": str(TODAY), "customer_id": by_name["Tulsi Pharmacy"], "total_amount": 3000})
-        self.call(self.admin, "POST", "/admin/manual-invoices", expect=404, json={
+        # Admin "Add invoice" is available again (Admin only).
+        manual = self.call(self.admin, "POST", "/admin/manual-invoices", expect=201, json={
             "invoice_number": "T102", "invoice_date": str(TODAY), "customer_id": by_name["Tulsi Pharmacy"], "total_amount": 3000})
+        self.assertEqual(manual["mr_name"], "Rahul")
+        self.call(self.admin, "POST", "/admin/manual-invoices", expect=409, json={
+            "invoice_number": "T102", "invoice_date": str(TODAY), "customer_id": by_name["Tulsi Pharmacy"], "total_amount": 3000})
+        # MRs still cannot add invoices: their route stays disabled, and the Admin one is Admin-only.
         self.call(self.rahul, "POST", "/invoices", expect=405, json={
             "invoice_number": "X1", "customer_name": "Tulsi Pharmacy", "total_amount": 10})
-        # T102 is seeded directly instead (same shape the manual route produced).
-        with self.Session() as db:
-            db.add(models.Invoice(
-                invoice_number="T102", invoice_date=TODAY, customer_id=by_name["Tulsi Pharmacy"],
-                mr_id=self.rahul["id"], total_amount=3000, paid_amount=0, pending_amount=3000, status="UNPAID",
-            ))
-            db.commit()
+        self.call(self.rahul, "POST", "/admin/manual-invoices", expect=403, json={
+            "invoice_number": "X2", "invoice_date": str(TODAY), "customer_id": by_name["Tulsi Pharmacy"], "total_amount": 10})
 
     def test_03_mr_sees_only_own_data_with_filters(self):
         rahul = self.call(self.rahul, "GET", "/mr/outstanding", params={"limit": 50, "offset": 0})

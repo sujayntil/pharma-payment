@@ -1,77 +1,106 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Loader, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { IconSearch } from '@tabler/icons-react';
+import { ActionIcon, Button, Group, Loader, Paper, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
+import { useDebouncedValue } from '@mantine/hooks';
+import { IconArrowsSort, IconCash, IconCircleCheck, IconHistory } from '@tabler/icons-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
-import { fetchMrOutstanding, recordPayment, resetPaymentStatus, setSearchQuery } from '../../store/slices/mrSlice';
+import { fetchMrOutstanding, setSearchQuery } from '../../store/slices/mrSlice';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
-import { money } from '../../utils/formatters';
+import RowCard, { CardList } from '../../components/common/RowCard';
+import { listPaperProps } from '../../components/common/listPaper';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import DateRangeFilter from '../../components/filters/DateRangeFilter';
+import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
+import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
+import InvoiceHistory from '../../components/collections/InvoiceHistory';
+import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
+import { money, shortDate } from '../../utils/formatters';
 
-const modes = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'NEFT', 'RTGS', 'Other'];
-const outstandingParams = (page, search, filters) => ({
+const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
+const STATUSES = [{ value: 'UNPAID', label: 'Pending' }, { value: 'PARTIAL', label: 'Partially paid' }, { value: 'PAID', label: 'Paid' }, { value: 'REVERSED', label: 'Reversed' }];
+
+// My Collections lists ALL invoices of the MR's customers (include_settled);
+// every filter, the sort, paging and the summary are applied by the server.
+const outstandingParams = (page, search, range, sort, status) => ({
+  include_settled: true,
   limit: PAGE_SIZE,
   offset: (page - 1) * PAGE_SIZE,
+  sort_order: sort,
   ...(search.trim() && { search: search.trim() }),
-  ...filters,
+  ...(range.from && { date_from: range.from }),
+  ...(range.to && { date_to: range.to }),
+  ...(status && { status }),
 });
 
+/** Record collection is offered only while there is something to collect. */
+const canRecord = (item) => Number(item.pending_amount) > 0 && (item.status === 'UNPAID' || item.status === 'PARTIAL');
+
 export default function MrCollections() {
-  const dispatch = useAppDispatch(); const { outstanding, outstandingCount, totalOutstanding, loading, paymentLoading, paymentSuccess, paymentError, searchQuery } = useAppSelector((state) => state.mr);
-  const [page, setPage] = useState(1); const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState(''); const [sortOrder, setSortOrder] = useState('newest'); const [appliedFilters, setAppliedFilters] = useState({ sort_order: 'newest' }); const [filterError, setFilterError] = useState(''); const [active, setActive] = useState(null); const [amount, setAmount] = useState(0); const [mode, setMode] = useState('UPI'); const [reference, setReference] = useState(''); const [validation, setValidation] = useState('');
+  return <Stack gap="md">
+    <div><Title order={1}>Collections</Title><Text c="dimmed">All invoices of your customers. Record a payment on pending or partially paid ones.</Text></div>
+    <ToCollect />
+  </Stack>;
+}
+
+function ToCollect() {
+  const dispatch = useAppDispatch();
+  const { outstanding, outstandingCount, filteredOutstanding, loading, searchQuery } = useAppSelector((state) => state.mr);
+  const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
+  const [page, setPage] = useState(1); const [range, setRange] = useState(EMPTY_RANGE); const [sort, setSort] = useState('newest'); const [status, setStatus] = useState('');
+  const [active, setActive] = useState(null); const [historyId, setHistoryId] = useState(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
-    let activeRequest = true;
-    const timer = setTimeout(() => {
-      if (activeRequest) dispatch(fetchMrOutstanding(outstandingParams(page, searchQuery, appliedFilters)));
-    }, searchQuery ? 250 : 0);
-    return () => { activeRequest = false; clearTimeout(timer); };
-  }, [appliedFilters, dispatch, page, searchQuery]);
+    dispatch(fetchMrOutstanding(outstandingParams(page, debouncedSearch, range, sort, status)));
+  }, [debouncedSearch, dispatch, page, range, sort, status]);
 
-  const open = (invoice) => { setActive(invoice); setAmount(invoice.pending_amount); setMode('UPI'); setReference(''); setValidation(''); dispatch(resetPaymentStatus()); };
-  const submit = async (event) => {
-    event.preventDefault();
-    if (!active || !amount || amount <= 0 || amount > active.pending_amount) { setValidation(`Enter an amount up to ${money(active?.pending_amount)}.`); return; }
-    setValidation('');
-    const action = await dispatch(recordPayment({ invoice_id: active.invoice_id, amount, mode: mode || null, transaction_reference: reference.trim() || null }));
-    if (recordPayment.fulfilled.match(action)) {
-      notifications.show({ color: 'green', title: 'Collection recorded', message: `${money(amount)} received for ${active.invoice_number}.` });
-      setActive(null);
-      const settlesInvoice = amount >= active.pending_amount - 0.01;
-      const nextPage = Math.min(page, Math.max(1, Math.ceil((outstandingCount - Number(settlesInvoice)) / PAGE_SIZE)));
-      if (nextPage !== page) setPage(nextPage);
-      else dispatch(fetchMrOutstanding(outstandingParams(page, searchQuery, appliedFilters)));
-    }
-  };
-  const applyFilters = () => {
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      setFilterError('From date must be on or before To date.');
-      return;
-    }
-    setFilterError('');
-    setPage(1);
-    setAppliedFilters({ ...(dateFrom && { date_from: dateFrom }), ...(dateTo && { date_to: dateTo }), sort_order: sortOrder });
-  };
-  const clearFilters = () => {
-    setDateFrom(''); setDateTo(''); setSortOrder('newest'); setPage(1);
-    setFilterError('');
-    setAppliedFilters({ sort_order: 'newest' });
-    dispatch(setSearchQuery(''));
-  };
-  const hasDateFilter = Boolean(appliedFilters.date_from || appliedFilters.date_to);
+  const onSearch = (value) => { dispatch(setSearchQuery(value)); setPage(1); };
+  const reset = () => { setRange(EMPTY_RANGE); setSort('newest'); setStatus(''); onSearch(''); };
+  // Settled invoices stay in the list now, so a plain reload keeps the page.
+  const onSaved = () => dispatch(fetchMrOutstanding(outstandingParams(page, debouncedSearch, range, sort, status)));
+  const rangeLabel = describeRange(range);
+  const chips = [
+    status && { key: 'status', label: `Status: ${STATUSES.find((s) => s.value === status)?.label}`, onRemove: () => { setStatus(''); setPage(1); } },
+    rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => { setRange(EMPTY_RANGE); setPage(1); } },
+    searchQuery.trim() && { key: 'q', label: `“${searchQuery.trim()}”`, onRemove: () => onSearch('') },
+  ];
+  const filtered = Boolean(searchQuery.trim() || rangeLabel || status);
 
-  return <Stack gap="md"><div><Title order={1}>Collections</Title><Text c="dimmed">Select an outstanding invoice to record a payment.</Text></div><Paper withBorder p="md" bg="green.0"><Text size="sm" c="dimmed">Outstanding across your invoices</Text><Title order={2}>{money(totalOutstanding)}</Title></Paper>
-    <Paper withBorder p="md"><Group justify="space-between" mb="md"><Title order={3}>Invoices to collect</Title></Group>
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm" verticalSpacing="sm" mb="md">
-        <TextInput type="date" label="From invoice date" value={dateFrom} onChange={(event) => setDateFrom(event.currentTarget.value)} />
-        <TextInput type="date" label="To invoice date" value={dateTo} onChange={(event) => setDateTo(event.currentTarget.value)} />
-        <Select label="Sort by invoice date" data={[{ value: 'newest', label: 'Newest first' }, { value: 'oldest', label: 'Oldest first' }]} value={sortOrder} onChange={(value) => setSortOrder(value || 'newest')} />
-        <Group align="end" grow><Button onClick={applyFilters}>Apply</Button><Button variant="subtle" onClick={clearFilters}>Clear</Button></Group>
-      </SimpleGrid>
-      {filterError && <Alert color="red" mb="md">{filterError}</Alert>}
-      <TextInput mb="md" leftSection={<IconSearch size={16} />} placeholder="Search invoice or customer" value={searchQuery} onChange={(event) => { dispatch(setSearchQuery(event.currentTarget.value)); setPage(1); }} />
-      {loading ? <Group justify="center" p="xl"><Loader /></Group> : !outstanding.length ? <Text c="dimmed" ta="center" py="xl">{searchQuery.trim() || hasDateFilter ? 'No invoices match these filters.' : outstandingCount ? 'No invoices on this page.' : 'Nothing outstanding. All invoices are settled.'}</Text> : <Table.ScrollContainer minWidth={700}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{outstanding.map((item) => <Table.Tr key={item.invoice_id}><Table.Td fw={600}>{item.customer || 'Unnamed customer'}</Table.Td><Table.Td>{item.invoice_number}</Table.Td><Table.Td>{item.invoice_date || '—'}</Table.Td><Table.Td fw={700} c="red">{money(item.pending_amount)}</Table.Td><Table.Td><Badge color={item.status === 'PARTIAL' ? 'yellow' : 'red'}>{item.status}</Badge></Table.Td><Table.Td><Button size="xs" onClick={() => open(item)}>Record collection</Button></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
-      <ListPagination total={outstandingCount} page={page} onChange={setPage} searchActive={Boolean(searchQuery.trim())} label="invoices" />
+  const historyIcon = (item) => (
+    <Tooltip label="Invoice history" withArrow>
+      <ActionIcon variant="light" color="gray" size="lg" aria-label={`History for ${item.invoice_number}`} onClick={() => setHistoryId(item.invoice_id)}><IconHistory size={18} /></ActionIcon>
+    </Tooltip>
+  );
+
+  return <Stack gap="md">
+    <Paper withBorder p="md" bg="green.0"><Text size="sm" c="dimmed">{filtered ? 'Outstanding in these results' : 'Outstanding across your invoices'}</Text><Title order={2}>{money(filteredOutstanding)}</Title></Paper>
+    <FilterBar search={searchQuery} onSearch={onSearch} searchPlaceholder="Search invoice or customer" chips={chips} onReset={reset}>
+      <FilterSelect placeholder="All statuses" icon={<IconCircleCheck size={16} />} data={STATUSES} value={status} onChange={(next) => { setStatus(next); setPage(1); }} />
+      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} />
+      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => { setSort(next || 'newest'); setPage(1); }} />
+    </FilterBar>
+    <Paper {...listPaperProps(isMobile)}>
+      {loading ? <Group justify="center" p="xl"><Loader /></Group> : !outstanding.length ? <Text c="dimmed" ta="center" py="xl">{filtered ? 'No invoices match these filters.' : outstandingCount ? 'No invoices on this page.' : 'No invoices assigned to you yet.'}</Text> : isMobile ? <CardList>{outstanding.map((item) => (
+        <RowCard
+          key={item.invoice_id}
+          title={item.customer || 'Unnamed customer'}
+          subtitle={`${item.invoice_number} · ${shortDate(item.invoice_date)}`}
+          amount={money(item.pending_amount)}
+          amountLabel="pending"
+          amountColor={Number(item.pending_amount) > 0 ? 'red' : 'green'}
+          badges={<StatusCell row={item} />}
+          details={[{ label: 'Recorded by', value: <RecordedBy row={item} />, full: true }]}
+          actions={<>{historyIcon(item)}{canRecord(item) && <Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setActive(item)}>Record collection</Button>}</>}
+        />
+      ))}</CardList> : <Table.ScrollContainer minWidth={900}><Table striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{outstanding.map((item) => <Table.Tr key={item.invoice_id}>
+        <Table.Td fw={600}>{item.customer || 'Unnamed customer'}</Table.Td><Table.Td>{item.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}</Table.Td><Table.Td ta="right" fw={700} c={Number(item.pending_amount) > 0 ? 'red' : 'green'}>{money(item.pending_amount)}</Table.Td>
+        <Table.Td><StatusCell row={item} /></Table.Td>
+        <Table.Td maw={200}><RecordedBy row={item} /></Table.Td>
+        <Table.Td><Group gap={6} wrap="nowrap" justify="flex-end">{canRecord(item) && <Button size="xs" onClick={() => setActive(item)}>Record collection</Button>}{historyIcon(item)}</Group></Table.Td>
+      </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
+      <ListPagination total={outstandingCount} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
-    <Modal opened={!!active} onClose={() => setActive(null)} title={`Record payment · ${active?.invoice_number || ''}`} centered><form onSubmit={submit}><Stack><Paper withBorder p="sm"><Text size="xs" c="dimmed">Customer</Text><Text fw={600}>{active?.customer || '—'}</Text><Text size="xs" c="dimmed" mt="xs">Pending balance</Text><Text fw={700} c="red">{money(active?.pending_amount)}</Text></Paper>{validation && <Alert color="red">{validation}</Alert>}{paymentError && <Alert color="red">{paymentError}</Alert>}{paymentSuccess && <Alert color="green">Payment recorded successfully.</Alert>}<NumberInput label="Amount received (₹)" min={0.01} max={active?.pending_amount} decimalScale={2} required value={amount} onChange={setAmount} /><Select label="Payment mode" required data={modes} value={mode} onChange={(value) => setMode(value || 'UPI')} /><TextInput label="Reference / UTR / cheque number (optional)" value={reference} onChange={(e) => setReference(e.currentTarget.value)} /><Group justify="end"><Button variant="default" type="button" onClick={() => setActive(null)}>Cancel</Button><Button type="submit" loading={paymentLoading}>Save payment</Button></Group></Stack></form></Modal>
+    <RecordCollectionModal invoice={active} onClose={() => setActive(null)} onSaved={onSaved} />
+    <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} />
   </Stack>;
 }

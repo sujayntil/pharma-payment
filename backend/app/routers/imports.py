@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 from ..deps import require_admin
+from ..collection_info import log_event
 from ..utils import compute_status
 
 router = APIRouter(prefix="/admin", tags=["admin-imports"])
@@ -290,6 +291,8 @@ async def import_invoices(
                 )
                 db.add(invoice)
                 db.flush()
+                # Invoice history: "Invoice created" (by the importing Admin).
+                log_event(db, invoice.id, models.InvoiceEventType.CREATED.value, user, amount=total_amount)
                 invoice_by_key.setdefault(bill_key, []).append(invoice)
                 result["created"] += 1
                 note_unmapped(customer)

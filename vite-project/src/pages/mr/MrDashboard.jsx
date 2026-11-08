@@ -1,17 +1,52 @@
-import { useEffect } from 'react';
-import { Button, Group, Loader, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconUpload } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
+import { Button, Grid, Group, Loader, Paper, Stack, Table, Text, Title } from '@mantine/core';
+// Disabled: Add Invoice button. Re-enable if needed.
+// import { IconUpload } from '@tabler/icons-react';
+import { IconArrowRight } from '@tabler/icons-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import { fetchMrDashboard, fetchMrOutstanding } from '../../store/slices/mrSlice';
-import { money } from '../../utils/formatters';
+import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
+import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
+import InvoiceCard from '../../components/collections/InvoiceCard';
+import InvoiceHistory from '../../components/collections/InvoiceHistory';
+import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
+import { CardList } from '../../components/common/RowCard';
+import { mrApi } from '../../api/mrApi';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { money, shortDate } from '../../utils/formatters';
 
-const Metric = ({ label, value, color }) => <Paper withBorder p="md"><Text size="sm" c="dimmed">{label}</Text><Title order={2} c={color}>{value}</Title></Paper>;
+const Metric = ({ label, value, color }) => <Paper withBorder p="md" h="100%"><Text size="sm" c="dimmed">{label}</Text><Title order={2} c={color} fz={{ base: 22, sm: 28 }} style={{ whiteSpace: 'nowrap' }}>{value}</Title></Paper>;
 
-export default function MrDashboard({ onNavigateToUpload }) {
+/**
+ * MR Home. Same figures and data as before; recent invoices and overdue
+ * customers now open straight to the invoice / the customer's ledger.
+ *
+ * onOpenPending:  go to Invoices on the Pending tab
+ * onOpenCustomer: ({ id, name }) => open that customer's ledger
+ */
+export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disabled: onNavigateToUpload */) {
   const dispatch = useAppDispatch(); const { dashboard, totalOutstanding, loading } = useAppSelector((state) => state.mr);
+  const isMobile = useIsMobile();
+  const [openId, setOpenId] = useState(null); const [historyKey, setHistoryKey] = useState(0); const [recording, setRecording] = useState(null);
   useEffect(() => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); }, [dispatch]);
-  return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>Hello, {dashboard?.name || 'there'}</Title><Text c="dimmed">Your invoices and collection position.</Text></div><Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button></Group>
-    <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}><Metric label="Invoices" value={dashboard?.total_invoices || 0} /><Metric label="Paid" value={dashboard?.paid || 0} color="green" /><Metric label="Need collection" value={(dashboard?.partial || 0) + (dashboard?.unpaid || 0)} color="orange" /><Metric label="Outstanding" value={money(totalOutstanding)} color="red" /></SimpleGrid>
-    <Paper withBorder p="md"><Title order={3} mb="sm">Recent invoices</Title>{loading ? <Group justify="center" p="lg"><Loader /></Group> : !dashboard?.recent?.length ? <Text c="dimmed" py="md">No invoices assigned to you yet.</Text> : <Table.ScrollContainer minWidth={540}><Table striped><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Amount</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{dashboard.recent.map((invoice, index) => <Table.Tr key={`${invoice.invoice_number}-${index}`}><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td>{invoice.customer || '—'}</Table.Td><Table.Td>{money(invoice.total_amount)}</Table.Td><Table.Td>{invoice.status}</Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}</Paper>
+  const onSaved = () => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); setHistoryKey((v) => v + 1); };
+  const recent = dashboard?.recent || [];
+
+  return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>Hello, {dashboard?.name || 'there'}</Title><Text c="dimmed">Your invoices and collection position.</Text></div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
+    {/* Phones: the money figure gets its own full row (so it never wraps) and
+        comes first; the three counts share one row. Desktop: four in a row. */}
+    <Grid gutter="sm">
+      <Grid.Col span={{ base: 4, lg: 3 }} order={{ base: 2, lg: 1 }}><Metric label="Invoices" value={dashboard?.total_invoices || 0} /></Grid.Col>
+      <Grid.Col span={{ base: 4, lg: 3 }} order={{ base: 3, lg: 2 }}><Metric label="Paid" value={dashboard?.paid || 0} color="green" /></Grid.Col>
+      <Grid.Col span={{ base: 4, lg: 3 }} order={{ base: 4, lg: 3 }}><Metric label="Need collection" value={(dashboard?.partial || 0) + (dashboard?.unpaid || 0)} color="orange" /></Grid.Col>
+      <Grid.Col span={{ base: 12, lg: 3 }} order={{ base: 1, lg: 4 }}><Metric label="Outstanding" value={money(totalOutstanding)} color="red" /></Grid.Col>
+    </Grid>
+    {onOpenPending && <Button fullWidth={isMobile} size="md" rightSection={<IconArrowRight size={16} />} style={isMobile ? undefined : { alignSelf: 'flex-start' }} onClick={onOpenPending}>See pending invoices</Button>}
+    <OverdueCustomersPanel load={mrApi.getOverdueAlerts} description="Your customers with a balance unpaid for 40 days or more, counted from invoice date." emptyText="None of your customers have invoices outstanding for 40 days or more." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
+    <Paper withBorder p="md"><Title order={3} mb="sm">Recent invoices</Title>{loading && !dashboard ? <Group justify="center" p="lg"><Loader /></Group> : !recent.length ? <Text c="dimmed" py="md">No invoices assigned to you yet.</Text> : isMobile ? <CardList>{recent.map((invoice, index) => (
+      <InvoiceCard key={invoice.invoice_id ?? `${invoice.invoice_number}-${index}`} invoice={invoice} onOpen={invoice.invoice_id ? () => setOpenId(invoice.invoice_id) : undefined} />
+    ))}</CardList> : <Table.ScrollContainer minWidth={760}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{recent.map((invoice, index) => <Table.Tr key={invoice.invoice_id ?? `${invoice.invoice_number}-${index}`} onClick={invoice.invoice_id ? () => setOpenId(invoice.invoice_id) : undefined} style={invoice.invoice_id ? { cursor: 'pointer' } : undefined}><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer || '—'}</Table.Td><Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right" fw={600} c={Number(invoice.pending_amount) > 0 ? 'red' : 'green'}>{money(invoice.pending_amount)}</Table.Td><Table.Td><StatusCell row={invoice} /></Table.Td><Table.Td maw={200}><RecordedBy row={invoice} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}</Paper>
+    <InvoiceHistory invoiceId={openId} onClose={() => setOpenId(null)} onRecord={(invoice) => setRecording(invoice)} refreshKey={historyKey} />
+    <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={onSaved} />
   </Stack>;
 }

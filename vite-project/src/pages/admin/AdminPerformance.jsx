@@ -1,19 +1,50 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Loader, Paper, ScrollArea, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Group, Loader, Paper, ScrollArea, Stack, Table, Text, Title } from '@mantine/core';
 import { adminApi } from '../../api/adminApi';
-import { money } from '../../utils/formatters';
+import FilterBar from '../../components/filters/FilterBar';
+import DateRangeFilter from '../../components/filters/DateRangeFilter';
+import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
+import RowCard, { CardList } from '../../components/common/RowCard';
+import { listPaperProps } from '../../components/common/listPaper';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { errorText, money } from '../../utils/formatters';
+
+const rateOf = (row) => (Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : 0);
+const RateBadge = ({ rate }) => <Badge color={rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red'}>{rate}%</Badge>;
 
 export default function AdminPerformance() {
-  const [rows, setRows] = useState([]); const [from, setFrom] = useState(''); const [to, setTo] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
-  const load = async (params = {}, initial = false) => { if (!initial) { setLoading(true); setError(''); } try { setRows(await adminApi.getMrPerformance(params)); } catch (err) { setError(err.detail || err.message); } finally { setLoading(false); } };
+  const [rows, setRows] = useState([]); const [range, setRange] = useState(EMPTY_RANGE); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const isMobile = useIsMobile();
+
   useEffect(() => {
     let active = true;
-    adminApi.getMrPerformance()
-      .then((result) => { if (active) setRows(result); })
-      .catch((err) => { if (active) setError(err.detail || err.message); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
-  const apply = () => load({ ...(from && { date_from: from }), ...(to && { date_to: to }) });
-  return <div><Group justify="space-between" mb="md"><div><Title order={1}>MR performance</Title><Text c="dimmed">Sales, collections and pending balance by representative.</Text></div><Badge variant="light">{rows.length} MRs</Badge></Group><Paper withBorder p="md" mb="md"><Group align="end"><TextInput type="date" label="From invoice date" value={from} onChange={(e) => setFrom(e.currentTarget.value)} /><TextInput type="date" label="To invoice date" value={to} onChange={(e) => setTo(e.currentTarget.value)} /><Button onClick={apply}>Apply</Button><Button variant="subtle" onClick={() => { setFrom(''); setTo(''); load(); }}>All time</Button></Group></Paper><Paper withBorder p="md">{error && <Alert color="red">{error}</Alert>}{loading ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text c="dimmed" ta="center" py="xl">No performance records for this range.</Text> : <ScrollArea><Table miw={640} striped><Table.Thead><Table.Tr><Table.Th>Medical representative</Table.Th><Table.Th>Sales</Table.Th><Table.Th>Collected</Table.Th><Table.Th>Pending</Table.Th><Table.Th>Collection rate</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => { const rate = Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : 0; return <Table.Tr key={row.mr_id}><Table.Td fw={600}>{row.name}</Table.Td><Table.Td>{money(row.sales)}</Table.Td><Table.Td c="green" fw={700}>{money(row.collected)}</Table.Td><Table.Td c="red">{money(row.pending)}</Table.Td><Table.Td><Badge color={rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red'}>{rate}%</Badge></Table.Td></Table.Tr>; })}</Table.Tbody></Table></ScrollArea>}</Paper></div>;
+    const timer = setTimeout(async () => {
+      setLoading(true); setError('');
+      try {
+        const result = await adminApi.getMrPerformance({ ...(range.from && { date_from: range.from }), ...(range.to && { date_to: range.to }) });
+        if (active) setRows(result);
+      } catch (err) { if (active) setError(errorText(err)); }
+      finally { if (active) setLoading(false); }
+    }, 0);
+    return () => { active = false; clearTimeout(timer); };
+  }, [range]);
+
+  const rangeLabel = describeRange(range);
+  return <Stack gap="md"><Group justify="space-between" align="end"><div><Title order={1}>MR performance</Title><Text c="dimmed">Sales, collections and pending balance by representative.</Text></div><Badge variant="light" size="lg">{rows.length} MRs</Badge></Group>
+    <FilterBar chips={[rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => setRange(EMPTY_RANGE) }]} summary={rangeLabel ? null : 'Showing all time'}>
+      <DateRangeFilter label="Invoice date" value={range} onChange={setRange} allLabel="All time" />
+    </FilterBar>
+    {error && <Alert color="red">{error}</Alert>}
+    <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text c="dimmed" ta="center" py="xl">No performance records for this range.</Text> : isMobile ? <CardList>{rows.map((row) => (
+      <RowCard
+        key={row.mr_id}
+        title={row.name}
+        amount={money(row.collected)}
+        amountLabel="collected"
+        amountColor="green"
+        badges={<RateBadge rate={rateOf(row)} />}
+        details={[{ label: 'Sales', value: money(row.sales) }, { label: 'Pending', value: <Text span c="red" size="sm">{money(row.pending)}</Text> }]}
+      />
+    ))}</CardList> : <ScrollArea><Table miw={640} striped verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Medical representative</Table.Th><Table.Th ta="right">Sales</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Collection rate</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.mr_id}><Table.Td fw={600}>{row.name}</Table.Td><Table.Td ta="right">{money(row.sales)}</Table.Td><Table.Td ta="right" c="green" fw={700}>{money(row.collected)}</Table.Td><Table.Td ta="right" c="red">{money(row.pending)}</Table.Td><Table.Td><RateBadge rate={rateOf(row)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}</Paper>
+  </Stack>;
 }

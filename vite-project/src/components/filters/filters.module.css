@@ -1,0 +1,151 @@
+.bar {
+  background: var(--mantine-color-white);
+  box-shadow: var(--mantine-shadow-xs);
+}
+
+.search {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+
+.trigger {
+  max-width: 100%;
+  font-weight: 400;
+}
+
+.select {
+  flex: 0 1 190px;
+  min-width: 150px;
+}
+
+/* Desktop: Reset sits at the end of the bar. */
+.reset {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.preset {
+  padding: 6px 10px;
+  border-radius: var(--mantine-radius-sm);
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-gray-8);
+  border: 1px solid var(--mantine-color-gray-3);
+  text-align: left;
+  min-height: 36px;
+}
+
+.preset:hover {
+  background: var(--mantine-color-gray-0);
+}
+
+.preset[data-active] {
+  border-color: var(--mantine-color-green-6);
+  background: var(--mantine-color-green-0);
+  color: var(--mantine-color-green-9);
+  font-weight: 600;
+}
+
+.chips {
+  border-top: 1px dashed var(--mantine-color-gray-3);
+  padding-top: var(--mantine-spacing-xs);
+  margin-top: var(--mantine-spacing-sm);
+}
+
+.chipList {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Long chip labels (date ranges, names) truncate instead of widening the page. */
+.pill {
+  max-width: 100%;
+}
+
+.pill :global(.mantine-Pill-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Phones ---- */
+
+.mobileSearch {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.filtersButton {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding-inline: 12px;
+}
+
+.filtersButtonFull {
+  flex: 1 1 100%;
+  min-height: 36px;
+}
+
+/* Bottom sheet: grows with its content, never taller than the screen. */
+.sheet {
+  height: auto !important;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The drawer content already scrolls; no second scroll container here, so
+   dropdowns anchored to these fields are not treated as clipped. */
+.sheetBody {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
+.sheetFields > * {
+  width: 100%;
+  max-width: 100%;
+}
+
+.sheetFields .select,
+.sheetFields .trigger,
+.sheetFields .search {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sheetFields .trigger {
+  min-height: 40px;
+}
+
+.sheetFields .trigger :global(.mantine-Button-inner) {
+  justify-content: flex-start;
+}
+
+.sheetFields .trigger :global(.mantine-Button-label) {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheetFooter {
+  position: sticky;
+  bottom: 0;
+  background: var(--mantine-color-white);
+  border-top: 1px solid var(--mantine-color-gray-2);
+  margin-top: var(--mantine-spacing-md);
+  padding-block: var(--mantine-spacing-sm);
+  padding-bottom: calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom, 0px));
+}
+
+.sheetFooter button {
+  min-height: 42px;
+}
+
+@media (max-width: 575px) {
+  .search,
+  .select,
+  .trigger {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}

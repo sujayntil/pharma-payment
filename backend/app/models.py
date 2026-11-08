@@ -113,6 +113,10 @@ class Invoice(Base):
     payments = relationship(
         "Payment", back_populates="invoice", cascade="all, delete-orphan"
     )
+    # Invoice history log (created / collected / reversed). Deleted with the invoice.
+    events = relationship(
+        "InvoiceEvent", back_populates="invoice", cascade="all, delete-orphan"
+    )
 
 
 class InvoiceItem(Base):
@@ -143,9 +147,50 @@ class Payment(Base):
     mode = Column(String)
     transaction_reference = Column(String)
     payment_date = Column(DateTime, server_default=func.now())
+    # The MR the collection is credited to (the customer's assigned MR when
+    # an Admin records it). Totals and MR-wise figures follow this field.
     collected_by = Column(Integer, ForeignKey("users.id"))
+    # Who actually entered the row (Admin or MR). NULL on older rows, where
+    # collected_by is treated as the recorder.
+    recorded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Set on reversal rows: the payment this entry reverses.
+    reversal_of_id = Column(
+        Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Mandatory reason on reversal rows.
+    reason = Column(Text, nullable=True)
 
     invoice = relationship("Invoice", back_populates="payments")
+
+
+class InvoiceEventType(str, enum.Enum):
+    CREATED = "CREATED"
+    COLLECTED = "COLLECTED"
+    REVERSED = "REVERSED"
+
+
+class InvoiceEvent(Base):
+    """Append-only history log for an invoice's timeline."""
+
+    __tablename__ = "invoice_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(
+        Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type = Column(String(20), nullable=False)
+    payment_id = Column(
+        Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    amount = Column(Float, nullable=True)
+    mode = Column(String, nullable=True)
+    reference = Column(String, nullable=True)
+    reason = Column(Text, nullable=True)
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_role = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    invoice = relationship("Invoice", back_populates="events")
 
 
 class PushSubscription(Base):

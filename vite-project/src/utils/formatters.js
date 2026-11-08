@@ -9,6 +9,31 @@ export function money(n) {
 }
 
 /**
+ * Readable message from an API error. FastAPI validation errors arrive as
+ * an array of objects, which React cannot render directly.
+ */
+export function errorText(err, fallback = 'Something went wrong.') {
+  const detail = err?.detail ?? err?.message;
+  if (Array.isArray(detail)) return detail.map((item) => item?.msg || String(item)).join(' ');
+  if (detail && typeof detail === 'object') return detail.msg || JSON.stringify(detail);
+  return detail || fallback;
+}
+
+/** Date + time in India, e.g. "8 Nov 2026, 4:05 pm". */
+export function dateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
+}
+
+/** Short date for YYYY-MM-DD strings, e.g. "8 Nov 2026". */
+export function shortDate(value) {
+  if (!value) return '—';
+  const [y, m, d] = String(value).slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return String(value);
+  return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
  * Formats a date string or Date object into YYYY-MM-DD.
  * @param {Date} d
  * @returns {string}

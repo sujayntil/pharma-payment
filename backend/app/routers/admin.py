@@ -6,11 +6,23 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
+from ..collection_info import (
+    RECORDER_ID,
+    REVERSAL_MODE,
+    apply_ledger_delta,
+    credited_mr_id,
+    log_event,
+    linked_reversal_totals,
+    net_collected,
+    payment_row,
+    reversal_fields,
+    reversible_amount,
+)
 from ..database import get_db
 from ..deps import require_admin
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password
-from ..utils import compute_status, page_result, query_page
+from ..utils import clean_search, compute_status, page_result, query_page
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -171,6 +183,7 @@ def outstanding_alerts(
     invoices, total, page_size, page_offset = query_page(query, limit, offset, search)
     items = [
         {
+            "invoice_id": i.id,  # additive: lets the dashboard open the invoice
             "invoice_number": i.invoice_number,
             "customer": i.customer.name if i.customer else None,
             "pending_amount": i.pending_amount,
@@ -195,24 +208,17 @@ def recent_payments(
         db.query(models.Payment, models.Invoice, models.Customer, models.User)
         .join(models.Invoice, models.Payment.invoice_id == models.Invoice.id)
         .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
-        .outerjoin(models.User, models.Payment.collected_by == models.User.id)
+        .outerjoin(models.User, RECORDER_ID == models.User.id)
         .order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
         .limit(limit)
         .all()
     )
     return [
         {
-            "payment_id": payment.id,
+            **payment_row(payment, collector),
             "invoice_number": invoice.invoice_number,
             "customer_name": customer.name if customer else None,
-            "amount": payment.amount,
-            "mode": payment.mode,
             "collected_by": collector.name if collector else None,
-            "payment_date": (
-                payment.payment_date.replace(tzinfo=timezone.utc)
-                if payment.payment_date and payment.payment_date.tzinfo is None
-                else payment.payment_date
-            ),
         }
         for payment, invoice, customer, collector in rows
     ]
@@ -224,6 +230,8 @@ def collections(
     date_to: Optional[date] = None,
     mr_id: Optional[int] = None,
     mode: Optional[str] = None,
+    recorded_by: Optional[str] = None,
+    entry_type: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
@@ -232,6 +240,7 @@ def collections(
 ):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "date_from must be on or before date_to")
+    search = clean_search(search)
 
     collector = aliased(models.User)
     assigned_mr = aliased(models.User)
@@ -239,7 +248,8 @@ def collections(
         db.query(models.Payment, models.Invoice, models.Customer, collector, assigned_mr)
         .join(models.Invoice, models.Payment.invoice_id == models.Invoice.id)
         .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
-        .outerjoin(collector, models.Payment.collected_by == collector.id)
+        # "collector" is whoever recorded the row (Admin or MR).
+        .outerjoin(collector, RECORDER_ID == collector.id)
         .outerjoin(assigned_mr, models.Invoice.mr_id == assigned_mr.id)
     )
 
@@ -250,6 +260,18 @@ def collections(
         query = query.filter(models.Invoice.mr_id == mr_id)
     if mode:
         query = query.filter(func.lower(models.Payment.mode) == mode.strip().lower())
+    if recorded_by:
+        role = recorded_by.strip().upper()
+        if role not in (models.RoleEnum.ADMIN.value, models.RoleEnum.MR.value):
+            raise HTTPException(422, "recorded_by must be ADMIN or MR")
+        query = query.filter(collector.role == role)
+    if entry_type:
+        if entry_type == "reversal":
+            query = query.filter(models.Payment.amount < 0)
+        elif entry_type == "collection":
+            query = query.filter(models.Payment.amount > 0)
+        else:
+            raise HTTPException(422, "entry_type must be collection or reversal")
     if search and search.strip():
         term = f"%{search.strip()}%"
         query = query.filter(or_(
@@ -270,6 +292,7 @@ def collections(
         page_size = min(max(limit, 1), 100)
         page_offset = max(offset, 0)
         rows = ordered.offset(page_offset).limit(page_size).all()
+    reversed_totals = linked_reversal_totals(db, [row[0].id for row in rows])
     return {
         "total_count": total_count,
         "total_amount": total_amount,
@@ -277,22 +300,14 @@ def collections(
         "offset": page_offset,
         "rows": [
             {
-                "payment_id": payment.id,
-                "payment_date": (
-                    payment.payment_date.replace(tzinfo=timezone.utc)
-                    if payment.payment_date and payment.payment_date.tzinfo is None
-                    else payment.payment_date
-                ),
-                "invoice_id": invoice.id,
+                **payment_row(payment, collector),
+                **reversal_fields(payment, reversed_totals),
                 "invoice_number": invoice.invoice_number,
                 "customer_name": customer.name if customer else None,
                 "mr_name": assigned_mr.name if assigned_mr else None,
-                "recorded_by": collector.name if collector else None,
-                "amount": payment.amount,
-                "mode": payment.mode,
-                "transaction_reference": payment.transaction_reference,
                 "invoice_amount": invoice.total_amount,
                 "pending_amount": invoice.pending_amount,
+                "paid_amount": invoice.paid_amount,
                 "invoice_status": invoice.status,
             }
             for payment, invoice, customer, collector, assigned_mr in rows
@@ -315,25 +330,65 @@ def override_collection_status(
         raise HTTPException(404, "Invoice not found")
 
     old_value = {
+        "invoice_id": invoice.id,
         "status": invoice.status,
         "paid_amount": invoice.paid_amount,
         "pending_amount": invoice.pending_amount,
     }
+    # Every change goes through the payments ledger so collection totals
+    # (dashboard, collections page, MR views) move with the invoice status.
+    ledger_entry = None
+    event_type = None
     if status == models.StatusEnum.PAID.value:
-        invoice.paid_amount = invoice.total_amount
-        invoice.pending_amount = 0
+        settle = round((invoice.total_amount or 0) - (invoice.paid_amount or 0), 2)
+        if settle > 0:
+            ledger_entry = models.Payment(
+                invoice_id=invoice.id,
+                amount=settle,
+                mode=(payload.mode or "").strip() or "Admin adjustment",
+                transaction_reference=(payload.transaction_reference or "").strip() or None,
+                collected_by=credited_mr_id(invoice, user),
+                recorded_by=user.id,
+            )
+            event_type = models.InvoiceEventType.COLLECTED.value
+        if ledger_entry and ledger_entry.mode:
+            invoice.payment_mode = ledger_entry.mode
+        target_paid = invoice.total_amount
     else:
-        invoice.paid_amount = 0
-        invoice.pending_amount = invoice.total_amount
-    invoice.status = status
+        # Reverse whatever the ledger currently holds for this invoice. Older
+        # overrides changed paid_amount without a ledger row; those have
+        # nothing to reverse, so the totals stay consistent either way.
+        collected = round(net_collected(db, invoice.id), 2)
+        if collected > 0:
+            reason = (payload.reason or "").strip()
+            ledger_entry = models.Payment(
+                invoice_id=invoice.id,
+                amount=-collected,
+                mode=REVERSAL_MODE,
+                transaction_reference=f"Marked unpaid by {user.name}" + (f": {reason}" if reason else ""),
+                # Deducted from the MR the invoice's collections sit under.
+                collected_by=credited_mr_id(invoice, user),
+                recorded_by=user.id,
+                reason=reason or "Marked unpaid",
+            )
+            event_type = models.InvoiceEventType.REVERSED.value
+        target_paid = 0
+    if ledger_entry:
+        db.add(ledger_entry)
+        db.flush()
+        log_event(db, invoice.id, event_type, user, payment=ledger_entry)
+    # Same balance helper as every other collection/reversal.
+    apply_ledger_delta(invoice, round((target_paid or 0) - (invoice.paid_amount or 0), 2))
     db.add(models.AuditLog(
         action="admin_collection_status_override",
         user_id=user.id,
         old_value=old_value,
         new_value={
+            "invoice_id": invoice.id,
             "status": invoice.status,
             "paid_amount": invoice.paid_amount,
             "pending_amount": invoice.pending_amount,
+            "ledger_amount": ledger_entry.amount if ledger_entry else 0,
         },
     ))
     db.commit()
@@ -342,66 +397,153 @@ def override_collection_status(
         "status": invoice.status,
         "paid_amount": invoice.paid_amount,
         "pending_amount": invoice.pending_amount,
+        "ledger_amount": ledger_entry.amount if ledger_entry else 0,
     }
 
 
-@router.post("/manual-invoices", status_code=201)
-def create_manual_invoice(
-    payload: schemas.ManualInvoiceCreate,
+@router.post("/payments/{payment_id}/reverse")
+def reverse_payment(
+    payment_id: int,
+    payload: schemas.PaymentReversalCreate,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    invoice_number = payload.invoice_number.strip()
-    customer_name = (payload.customer_name or "").strip()
-    if not invoice_number or (not payload.customer_id and not customer_name):
-        raise HTTPException(422, "Invoice number and customer are required")
+    """Admin-only. Reverses one collection by adding a linked negative ledger
+    entry -- the original row is never changed or deleted. A payment can be
+    re-collected and reversed any number of times; each action is its own
+    entry. A single reversal can never exceed what is still collected."""
+    payment = db.get(models.Payment, payment_id)
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+    if (payment.amount or 0) <= 0:
+        raise HTTPException(400, "A reversal entry cannot itself be reversed")
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise HTTPException(422, "A reason is required to reverse a collection")
+    invoice = db.get(models.Invoice, payment.invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
 
-    existing = (
-        db.query(models.Invoice)
-        .filter(func.lower(func.trim(models.Invoice.invoice_number)) == invoice_number.lower())
-        .first()
-    )
-    if existing:
-        raise HTTPException(409, f"Invoice {invoice_number} already exists")
+    available = reversible_amount(db, payment)
+    if available <= 0:
+        raise HTTPException(400, "Nothing left to reverse on this collection")
+    amount = round(payload.amount, 2) if payload.amount is not None else available
+    if amount <= 0:
+        raise HTTPException(422, "Reversal amount must be greater than zero")
+    if amount > available + 0.01:
+        raise HTTPException(
+            400, f"Reversal (₹{amount}) exceeds the amount still collected on this entry (₹{available})"
+        )
+    amount = min(amount, available)
 
-    customer = db.get(models.Customer, payload.customer_id) if payload.customer_id else None
-    if payload.customer_id and not customer:
-        raise HTTPException(404, "Customer not found")
-    matching_customers = [] if customer else (
-        db.query(models.Customer)
-        .filter(func.lower(func.trim(models.Customer.name)) == customer_name.lower())
-        .all()
+    old_value = {
+        "invoice_id": invoice.id,
+        "status": invoice.status,
+        "paid_amount": invoice.paid_amount,
+        "pending_amount": invoice.pending_amount,
+    }
+    reversal = models.Payment(
+        invoice_id=invoice.id,
+        amount=-amount,
+        mode=REVERSAL_MODE,
+        transaction_reference=f"Reversal of payment #{payment.id}: {reason}",
+        # Deducted from the same MR the collection was saved under.
+        collected_by=payment.collected_by,
+        recorded_by=user.id,
+        reversal_of_id=payment.id,
+        reason=reason,
     )
-    if len(matching_customers) > 1:
-        raise HTTPException(409, f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.")
-    customer = customer or (matching_customers[0] if matching_customers else None)
-    if customer is None:
-        customer = models.Customer(name=customer_name)
-        db.add(customer)
-        db.flush()
-
-    status, pending = compute_status(payload.total_amount, 0)
-    invoice = models.Invoice(
-        invoice_number=invoice_number,
-        invoice_date=payload.invoice_date,
-        customer_id=customer.id,
-        mr_id=customer.mr_id,
-        total_amount=payload.total_amount,
-        paid_amount=0,
-        pending_amount=pending,
-        status=status,
-    )
-    db.add(invoice)
+    db.add(reversal)
+    db.flush()
+    apply_ledger_delta(invoice, -amount)
+    log_event(db, invoice.id, models.InvoiceEventType.REVERSED.value, user, payment=reversal)
+    db.add(models.AuditLog(
+        action="admin_payment_reversal",
+        user_id=user.id,
+        old_value=old_value,
+        new_value={
+            "invoice_id": invoice.id,
+            "payment_id": payment.id,
+            "reversal_id": reversal.id,
+            "amount": -amount,
+            "reason": reason,
+            "status": invoice.status,
+            "paid_amount": invoice.paid_amount,
+            "pending_amount": invoice.pending_amount,
+        },
+    ))
     db.commit()
-    db.refresh(invoice)
-
     return {
         "invoice_id": invoice.id,
-        "invoice_number": invoice.invoice_number,
-        "customer_name": customer.name,
-        "total_amount": invoice.total_amount,
-        "mr_name": customer.mr.name if customer.mr else None,
+        "payment_id": payment.id,
+        "reversal_id": reversal.id,
+        "reversed_amount": amount,
+        "status": invoice.status,
+        "paid_amount": invoice.paid_amount,
+        "pending_amount": invoice.pending_amount,
     }
+
+
+# Disabled: "Add Invoice" is removed everywhere (Dashboard, Workspace, Import
+# page). Re-enable if needed: uncomment this route and the "Add invoice"
+# button/modal in vite-project/src/pages/admin/AdminImport.jsx.
+# @router.post("/manual-invoices", status_code=201)
+# def create_manual_invoice(
+#     payload: schemas.ManualInvoiceCreate,
+#     db: Session = Depends(get_db),
+#     user: models.User = Depends(require_admin),
+# ):
+#     invoice_number = payload.invoice_number.strip()
+#     customer_name = (payload.customer_name or "").strip()
+#     if not invoice_number or (not payload.customer_id and not customer_name):
+#         raise HTTPException(422, "Invoice number and customer are required")
+#
+#     existing = (
+#         db.query(models.Invoice)
+#         .filter(func.lower(func.trim(models.Invoice.invoice_number)) == invoice_number.lower())
+#         .first()
+#     )
+#     if existing:
+#         raise HTTPException(409, f"Invoice {invoice_number} already exists")
+#
+#     customer = db.get(models.Customer, payload.customer_id) if payload.customer_id else None
+#     if payload.customer_id and not customer:
+#         raise HTTPException(404, "Customer not found")
+#     matching_customers = [] if customer else (
+#         db.query(models.Customer)
+#         .filter(func.lower(func.trim(models.Customer.name)) == customer_name.lower())
+#         .all()
+#     )
+#     if len(matching_customers) > 1:
+#         raise HTTPException(409, f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.")
+#     customer = customer or (matching_customers[0] if matching_customers else None)
+#     if customer is None:
+#         customer = models.Customer(name=customer_name)
+#         db.add(customer)
+#         db.flush()
+#
+#     status, pending = compute_status(payload.total_amount, 0)
+#     invoice = models.Invoice(
+#         invoice_number=invoice_number,
+#         invoice_date=payload.invoice_date,
+#         customer_id=customer.id,
+#         mr_id=customer.mr_id,
+#         total_amount=payload.total_amount,
+#         paid_amount=0,
+#         pending_amount=pending,
+#         status=status,
+#     )
+#     db.add(invoice)
+#     db.commit()
+#     db.refresh(invoice)
+#
+#     return {
+#         "invoice_id": invoice.id,
+#         "invoice_number": invoice.invoice_number,
+#         "customer_name": customer.name,
+#         "total_amount": invoice.total_amount,
+#         "mr_name": customer.mr.name if customer.mr else None,
+#     }
 
 
 @router.post("/users", response_model=schemas.UserOut)

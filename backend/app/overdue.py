@@ -18,10 +18,12 @@ _REMINDER_INTERVAL_DAYS = 2
 _CLAIM_TIMEOUT = timedelta(minutes=15)
 
 
-def overdue_customer_summaries(db: Session, today: date | None = None) -> list[dict]:
+def overdue_customer_summaries(db: Session, today: date | None = None, mr_id: int | None = None) -> list[dict]:
+    """Customers with invoices unpaid for 40+ days. Pass mr_id to limit the
+    result to invoices assigned to one MR (used by the MR dashboard)."""
     today = today or datetime.now(_IST).date()
     cutoff = today - timedelta(days=_OVERDUE_DAYS)
-    rows = (
+    query = (
         db.query(models.Invoice, models.Customer, models.User)
         .join(models.Customer, models.Invoice.customer_id == models.Customer.id)
         .outerjoin(models.User, models.Invoice.mr_id == models.User.id)
@@ -30,9 +32,10 @@ def overdue_customer_summaries(db: Session, today: date | None = None) -> list[d
             models.Invoice.invoice_date.isnot(None),
             models.Invoice.invoice_date <= cutoff,
         )
-        .order_by(models.Customer.name, models.Invoice.invoice_date, models.Invoice.id)
-        .all()
     )
+    if mr_id is not None:
+        query = query.filter(models.Invoice.mr_id == mr_id)
+    rows = query.order_by(models.Customer.name, models.Invoice.invoice_date, models.Invoice.id).all()
     grouped: dict[int, dict] = {}
     for invoice, customer, mr in rows:
         summary = grouped.setdefault(customer.id, {

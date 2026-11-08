@@ -50,6 +50,8 @@ const mrSlice = createSlice({
     },
     outstanding: [],
     totalOutstanding: 0,
+    // Pending total for the currently filtered list (matches the rows shown).
+    filteredOutstanding: 0,
     outstandingCount: 0,
     loading: false,
     paymentLoading: false,
@@ -91,6 +93,7 @@ const mrSlice = createSlice({
         state.loading = false;
         state.outstanding = action.payload.items || [];
         state.totalOutstanding = action.payload.total_outstanding || 0;
+        state.filteredOutstanding = action.payload.filtered_outstanding ?? action.payload.total_outstanding ?? 0;
         state.outstandingCount = action.payload.total_count || 0;
       })
       .addCase(fetchMrOutstanding.rejected, (state, action) => {

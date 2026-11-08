@@ -1,0 +1,14 @@
+/* Card actions: share one row when they fit, wrap to full-width rows on
+   narrow screens, so labels are never clipped at any phone width. */
+.actions {
+  flex-wrap: wrap;
+}
+
+.actions button {
+  min-height: 36px;
+  min-width: 36px;
+}
+
+.actions > :global(.mantine-Button-root) {
+  flex: 1 0 auto;
+}

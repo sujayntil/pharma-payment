@@ -359,6 +359,7 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(marked_unpaid.json()["pending_amount"], 200)
         self.assertEqual(self.db.query(models.AuditLog).filter_by(action="admin_collection_status_override").count(), 2)
 
+    @unittest.skip("Disabled: Add Invoice routes are commented out; re-enable with the routes")
     def test_manual_invoice_uses_selected_existing_customer_id(self):
         first = models.Customer(name="Same Name", mr_id=self.mr.id)
         second = models.Customer(name="Same Name")
@@ -498,6 +499,7 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(dashboard.status_code, 200)
         self.assertEqual(dashboard.json()["collected"], 35)
 
+    @unittest.skip("Disabled: Add Invoice routes are commented out; re-enable with the routes")
     def test_mr_manual_invoice_flow_remains_available_but_blocks_tally_duplicate(self):
         new_invoice = {
             "invoice_number": "MR-001",

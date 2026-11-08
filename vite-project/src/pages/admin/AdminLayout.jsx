@@ -23,14 +23,17 @@ const ADMIN_TABS = [
 
 export default function AdminLayout() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  // Set when the Dashboard opens a customer; the key remounts Customers on it.
+  const [openCustomer, setOpenCustomer] = useState(null);
+  const choose = (tab) => { setOpenCustomer(null); setActiveTab(tab); };
 
   return (
-    <AppFrame items={ADMIN_TABS} active={activeTab} onChange={setActiveTab}>
+    <AppFrame items={ADMIN_TABS} active={activeTab} onChange={choose}>
       <main>
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
-        {activeTab === 'dashboard' && <AdminDashboard />}
+        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => { setOpenCustomer(customer); setActiveTab('customers'); }} />}
         {activeTab === 'invoices' && <AdminInvoices />}
-        {activeTab === 'customers' && <AdminCustomers />}
+        {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
         {activeTab === 'collections' && <AdminCollections />}
         {activeTab === 'import' && <AdminImport />}
         {activeTab === 'performance' && <AdminPerformance />}

@@ -12,6 +12,7 @@ from app.deps import get_current_user
 from app.routers.admin import router as admin_router
 
 
+@unittest.skip("Disabled: Add Invoice (POST /admin/manual-invoices) is commented out; re-enable with the route")
 class ManualInvoiceTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine(

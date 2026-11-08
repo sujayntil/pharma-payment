@@ -2,10 +2,10 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..collection_info import apply_ledger_delta, credited_mr_id, log_event
 from ..database import get_db
 from ..deps import get_current_user
 from ..push import send_payment_notification
-from ..utils import compute_status
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -26,6 +26,8 @@ def add_payment(
         raise HTTPException(403, "You can only update payments on your own invoices")
     if payload.amount <= 0:
         raise HTTPException(400, "Payment amount must be greater than zero")
+    if (invoice.pending_amount or 0) <= 0:
+        raise HTTPException(400, "This invoice is already fully paid")
     if payload.amount > invoice.pending_amount + 0.01:
         raise HTTPException(
             400,
@@ -37,14 +39,15 @@ def add_payment(
         amount=payload.amount,
         mode=payload.mode,
         transaction_reference=payload.transaction_reference,
-        collected_by=user.id,
+        # Saved under the customer's assigned MR when an Admin records it, so
+        # it counts in that MR's totals; recorded_by keeps who entered it.
+        collected_by=credited_mr_id(invoice, user),
+        recorded_by=user.id,
     )
     db.add(payment)
+    db.flush()
 
-    invoice.paid_amount = (invoice.paid_amount or 0) + payload.amount
-    status_, pending = compute_status(invoice.total_amount, invoice.paid_amount)
-    invoice.status = status_
-    invoice.pending_amount = pending
+    apply_ledger_delta(invoice, payload.amount)
     if payload.mode:
         # Keep this in sync with the most recent payment's mode -- there's
         # no full per-payment history view anymore, so this single field is
@@ -52,6 +55,7 @@ def add_payment(
         # should reflect the latest payment, not just whatever was set when
         # the invoice was first created.
         invoice.payment_mode = payload.mode
+    log_event(db, invoice.id, models.InvoiceEventType.COLLECTED.value, user, payment=payment)
 
     db.commit()
     db.refresh(invoice)

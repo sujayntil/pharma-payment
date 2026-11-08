@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
@@ -129,6 +129,15 @@ class InvoiceOut(BaseModel):
     remarks: Optional[str] = None
     mr_name: Optional[str] = None
     customer_name: Optional[str] = None
+    # Latest entry in the payments ledger -- lets an MR see when an Admin
+    # recorded or reversed a collection on their invoice.
+    last_collection_by: Optional[str] = None
+    last_collection_by_id: Optional[int] = None
+    last_collection_by_role: Optional[str] = None
+    last_collection_by_admin: bool = False
+    last_collection_at: Optional[datetime] = None
+    last_collection_amount: Optional[float] = None
+    last_collection_is_reversal: bool = False
 
 
 class InvoiceUpdate(BaseModel):
@@ -169,8 +178,16 @@ class PaymentCreate(BaseModel):
     transaction_reference: Optional[str] = None
 
 
+class PaymentReversalCreate(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+    amount: Optional[float] = Field(default=None, gt=0)  # defaults to everything still reversible
+
+
 class CollectionStatusUpdate(BaseModel):
     status: str
+    mode: Optional[str] = None  # used when marking PAID
+    transaction_reference: Optional[str] = None  # used when marking PAID
+    reason: Optional[str] = Field(default=None, max_length=200)  # used when marking UNPAID
 
 
 class PushSubscriptionCreate(BaseModel):

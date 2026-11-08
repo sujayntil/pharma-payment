@@ -15,6 +15,24 @@
 | Record a collection and open the admin dashboard feed | Recent payment is visible without a new notifications table | `test_recent_collection_feed_uses_existing_payment_ledger` |
 | MR adds a normal invoice, then attempts to add an invoice already imported from Tally | Manual entry remains available; the Tally duplicate is blocked even with the legacy override flag | `test_mr_manual_invoice_flow_remains_available_but_blocks_tally_duplicate` |
 
+## Collections, Admin actions and MR visibility
+
+| Case | Expected result | Automated coverage |
+|---|---|---|
+| Admin records a payment on an MR's invoice | Payment row written (counts in all collection totals), tagged as recorded by Admin, visible to the assigned MR | `test_admin_collections`, `test_end_to_end` 05 |
+| Admin marks an invoice unpaid | Reversal row for the collected amount (optional reason), totals drop, original rows kept; repeating adds nothing | `test_admin_collections`, `test_end_to_end` 06 |
+| Admin marks an invoice paid | Settlement row for the remaining balance | `test_admin_collections`, `test_end_to_end` 06 |
+| Payment validation | Zero/over-balance/unknown invoice rejected; MR cannot pay another MR's invoice | `test_end_to_end` 04 |
+| Collections filters | Date (IST), MR, mode, recorded by Admin/MR, collections vs reversals, search; totals = sum of filtered rows; invalid values 422 | `test_end_to_end` 07 |
+| Totals agree everywhere | Dashboard collected = collections ledger; MR performance; every invoice paid = sum of its ledger rows | `test_end_to_end` 07, 12 |
+| MR data isolation | Outstanding, customers, ledger, invoice, history and 40+ day alerts show only the MR's own data | `test_end_to_end` 03, 09 |
+| Real login | bcrypt passwords, JWT on every call, wrong password / no token 401, MR on Admin routes 403 | `test_end_to_end` 01 |
+
+`test_end_to_end` runs on SQLite by default. To check Postgres-specific SQL, point it at a **throwaway** Postgres
+database (it drops all tables; it refuses Neon URLs):
+
+    TEST_DATABASE_URL=postgresql://user@localhost:55432/pharma_test python -m unittest tests.test_end_to_end
+
 Run from `backend/` with `python -m unittest discover -s tests`.
 
 Manual acceptance still needed before rollout: inspect the import result on a phone and laptop, check a representative real workbook, and verify against a Neon staging branch with anonymized production-like rows. Do not run the schema migration directly against production as a test.

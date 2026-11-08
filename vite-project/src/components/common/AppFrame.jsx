@@ -17,12 +17,19 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { IconChevronDown, IconLogout, IconPill } from '@tabler/icons-react';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
 import { logout, setUserData } from '../../store/slices/authSlice';
 import { authApi } from '../../api/authApi';
 
-export default function AppFrame({ items, active, onChange, children }) {
+/**
+ * bottomNav: on phones, show the sections as a bottom tab bar instead of the
+ * burger menu (MR app). Desktop keeps the left sidebar either way.
+ */
+export default function AppFrame({ items, active, onChange, children, bottomNav = false }) {
   const [opened, setOpened] = useState(false);
+  const isMobile = useIsMobile();
+  const useBottomNav = bottomNav && isMobile;
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { user, role } = useAuth();
@@ -54,13 +61,14 @@ export default function AppFrame({ items, active, onChange, children }) {
   return (
     <AppShell
       header={{ height: 64 }}
-      navbar={{ width: 244, breakpoint: 'sm', collapsed: { mobile: !opened } }}
+      navbar={{ width: 244, breakpoint: 'sm', collapsed: { mobile: useBottomNav || !opened } }}
+      footer={useBottomNav ? { height: 'calc(64px + env(safe-area-inset-bottom, 0px))' } : undefined}
       padding="md"
     >
       <AppShell.Header px="md">
         <Group h="100%" justify="space-between">
           <Group gap="sm">
-            <Burger opened={opened} onClick={() => setOpened((value) => !value)} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
+            {!useBottomNav && <Burger opened={opened} onClick={() => setOpened((value) => !value)} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />}
             <ThemeIcon size={34} radius="md" variant="filled"><IconPill size={19} /></ThemeIcon>
             <div>
               <Text fw={700} size="sm">Pharma Sales</Text>
@@ -113,6 +121,28 @@ export default function AppFrame({ items, active, onChange, children }) {
           <Button variant="subtle" color="gray" fullWidth justify="flex-start" leftSection={<IconLogout size={17} />} onClick={signOut}>Log out</Button>
         </AppShell.Section>
       </AppShell.Navbar>
+
+      {useBottomNav && (
+        <AppShell.Footer style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <nav aria-label="Main" style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, height: 64 }}>
+            {items.map((item) => {
+              const Icon = item.icon;
+              const current = active === item.id;
+              return (
+                <UnstyledButton
+                  key={item.id}
+                  onClick={() => choose(item.id)}
+                  aria-current={current ? 'page' : undefined}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, color: current ? 'var(--mantine-color-green-7)' : 'var(--mantine-color-gray-6)' }}
+                >
+                  <Icon size={22} stroke={current ? 2.2 : 1.8} />
+                  <Text size="xs" fw={current ? 700 : 500} c="inherit">{item.label}</Text>
+                </UnstyledButton>
+              );
+            })}
+          </nav>
+        </AppShell.Footer>
+      )}
 
       <AppShell.Main>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>{children}</div>

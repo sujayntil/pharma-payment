@@ -29,6 +29,25 @@ export const invoicesApi = {
   },
 
   /**
+   * Collection history (payments and reversals) for one invoice.
+   * @param {number|string} id
+   */
+  async getInvoicePayments(id) {
+    const response = await axiosClient.get(`/invoices/${id}/payments`);
+    return response.data;
+  },
+
+  /**
+   * Full invoice timeline (created, collections, reversals), oldest first.
+   * One endpoint for My Collections, MR Invoices and Admin Invoices.
+   * @param {number|string} id
+   */
+  async getInvoiceHistory(id) {
+    const response = await axiosClient.get(`/invoices/${id}/history`);
+    return response.data;
+  },
+
+  /**
    * Send invoice image/PDF to Gemini AI for OCR & field extraction.
    * @param {File} file
    */

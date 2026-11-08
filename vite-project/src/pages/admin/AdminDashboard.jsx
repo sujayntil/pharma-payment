@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Loader, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { IconCategory } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
 import PaymentAlerts from '../../components/common/PaymentAlerts';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
-import { money } from '../../utils/formatters';
+import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import DateRangeFilter from '../../components/filters/DateRangeFilter';
+import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
+import { RecordedBy } from '../../components/collections/CollectionBadges';
+import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
+import InvoiceHistory from '../../components/collections/InvoiceHistory';
+import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { dateTime, money } from '../../utils/formatters';
 
 const Stat = ({ label, value, accent = false }) => (
   <Paper withBorder p="md" bg={accent ? 'green.0' : undefined}>
@@ -14,26 +23,24 @@ const Stat = ({ label, value, accent = false }) => (
   </Paper>
 );
 
-const localDate = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const CUSTOMER_TYPES = [
+  { value: 'distributor', label: 'Distributor' },
+  { value: 'chemist', label: 'Chemist' },
+  { value: 'doctor', label: 'Doctor' },
+  { value: 'other', label: 'Other' },
+];
 
-export default function AdminDashboard() {
+/** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
+export default function AdminDashboard({ onOpenCustomer }) {
   const dispatch = useAppDispatch();
   const { dashboard, alerts, alertCount, alertsLoading, dashFilters } = useAppSelector((state) => state.admin);
+  const isMobile = useIsMobile();
   const [alertPage, setAlertPage] = useState(1);
-  const [from, setFrom] = useState(dashFilters.dateFrom || '');
-  const [to, setTo] = useState(dashFilters.dateTo || '');
-  const [customerType, setCustomerType] = useState('');
   const [appliedCustomerType, setAppliedCustomerType] = useState('');
   const [recent, setRecent] = useState([]);
   const [error, setError] = useState('');
-  const [overdue, setOverdue] = useState([]);
-  const [overdueLoading, setOverdueLoading] = useState(true);
-  const [overdueError, setOverdueError] = useState('');
+  // Rows open the invoice panel (summary, Record collection, history).
+  const [openId, setOpenId] = useState(null); const [recording, setRecording] = useState(null); const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const params = {};
@@ -42,45 +49,21 @@ export default function AdminDashboard() {
     if (appliedCustomerType) params.customer_type = appliedCustomerType;
     dispatch(fetchAdminDashboard(params));
     adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
-  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo, appliedCustomerType]);
+  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo, appliedCustomerType, refreshKey]);
 
-  useEffect(() => {
-    let active = true;
-    adminApi.getOverdueAlerts()
-      .then((items) => { if (active) setOverdue(items); })
-      .catch((err) => { if (active) setOverdueError(err.detail || err.message); })
-      .finally(() => { if (active) setOverdueLoading(false); });
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     dispatch(fetchOutstandingAlerts({ threshold: 50000, limit: PAGE_SIZE, offset: (alertPage - 1) * PAGE_SIZE }));
-  }, [dispatch, alertPage]);
+  }, [dispatch, alertPage, refreshKey]);
 
-  const selectRange = (dateFrom, dateTo) => {
-    setFrom(dateFrom);
-    setTo(dateTo);
-  };
-
-  const preset = (days) => {
-    if (!days) return selectRange('', '');
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - days + 1);
-    selectRange(localDate(start), localDate(end));
-  };
-
-  const applyFilters = () => {
-    dispatch(setDashFilters({ dateFrom: from || null, dateTo: to || null }));
-    setAppliedCustomerType(customerType);
-  };
-
-  const clearFilters = () => {
-    selectRange('', '');
-    setCustomerType('');
-    setAppliedCustomerType('');
-    dispatch(setDashFilters({ dateFrom: null, dateTo: null }));
-  };
+  const range = { from: dashFilters.dateFrom || '', to: dashFilters.dateTo || '' };
+  const setRange = (next) => dispatch(setDashFilters({ dateFrom: next.from || null, dateTo: next.to || null }));
+  const rangeLabel = describeRange(range);
+  const chips = [
+    rangeLabel && { key: 'range', label: `Dates: ${rangeLabel}`, onRemove: () => setRange(EMPTY_RANGE) },
+    appliedCustomerType && { key: 'type', label: `Customer type: ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}`, onRemove: () => setAppliedCustomerType('') },
+  ];
+  const reset = () => { setRange(EMPTY_RANGE); setAppliedCustomerType(''); };
 
   return (
     <Stack gap="md">
@@ -89,31 +72,10 @@ export default function AdminDashboard() {
         <Badge variant="light" size="lg">Admin view</Badge>
       </Group>
 
-      <Paper withBorder p="md">
-        <Stack gap="sm">
-          <Group>
-            <Button variant="default" onClick={() => preset(0)}>All time</Button>
-            <Button variant="default" onClick={() => preset(1)}>Today</Button>
-            <Button variant="default" onClick={() => preset(30)}>Last 30 days</Button>
-          </Group>
-          <Group align="end">
-            <TextInput type="date" label="From" value={from} onChange={(event) => setFrom(event.currentTarget.value)} />
-            <TextInput type="date" label="To" value={to} onChange={(event) => setTo(event.currentTarget.value)} />
-          </Group>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-            <Select label="Sales by customer type" data={[
-              { value: 'distributor', label: 'Distributor' },
-              { value: 'chemist', label: 'Chemist' },
-              { value: 'doctor', label: 'Doctor' },
-              { value: 'other', label: 'Other' },
-            ]} placeholder="All customer types" clearable value={customerType || null} onChange={(value) => setCustomerType(value || '')} />
-          </SimpleGrid>
-          <Group justify="flex-end">
-            <Button onClick={applyFilters}>Apply filters</Button>
-            <Button variant="subtle" onClick={clearFilters}>Clear filters</Button>
-          </Group>
-        </Stack>
-      </Paper>
+      <FilterBar chips={chips} onReset={reset} summary={rangeLabel ? null : 'Showing all time'}>
+        <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" />
+        <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={appliedCustomerType} onChange={setAppliedCustomerType} />
+      </FilterBar>
 
       {error && <Alert color="red">{error}</Alert>}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
@@ -135,11 +97,16 @@ export default function AdminDashboard() {
           <Badge>{alertCount}</Badge>
         </Group>
         {alertsLoading ? <Group justify="center" p="lg"><Loader /></Group> : !alerts.length ? <Text c="dimmed" py="md">No high outstanding balances.</Text> : (
-          <Table.ScrollContainer minWidth={620}>
+          isMobile ? <Stack gap={0}>{alerts.map((item, index) => (
+            <Group key={`${item.invoice_number}-${index}`} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: item.invoice_id ? 'pointer' : undefined }} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined}>
+              <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>
+              <Text fw={700} c="red" style={{ whiteSpace: 'nowrap' }}>{money(item.pending_amount)}</Text>
+            </Group>
+          ))}</Stack> :           <Table.ScrollContainer minWidth={620}>
             <Table striped>
               <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>MR</Table.Th><Table.Th>Outstanding</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{alerts.map((item, index) => (
-                <Table.Tr key={`${item.invoice_number}-${index}`}>
+                <Table.Tr key={`${item.invoice_number}-${index}`} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined} style={item.invoice_id ? { cursor: 'pointer' } : undefined}>
                   <Table.Td>{item.customer || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td>{item.mr || '—'}</Table.Td><Table.Td fw={700} c="red">{money(item.pending_amount)}</Table.Td>
                 </Table.Tr>
               ))}</Table.Tbody>
@@ -149,42 +116,37 @@ export default function AdminDashboard() {
         <ListPagination total={alertCount} page={alertPage} onChange={setAlertPage} label="invoices" />
       </Paper>
 
-      <Paper withBorder p="md">
-        <Group justify="space-between" mb="sm">
-          <div><Title order={3}>Outstanding for 40+ days</Title><Text size="sm" c="dimmed">From invoice date; reminders repeat every two days while the balance remains unpaid.</Text></div>
-          <Badge color={overdue.length ? 'red' : 'gray'}>{overdue.length} customers</Badge>
-        </Group>
-        {overdueError && <Alert color="red" mb="sm">{overdueError}</Alert>}
-        {overdueLoading ? <Group justify="center" p="lg"><Loader /></Group> : !overdue.length ? <Text c="dimmed" py="md">No customers have invoices outstanding for 40 days or more.</Text> : (
-          <Table.ScrollContainer minWidth={760}>
-            <Table striped highlightOnHover>
-              <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Oldest invoice</Table.Th><Table.Th>Days overdue</Table.Th><Table.Th>MR</Table.Th><Table.Th>Overdue invoices</Table.Th><Table.Th>40+ day balance</Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>{overdue.map((item) => (
-                <Table.Tr key={item.customer_id}>
-                  <Table.Td fw={600}>{item.customer}</Table.Td><Table.Td>{item.oldest_invoice_number}<Text size="xs" c="dimmed">{item.oldest_invoice_date}</Text></Table.Td><Table.Td>{item.days_overdue}</Table.Td><Table.Td>{item.mr || '—'}</Table.Td><Table.Td>{item.invoice_count}</Table.Td><Table.Td fw={700} c="red">{money(item.overdue_amount)}</Table.Td>
-                </Table.Tr>
-              ))}</Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Paper>
+      <OverdueCustomersPanel load={adminApi.getOverdueAlerts} showMr description="From invoice date; reminders repeat every two days while the balance remains unpaid." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
 
       <Paper withBorder p="md">
         <Title order={3} mb="sm">Recent collections</Title>
-        {recent.length ? (
+        {recent.length && isMobile ? (
+          <Stack gap={0}>{recent.map((item) => (
+            <Group key={item.payment_id} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: 'pointer' }} onClick={() => setOpenId(item.invoice_id)}>
+              <div style={{ minWidth: 0 }}>
+                <Text size="sm" fw={600} truncate>{item.invoice_number} · {item.customer_name || '—'}</Text>
+                <Group gap={6} c="dimmed" fz="xs" wrap="nowrap"><RecordedBy row={item} /></Group>
+                <Text size="xs" c="dimmed">{dateTime(item.payment_date)}</Text>
+              </div>
+              <Text fw={700} c={item.is_reversal ? 'orange.8' : undefined} style={{ whiteSpace: 'nowrap' }}>{item.is_reversal ? '−' : ''}{money(Math.abs(item.amount))}</Text>
+            </Group>
+          ))}</Stack>
+        ) : recent.length ? (
           <Table.ScrollContainer minWidth={600}>
             <Table striped>
-              <Table.Thead><Table.Tr><Table.Th>When</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Collected</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>When</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Amount</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{recent.map((item) => (
-                <Table.Tr key={item.payment_id}>
-                  <Table.Td>{item.payment_date ? new Date(item.payment_date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }) : '—'}</Table.Td>
-                  <Table.Td>{item.customer_name || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td>{item.collected_by || '—'}</Table.Td><Table.Td fw={700}>{money(item.amount)}</Table.Td>
+                <Table.Tr key={item.payment_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }}>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>{dateTime(item.payment_date)}</Table.Td>
+                  <Table.Td>{item.customer_name || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td><RecordedBy row={item} /></Table.Td><Table.Td fw={700} c={item.is_reversal ? 'orange.8' : undefined}>{item.is_reversal ? '−' : ''}{money(Math.abs(item.amount))}</Table.Td>
                 </Table.Tr>
               ))}</Table.Tbody>
             </Table>
           </Table.ScrollContainer>
         ) : <Text c="dimmed" py="md">No collections recorded yet.</Text>}
       </Paper>
+      <InvoiceHistory invoiceId={openId} onClose={() => setOpenId(null)} onChanged={() => setRefreshKey((v) => v + 1)} onRecord={setRecording} refreshKey={refreshKey} />
+      <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={() => setRefreshKey((v) => v + 1)} />
     </Stack>
   );
 }

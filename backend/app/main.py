@@ -10,11 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from . import models  # noqa: F401  (ensures models are registered before create_all)
 from .database import Base, SessionLocal, engine
 from .overdue import process_due_overdue_reminders
+from .schema_upgrade import ensure_additive_columns
 from .routers import admin, auth, customers, imports, invoices, mr, notifications, payments
 
 log = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
+ensure_additive_columns(engine)
 
 # Optional: create the demo login accounts on startup instead of requiring
 # shell access to run seed.py -- useful on hosts like Render's free tier

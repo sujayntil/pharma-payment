@@ -6,9 +6,10 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..collection_info import last_collection_fields, latest_collections
 from ..database import get_db
 from ..deps import get_current_user, require_admin
-from ..utils import page_result, query_page
+from ..utils import clean_search, page_result, query_page
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -22,6 +23,7 @@ def list_customers(
     offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
+    search = clean_search(search)
     q = db.query(models.Customer, func.count(models.Invoice.id).label("invoice_count"))
     if search and search.strip():
         term = f"%{search.strip()}%"
@@ -162,6 +164,7 @@ def customer_ledger(
         raise HTTPException(422, "date_from must be on or before date_to")
     if status and status.upper() not in {"PAID", "PARTIAL", "UNPAID"}:
         raise HTTPException(422, "status must be PAID, PARTIAL, or UNPAID")
+    search = clean_search(search)
     invoice_query = db.query(models.Invoice).filter(models.Invoice.customer_id == customer_id)
     if date_from:
         invoice_query = invoice_query.filter(models.Invoice.invoice_date >= date_from)
@@ -177,27 +180,24 @@ def customer_ledger(
             models.Invoice.status.ilike(term),
             models.Invoice.mr.has(models.User.name.ilike(term)),
         ))
-    totals_query = db.query(
+    # Totals come from the exact same filtered set as the rows (search
+    # included), so the summary always matches what is listed.
+    total_invoiced, total_paid = invoice_query.with_entities(
         func.coalesce(func.sum(models.Invoice.total_amount), 0),
         func.coalesce(func.sum(models.Invoice.paid_amount), 0),
-    ).filter(models.Invoice.customer_id == customer_id)
-    if date_from:
-        totals_query = totals_query.filter(models.Invoice.invoice_date >= date_from)
-    if date_to:
-        totals_query = totals_query.filter(models.Invoice.invoice_date <= date_to)
-    if status:
-        totals_query = totals_query.filter(models.Invoice.status == status.upper())
-    total_invoiced, total_paid = totals_query.one()
+    ).one()
     invoice_query = invoice_query.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
     invoices, invoice_count, page_size, page_offset = query_page(
         invoice_query, limit, offset, search
     )
 
+    latest = latest_collections(db, [i.id for i in invoices])
     result = {
         "customer": {
             "id": customer.id,
             "name": customer.name,
             "type": customer.type,
+            "mr_name": customer.mr.name if customer.mr else None,
         },
         "total_invoiced": total_invoiced,
         "total_paid": total_paid,
@@ -215,6 +215,8 @@ def customer_ledger(
                 "status": i.status,
                 "mode": i.payment_mode,
                 "mr": i.mr.name if i.mr else None,
+                "paid_amount": i.paid_amount,
+                **last_collection_fields(latest.get(i.id)),
             }
             for i in invoices
         ],

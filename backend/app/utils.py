@@ -30,3 +30,26 @@ def compute_status(total_amount: float, paid_amount: float) -> tuple[str, float]
     if paid_amount <= 0:
         return StatusEnum.UNPAID.value, pending
     return StatusEnum.PARTIAL.value, pending
+
+
+MAX_SEARCH_LENGTH = 100
+INVOICE_STATUSES = {StatusEnum.PAID.value, StatusEnum.PARTIAL.value, StatusEnum.UNPAID.value}
+
+
+def clean_search(search: str | None) -> str | None:
+    """Trim and length-limit a free-text filter. Values are always bound as
+    query parameters, so this only keeps the input sane. An empty value
+    stays empty (not None) so response shapes are unchanged."""
+    if search is None:
+        return None
+    return " ".join(search.split())[:MAX_SEARCH_LENGTH]
+
+
+def clean_status(status: str | None, allowed=INVOICE_STATUSES) -> str | None:
+    """Upper-cases a status filter; raises ValueError for unknown values."""
+    if status is None or not status.strip():
+        return None
+    value = status.strip().upper()
+    if value not in allowed:
+        raise ValueError(value)
+    return value

@@ -64,8 +64,24 @@ export const adminApi = {
     return response.data;
   },
 
-  async overrideCollectionStatus(invoiceId, status) {
-    const response = await axiosClient.put(`/admin/invoices/${invoiceId}/collection-status`, { status });
+  /**
+   * Mark an invoice PAID or UNPAID. Both write a payments-ledger entry
+   * (settlement or reversal) so collection totals stay correct.
+   * @param {object} extra - { mode, transaction_reference } for PAID, { reason } for UNPAID
+   */
+  async overrideCollectionStatus(invoiceId, status, extra = {}) {
+    const response = await axiosClient.put(`/admin/invoices/${invoiceId}/collection-status`, { status, ...extra });
+    return response.data;
+  },
+
+  /**
+   * Admin-only. Reverse one collection with a mandatory reason. Adds a linked
+   * reversal entry; the original payment is never deleted.
+   * @param {number} paymentId
+   * @param {{ reason: string, amount?: number }} payload
+   */
+  async reversePayment(paymentId, payload) {
+    const response = await axiosClient.post(`/admin/payments/${paymentId}/reverse`, payload);
     return response.data;
   },
 

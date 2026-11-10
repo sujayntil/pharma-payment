@@ -7,8 +7,9 @@ import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import RowCard, { CardList } from '../../components/common/RowCard';
-import { listPaperProps } from '../../components/common/listPaper';
+import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useBackClose } from '../../hooks/useBackClose';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
@@ -32,6 +33,8 @@ export default function AdminCustomers({ openCustomer = null }) {
   const [filters, setFilters] = useState({ mrId: '', type: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState(openCustomer); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
+  // Back closes the open ledger instead of leaving the screen.
+  useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null);
   const [editing, setEditing] = useState(null); const [customerForm, setCustomerForm] = useState(emptyCustomer); const [deleting, setDeleting] = useState(null);
   const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -119,7 +122,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
     </FilterBar>
-    <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match these filters.</Text> : isMobile ? <CardList>{customers.map((customer) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match these filters.</Text> : isMobile ? <CardList>{customers.map((customer) => (
       <RowCard
         key={customer.id}
         onClick={() => openLedger(customer)}
@@ -139,14 +142,14 @@ export default function AdminCustomers({ openCustomer = null }) {
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} />
         </FilterBar>
-        {ledgerLoading || !ledger ? <Group justify="center" p="xl"><Loader /></Group> : !ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
+        {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
           <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} />
         ))}</CardList> : <ScrollArea><Table miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th>{/* Disabled: MR is shown once in the header. Re-enable if needed. <Table.Th>MR</Table.Th> */}<Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}>
           <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}{invoice.mr && invoice.mr !== ledger.customer?.mr_name && <Text size="xs" c="dimmed" fw={400}>MR {invoice.mr}</Text>}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td>{/* <Table.Td>{invoice.mr || '—'}</Table.Td> */}<Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
           <Table.Td><StatusCell row={invoice} /></Table.Td>
           <Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td>
           <Table.Td>{ledgerActions(invoice)}</Table.Td>
-        </Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}
+        </Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
       </Stack>
     </Drawer>
     <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={reloadLedger} />

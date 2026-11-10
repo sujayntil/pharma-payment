@@ -3,10 +3,11 @@ import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Paper, S
 import { IconArrowBackUp, IconCash, IconDots, IconFileInvoice, IconFlag } from '@tabler/icons-react';
 import { invoicesApi } from '../../api/invoicesApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useBackClose } from '../../hooks/useBackClose';
 import { useAuth } from '../../hooks/useAppStore';
 import { dateTime, errorText, money, shortDate } from '../../utils/formatters';
 import { ReversedBadge, StatusBadge } from './CollectionBadges';
-import { SIDE_PANEL_WIDTH } from '../../hooks/useSidePanelSpace';
+import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { useActorLabel } from './collectionUtils';
 import ReversePaymentModal from './ReversePaymentModal';
 
@@ -43,16 +44,18 @@ function eventTitle(event) {
  */
 export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord, refreshKey = 0, actions }) {
   const isMobile = useIsMobile();
+  useBackClose(!!invoiceId, onClose);
+  const panelWidth = useSidePanelWidth();
   return (
     <Drawer
       opened={!!invoiceId}
       onClose={onClose}
       position={isMobile ? 'bottom' : 'right'}
-      size={isMobile ? '88dvh' : `min(${SIDE_PANEL_WIDTH}px, 100%)`}
+      size={isMobile ? '88dvh' : `min(${panelWidth}px, 100%)`}
       radius={isMobile ? 'lg' : 0}
       title={<Text fw={700}>Invoice details</Text>}
       closeButtonProps={{ 'aria-label': 'Close invoice details' }}
-      {...(!isMobile && { withOverlay: false, trapFocus: false, lockScroll: false, closeOnClickOutside: false, shadow: 'xl' })}
+      {...(!isMobile && { withOverlay: false, trapFocus: false, lockScroll: false, closeOnClickOutside: false, shadow: 'xl', styles: { inner: { top: 64, height: 'calc(100% - 64px)' } } })}
     >
       {invoiceId && <HistoryBody key={invoiceId} invoiceId={invoiceId} onChanged={onChanged} onRecord={onRecord} refreshKey={refreshKey} actions={actions} />}
     </Drawer>

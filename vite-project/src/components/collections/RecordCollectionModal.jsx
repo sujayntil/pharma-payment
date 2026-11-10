@@ -5,6 +5,7 @@ import { IconInfoCircle } from '@tabler/icons-react';
 import { paymentsApi } from '../../api/paymentsApi';
 import { mrApi } from '../../api/mrApi';
 import { useAuth } from '../../hooks/useAppStore';
+import { useBackClose } from '../../hooks/useBackClose';
 import { errorText, money, shortDate } from '../../utils/formatters';
 import { PAYMENT_MODES, toCollectionTarget } from './collectionUtils';
 
@@ -20,6 +21,7 @@ import { PAYMENT_MODES, toCollectionTarget } from './collectionUtils';
 export default function RecordCollectionModal({ invoice, customer, onClose, onSaved }) {
   const target = toCollectionTarget(invoice);
   const opened = !!target || !!customer;
+  useBackClose(opened, onClose);
   const title = target ? `Record collection · ${target.invoiceNumber || ''}` : `Record collection · ${customer?.name || ''}`;
   return (
     // zIndex 250: above the invoice panel and ledger drawers (200) so it never

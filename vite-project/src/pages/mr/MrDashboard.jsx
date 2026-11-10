@@ -15,7 +15,9 @@ import { mrApi } from '../../api/mrApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { money, shortDate } from '../../utils/formatters';
 
-const Metric = ({ label, value, color }) => <Paper withBorder p="md" h="100%"><Text size="sm" c="dimmed">{label}</Text><Title order={2} c={color} fz={{ base: 22, sm: 28 }} style={{ whiteSpace: 'nowrap' }}>{value}</Title></Paper>;
+// Secondary counts: quiet tiles (no border, soft background, smaller number)
+// so the Outstanding figure and its action stand out.
+const Metric = ({ label, value, color }) => <Paper p="sm" h="100%" bg="gray.1" radius="md"><Text size="xs" c="dimmed">{label}</Text><Text fw={700} c={color} fz={{ base: 20, sm: 22 }} style={{ whiteSpace: 'nowrap' }}>{value}</Text></Paper>;
 
 /**
  * MR Home. Same figures and data as before; recent invoices and overdue
@@ -35,13 +37,23 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
   return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>Hello, {dashboard?.name || 'there'}</Title><Text c="dimmed">Your invoices and collection position.</Text></div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
     {/* Phones: the money figure gets its own full row (so it never wraps) and
         comes first; the three counts share one row. Desktop: four in a row. */}
-    <Grid gutter="sm">
-      <Grid.Col span={{ base: 4, lg: 3 }} order={{ base: 2, lg: 1 }}><Metric label="Invoices" value={dashboard?.total_invoices || 0} /></Grid.Col>
-      <Grid.Col span={{ base: 4, lg: 3 }} order={{ base: 3, lg: 2 }}><Metric label="Paid" value={dashboard?.paid || 0} color="green" /></Grid.Col>
-      <Grid.Col span={{ base: 4, lg: 3 }} order={{ base: 4, lg: 3 }}><Metric label="Need collection" value={(dashboard?.partial || 0) + (dashboard?.unpaid || 0)} color="orange" /></Grid.Col>
-      <Grid.Col span={{ base: 12, lg: 3 }} order={{ base: 1, lg: 4 }}><Metric label="Outstanding" value={money(totalOutstanding)} color="red" /></Grid.Col>
+    <Grid gutter="sm" align="stretch">
+      {/* The main figure and the main action share one prominent block. */}
+      <Grid.Col span={{ base: 12, lg: 6 }}>
+        <Paper p="md" radius="md" bg="green.8" c="white" h="100%">
+          <Group justify="space-between" align="center" gap="sm" wrap="wrap">
+            <div>
+              <Text size="sm" c="green.1">Outstanding to collect</Text>
+              <Text fw={800} fz={{ base: 28, sm: 32 }} lh={1.15} style={{ whiteSpace: 'nowrap' }}>{money(totalOutstanding)}</Text>
+            </div>
+            {onOpenPending && <Button variant="white" color="green.9" size="md" fullWidth={isMobile} rightSection={<IconArrowRight size={16} />} onClick={onOpenPending}>See pending invoices</Button>}
+          </Group>
+        </Paper>
+      </Grid.Col>
+      <Grid.Col span={{ base: 4, lg: 2 }}><Metric label="Invoices" value={dashboard?.total_invoices || 0} /></Grid.Col>
+      <Grid.Col span={{ base: 4, lg: 2 }}><Metric label="Paid" value={dashboard?.paid || 0} color="green.8" /></Grid.Col>
+      <Grid.Col span={{ base: 4, lg: 2 }}><Metric label="Need collection" value={(dashboard?.partial || 0) + (dashboard?.unpaid || 0)} color="orange.8" /></Grid.Col>
     </Grid>
-    {onOpenPending && <Button fullWidth={isMobile} size="md" rightSection={<IconArrowRight size={16} />} style={isMobile ? undefined : { alignSelf: 'flex-start' }} onClick={onOpenPending}>See pending invoices</Button>}
     <OverdueCustomersPanel load={mrApi.getOverdueAlerts} description="Your customers with a balance unpaid for 40 days or more, counted from invoice date." emptyText="None of your customers have invoices outstanding for 40 days or more." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
     <Paper withBorder p="md"><Title order={3} mb="sm">Recent invoices</Title>{loading && !dashboard ? <Group justify="center" p="lg"><Loader /></Group> : !recent.length ? <Text c="dimmed" py="md">No invoices assigned to you yet.</Text> : isMobile ? <CardList>{recent.map((invoice, index) => (
       <InvoiceCard key={invoice.invoice_id ?? `${invoice.invoice_number}-${index}`} invoice={invoice} onOpen={invoice.invoice_id ? () => setOpenId(invoice.invoice_id) : undefined} />

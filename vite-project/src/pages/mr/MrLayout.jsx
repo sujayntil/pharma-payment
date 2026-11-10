@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Center, Loader } from '@mantine/core';
 import { IconHome, /* IconChartBar, IconFileUpload, IconCash, */ IconFileInvoice, IconUsers } from '@tabler/icons-react';
 import AppFrame from '../../components/common/AppFrame';
@@ -26,10 +27,16 @@ const MR_TABS = [
 ];
 
 export default function MrLayout() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // The current tab lives in the address (/mr, /mr/invoices, /mr/customers) so
+  // the phone's Back button moves between tabs and a reload keeps the tab.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const segment = location.pathname.split('/')[2];
+  const activeTab = MR_TABS.some((tab) => tab.id === segment) ? segment : 'dashboard';
+  const tabPath = (tab) => (tab === 'dashboard' ? '/mr' : `/mr/${tab}`);
   // Set when Home opens a customer directly; the key remounts Customers on it.
-  const [openCustomer, setOpenCustomer] = useState(null);
-  const choose = (tab) => { setOpenCustomer(null); setActiveTab(tab); };
+  const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
+  const choose = (tab) => { if (tab !== activeTab || openCustomer) navigate(tabPath(tab)); };
 
   return (
     <AppFrame items={MR_TABS} active={activeTab} onChange={choose} bottomNav>
@@ -38,7 +45,7 @@ export default function MrLayout() {
         {activeTab === 'dashboard' && (
           <MrDashboard
             onOpenPending={() => choose('invoices')}
-            onOpenCustomer={(customer) => { setOpenCustomer(customer); setActiveTab('customers'); }}
+            onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })}
             /* Disabled: onNavigateToUpload={() => setActiveTab('upload')} */
           />
         )}

@@ -258,6 +258,44 @@ class CollectionHistoryTests(unittest.TestCase):
         # Old-style call is unchanged: a plain list.
         self.assertIsInstance(self.client.get("/invoices").json(), list)
 
+    # ---- Excel export (Admin only, same filters as the lists) ----
+
+    def _sheet(self, response):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn("spreadsheetml", response.headers["content-type"])
+        return [list(row) for row in load_workbook(BytesIO(response.content)).active.iter_rows(values_only=True)]
+
+    def test_invoice_export_matches_filters_and_is_admin_only(self):
+        self.pay(self.paid_invoice, 500, self.mr)
+        self.current_user = self.admin
+        rows = self._sheet(self.client.get("/invoices/export"))
+        self.assertEqual(rows[0][:4], ["Invoice", "Invoice date", "Customer", "MR"])
+        self.assertEqual({r[0] for r in rows[1:]}, {"A100", "A101", "U100"})
+        pending = self._sheet(self.client.get("/invoices/export", params={"pending_only": True}))
+        self.assertEqual({r[0] for r in pending[1:]}, {"A100", "U100"})
+        paid = self._sheet(self.client.get("/invoices/export", params={"status": "PAID"}))
+        self.assertEqual([(r[0], r[5], r[7], r[9]) for r in paid[1:]], [("A101", 500, "Paid", "Ravi")])
+        self.assertEqual(self.client.get("/invoices/export", params={"status": "nope"}).status_code, 422)
+        self.current_user = self.mr
+        self.assertEqual(self.client.get("/invoices/export").status_code, 403)
+
+    def test_collections_export_matches_filters_and_is_admin_only(self):
+        self.pay(self.invoice, 400, self.mr)
+        self.pay(self.invoice, 100, self.admin)
+        self.reverse(self.latest_payment_id(self.invoice), reason="=HYPERLINK(1)")
+        rows = self._sheet(self.client.get("/admin/collections/export"))
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(sum(r[5] for r in rows[1:]), 400)
+        reversal = [r for r in rows[1:] if r[4] == "Reversal"][0]
+        self.assertEqual((reversal[5], reversal[9]), (-100, "Admin - Rahul Sharma"))
+        self.assertTrue(reversal[8].startswith("'="))  # formula-like text is neutralised
+        by_mr = self._sheet(self.client.get("/admin/collections/export", params={"recorded_by": "MR"}))
+        self.assertEqual([r[5] for r in by_mr[1:]], [400])
+        self.current_user = self.mr
+        self.assertEqual(self.client.get("/admin/collections/export").status_code, 403)
+
     def test_admin_invoice_filters_are_validated(self):
         self.assertEqual(self.client.get("/invoices", params={"status": "nope"}).status_code, 422)
         self.assertEqual(self.client.get("/invoices", params={"date_from": "2026-10-02", "date_to": "2026-10-01"}).status_code, 422)

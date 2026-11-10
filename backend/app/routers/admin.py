@@ -19,6 +19,7 @@ from ..collection_info import (
     reversible_amount,
 )
 from ..database import get_db
+from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import require_admin
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password
@@ -238,6 +239,99 @@ def collections(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
+    query, search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search)
+
+    total_count = query.with_entities(func.count(models.Payment.id)).scalar()
+    total_amount = query.with_entities(func.coalesce(func.sum(models.Payment.amount), 0)).scalar()
+    ordered = query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
+    if search and search.strip():
+        rows = ordered.all()
+        page_size, page_offset = None, 0
+    else:
+        page_size = min(max(limit, 1), 100)
+        page_offset = max(offset, 0)
+        rows = ordered.offset(page_offset).limit(page_size).all()
+    reversed_totals = linked_reversal_totals(db, [row[0].id for row in rows])
+    return {
+        "total_count": total_count,
+        "total_amount": total_amount,
+        "limit": page_size,
+        "offset": page_offset,
+        "rows": [
+            {
+                **payment_row(payment, collector),
+                **reversal_fields(payment, reversed_totals),
+                "invoice_number": invoice.invoice_number,
+                "customer_name": customer.name if customer else None,
+                "mr_name": assigned_mr.name if assigned_mr else None,
+                "invoice_amount": invoice.total_amount,
+                "pending_amount": invoice.pending_amount,
+                "paid_amount": invoice.paid_amount,
+                "invoice_status": invoice.status,
+            }
+            for payment, invoice, customer, collector, assigned_mr in rows
+        ],
+    }
+
+
+@router.get("/collections/export")
+def export_collections(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    mr_id: Optional[int] = None,
+    mode: Optional[str] = None,
+    recorded_by: Optional[str] = None,
+    entry_type: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Admin-only Excel download of the collections ledger with the same
+    filters and search as GET /admin/collections (all matching rows)."""
+    query, _search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search)
+    total = query.with_entities(func.count(models.Payment.id)).scalar() or 0
+    if total > EXPORT_MAX_ROWS:
+        raise HTTPException(
+            413, f"{total} entries match. Narrow the filters to {EXPORT_MAX_ROWS} or fewer to export."
+        )
+    rows = query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc()).all()
+
+    def sheet_rows():
+        for payment, invoice, customer, collector, assigned_mr in rows:
+            is_reversal = (payment.amount or 0) < 0
+            recorder = collector.name if collector else None
+            if recorder and collector.role == models.RoleEnum.ADMIN.value:
+                recorder = f"Admin - {recorder}"
+            yield [
+                to_ist(payment.payment_date),
+                invoice.invoice_number,
+                customer.name if customer else None,
+                assigned_mr.name if assigned_mr else "Unassigned",
+                "Reversal" if is_reversal else "Collection",
+                float(payment.amount or 0),
+                payment.mode,
+                None if is_reversal else payment.transaction_reference,
+                payment.reason,
+                recorder,
+                _STATUS_WORDS.get(invoice.status, invoice.status),
+            ]
+
+    stamp = datetime.now(_IST).strftime("%Y-%m-%d")
+    return workbook_response(
+        f"collections-{stamp}.xlsx", "Collections",
+        ["Date (IST)", "Invoice", "Customer", "Assigned MR", "Entry", "Amount", "Mode", "Reference",
+         "Reversal reason", "Recorded by", "Invoice status"],
+        sheet_rows(), widths=[20, 16, 32, 20, 12, 14, 16, 26, 30, 24, 14],
+    )
+
+
+_STATUS_WORDS = {"PAID": "Paid", "PARTIAL": "Part paid", "UNPAID": "Unpaid"}
+
+
+def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search):
+    """Validates the collections filters and returns (unordered query, cleaned
+    search). One builder for the list and the Excel export, so the totals,
+    the rows on screen and the exported rows always match."""
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "date_from must be on or before date_to")
     search = clean_search(search)
@@ -281,38 +375,7 @@ def collections(
             collector.name.ilike(term),
             models.Payment.transaction_reference.ilike(term),
         ))
-
-    total_count = query.with_entities(func.count(models.Payment.id)).scalar()
-    total_amount = query.with_entities(func.coalesce(func.sum(models.Payment.amount), 0)).scalar()
-    ordered = query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
-    if search and search.strip():
-        rows = ordered.all()
-        page_size, page_offset = None, 0
-    else:
-        page_size = min(max(limit, 1), 100)
-        page_offset = max(offset, 0)
-        rows = ordered.offset(page_offset).limit(page_size).all()
-    reversed_totals = linked_reversal_totals(db, [row[0].id for row in rows])
-    return {
-        "total_count": total_count,
-        "total_amount": total_amount,
-        "limit": page_size,
-        "offset": page_offset,
-        "rows": [
-            {
-                **payment_row(payment, collector),
-                **reversal_fields(payment, reversed_totals),
-                "invoice_number": invoice.invoice_number,
-                "customer_name": customer.name if customer else None,
-                "mr_name": assigned_mr.name if assigned_mr else None,
-                "invoice_amount": invoice.total_amount,
-                "pending_amount": invoice.pending_amount,
-                "paid_amount": invoice.paid_amount,
-                "invoice_status": invoice.status,
-            }
-            for payment, invoice, customer, collector, assigned_mr in rows
-        ],
-    }
+    return query, search
 
 
 @router.put("/invoices/{invoice_id}/collection-status")

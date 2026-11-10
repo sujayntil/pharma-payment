@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title } from '@mantine/core';
 import { IconCategory } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
@@ -16,12 +16,20 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { dateTime, money } from '../../utils/formatters';
 
-const Stat = ({ label, value, accent = false }) => (
+// loading: grey placeholder bar until the figure arrives (never a misleading "₹0").
+// quiet: secondary counts (no border, soft background, smaller number) so the
+// money figures above them carry the weight.
+const Stat = ({ label, value, accent = false, loading = false, quiet = false }) => (quiet ? (
+  <Paper p="sm" radius="md" bg="gray.1">
+    <Text size="xs" c="dimmed">{label}</Text>
+    {loading ? <Skeleton height={20} width={60} mt={6} mb={2} radius="sm" /> : <Text fw={700} fz={20}>{value}</Text>}
+  </Paper>
+) : (
   <Paper withBorder p="md" bg={accent ? 'green.0' : undefined}>
     <Text size="sm" c="dimmed">{label}</Text>
-    <Title order={2} mt={4}>{value}</Title>
+    {loading ? <Skeleton height={28} width={130} mt={8} mb={4} radius="sm" /> : <Title order={2} mt={4}>{value}</Title>}
   </Paper>
-);
+));
 
 const CUSTOMER_TYPES = [
   { value: 'distributor', label: 'Distributor' },
@@ -33,7 +41,10 @@ const CUSTOMER_TYPES = [
 /** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
 export default function AdminDashboard({ onOpenCustomer }) {
   const dispatch = useAppDispatch();
-  const { dashboard, alerts, alertCount, alertsLoading, dashFilters } = useAppSelector((state) => state.admin);
+  const { dashboard, alerts, alertCount, alertsLoading, dashFilters, error: statsError } = useAppSelector((state) => state.admin);
+  // Placeholders until the first real figures arrive (the store starts with
+  // zeros that have no invoice count); later reloads keep the numbers on screen.
+  const statsPending = dashboard?.total_invoices === undefined && !statsError;
   const isMobile = useIsMobile();
   const [alertPage, setAlertPage] = useState(1);
   const [appliedCustomerType, setAppliedCustomerType] = useState('');
@@ -79,18 +90,20 @@ export default function AdminDashboard({ onOpenCustomer }) {
 
       {error && <Alert color="red">{error}</Alert>}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-        <Stat label="Tally sales" value={money(dashboard?.total_sales)} accent />
-        <Stat label="Collected in selected dates" value={money(dashboard?.collected)} />
-        <Stat label="Outstanding on selected invoices" value={money(dashboard?.outstanding)} />
+        <Stat loading={statsPending} label="Tally sales" value={money(dashboard?.total_sales)} accent />
+        <Stat loading={statsPending} label="Collected in selected dates" value={money(dashboard?.collected)} />
+        <Stat loading={statsPending} label="Outstanding on selected invoices" value={money(dashboard?.outstanding)} />
       </SimpleGrid>
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        <Stat label="Paid invoices" value={dashboard?.paid ?? 0} />
-        <Stat label="Partially paid" value={dashboard?.partial ?? 0} />
-        <Stat label="Unpaid invoices" value={dashboard?.unpaid ?? 0} />
+      <SimpleGrid cols={3} spacing="sm">
+        <Stat quiet loading={statsPending} label="Paid invoices" value={dashboard?.paid ?? 0} />
+        <Stat quiet loading={statsPending} label="Partially paid" value={dashboard?.partial ?? 0} />
+        <Stat quiet loading={statsPending} label="Unpaid invoices" value={dashboard?.unpaid ?? 0} />
       </SimpleGrid>
 
       <Paper withBorder p="md"><PaymentAlerts /></Paper>
 
+      {/* Wide screens: the two follow-up lists sit side by side to cut scrolling. */}
+      <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md" style={{ alignItems: 'start' }}>
       <Paper withBorder p="md">
         <Group justify="space-between" mb="sm">
           <div><Title order={3}>Outstanding above ₹50,000</Title><Text size="sm" c="dimmed">Invoices that may need follow up.</Text></div>
@@ -102,7 +115,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
               <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>
               <Text fw={700} c="red" style={{ whiteSpace: 'nowrap' }}>{money(item.pending_amount)}</Text>
             </Group>
-          ))}</Stack> :           <Table.ScrollContainer minWidth={620}>
+          ))}</Stack> :           <Table.ScrollContainer minWidth={480}>
             <Table striped>
               <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>MR</Table.Th><Table.Th>Outstanding</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{alerts.map((item, index) => (
@@ -116,7 +129,8 @@ export default function AdminDashboard({ onOpenCustomer }) {
         <ListPagination total={alertCount} page={alertPage} onChange={setAlertPage} label="invoices" />
       </Paper>
 
-      <OverdueCustomersPanel load={adminApi.getOverdueAlerts} showMr description="From invoice date; reminders repeat every two days while the balance remains unpaid." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
+      <OverdueCustomersPanel load={adminApi.getOverdueAlerts} showMr description="From invoice date; reminders repeat every two days while the balance remains unpaid." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} tableMinWidth={540} />
+      </SimpleGrid>
 
       <Paper withBorder p="md">
         <Title order={3} mb="sm">Recent collections</Title>

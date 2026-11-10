@@ -11,7 +11,7 @@ import { errorText, money, shortDate } from '../../utils/formatters';
  * load: () => Promise<rows> from adminApi.getOverdueAlerts or mrApi.getOverdueAlerts
  * onSelect: optional (row) => void; makes each customer open on tap/click.
  */
-export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No customers have invoices outstanding for 40 days or more.', onSelect }) {
+export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No customers have invoices outstanding for 40 days or more.', onSelect, tableMinWidth }) {
   const isMobile = useIsMobile();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +56,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
           ))}
         </Stack>
       ) : (
-        <Table.ScrollContainer minWidth={showMr ? 760 : 640}>
+        <Table.ScrollContainer minWidth={tableMinWidth ?? (showMr ? 760 : 640)}>
           <Table striped highlightOnHover verticalSpacing="sm">
             <Table.Thead>
               <Table.Tr>

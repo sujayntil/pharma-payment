@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Group, Loader, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
+import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDownload, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { invoicesApi } from '../../api/invoicesApi';
 import { adminApi } from '../../api/adminApi';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import { CardList } from '../../components/common/RowCard';
-import { listPaperProps } from '../../components/common/listPaper';
+import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
@@ -21,7 +21,7 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
 import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
-import { errorText, money, shortDate } from '../../utils/formatters';
+import { downloadErrorText, errorText, money, saveDownload, shortDate } from '../../utils/formatters';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -92,6 +92,23 @@ export default function AdminInvoices() {
     return () => { active = false; };
   }, [refresh]);
 
+  // Export: every invoice matching the current tab, filters, search and sort (not just this page).
+  const [exporting, setExporting] = useState(false);
+  const exportExcel = async () => {
+    setExporting(true); setError('');
+    try {
+      saveDownload(await invoicesApi.exportInvoices({
+        ...tabParams(tab, filters.only),
+        sort_order: filters.sort,
+        ...(search.trim() && { search: search.trim() }),
+        ...(filters.mrId && { mr_id: filters.mrId }),
+        ...(filters.range.from && { date_from: filters.range.from }),
+        ...(filters.range.to && { date_to: filters.range.to }),
+      }), 'invoices.xlsx');
+    } catch (err) { setError(await downloadErrorText(err)); }
+    finally { setExporting(false); }
+  };
+
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
   const changeTab = (next) => { setTab(next); if (!ONLY_OPTIONS[next].some((o) => o.value === filters.only)) update({ only: '' }); setPage(1); };
   const onSearch = (value) => { setSearch(value); setPage(1); };
@@ -151,10 +168,10 @@ export default function AdminInvoices() {
       <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={filters.sort} clearable={false} allowDeselect={false} onChange={(sort) => update({ sort: sort || 'newest' })} />
     </FilterBar>
-    <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text></Group>
-    <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : isMobile ? <CardList>{invoices.map((invoice) => (
+    <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text><Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button></Group></Group>
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !invoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : isMobile ? <CardList>{invoices.map((invoice) => (
       <InvoiceCard key={invoice.id} invoice={invoice} onOpen={() => setHistoryId(invoice.id)} />
-    ))}</CardList> : <Table.ScrollContainer minWidth={1180}><Table striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined}>
+    ))}</CardList> : <Table.ScrollContainer minWidth={1180}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
       <Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td><Table.Td>{invoice.mr_name || <Text span c="dimmed" size="sm">Unassigned</Text>}</Table.Td>
       <Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td><Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
       <Table.Td><StatusCell row={invoice} /></Table.Td>

@@ -5,7 +5,7 @@ import { IconArrowsSort, IconCash, IconCircleCheck, IconHistory } from '@tabler/
 import { mrApi } from '../../api/mrApi';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import { CardList } from '../../components/common/RowCard';
-import { listPaperProps } from '../../components/common/listPaper';
+import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
@@ -133,13 +133,13 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
       <Text fw={700}>{data.total_count} {data.total_count === 1 ? 'invoice' : 'invoices'}</Text>
       <Text size="sm" c="dimmed">{money(data.filtered_outstanding)} pending</Text>
     </Group>
-    <Paper {...listPaperProps(isMobile)}>
-      {loading ? <Group justify="center" p="xl"><Loader /></Group>
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && items.length > 0)}>
+      {loading && !items.length ? <Group justify="center" p="xl"><Loader /></Group>
         : !items.length ? <Text c="dimmed" ta="center" py="xl">{filtered ? 'No invoices match these filters.' : tab === 'pending' ? 'Nothing pending. All your invoices are settled.' : 'No invoices here yet.'}</Text>
           : isMobile ? <CardList>{items.map((item) => <InvoiceCard key={item.invoice_id} invoice={item} onOpen={() => setOpenId(item.invoice_id)} />)}</CardList>
-            : <Table.ScrollContainer minWidth={1000}><Table striped highlightOnHover verticalSpacing="sm">
+            : <Table.ScrollContainer minWidth={1000}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm">
               <Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead>
-              <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }} bg={openId === item.invoice_id ? 'green.0' : undefined}>
+              <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }} bg={openId === item.invoice_id ? 'green.0' : undefined} data-selected={openId === item.invoice_id || undefined}>
                 <Table.Td fw={600}>{item.invoice_number}</Table.Td>
                 <Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}</Table.Td>
                 <Table.Td>{item.customer || '—'}</Table.Td>

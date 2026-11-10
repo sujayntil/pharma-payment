@@ -40,6 +40,14 @@ export const adminApi = {
     return response.data;
   },
 
+  /**
+   * Excel file of every ledger entry matching the same filters as the list.
+   * Returns the raw response (Blob) for saveDownload().
+   */
+  async exportCollections(params = {}) {
+    return axiosClient.get('/admin/collections/export', { params, responseType: 'blob' });
+  },
+
   async getRecentPayments(limit = 20) {
     const response = await axiosClient.get('/admin/recent-payments', { params: { limit } });
     return response.data;

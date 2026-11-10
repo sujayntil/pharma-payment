@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowBackUp, IconCash, IconDots, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
+import { IconArrowBackUp, IconCash, IconDots, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import RowCard, { CardList } from '../../components/common/RowCard';
-import { listPaperProps } from '../../components/common/listPaper';
+import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
@@ -19,7 +19,7 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import ReversePaymentModal from '../../components/collections/ReversePaymentModal';
 import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusBadge } from '../../components/collections/CollectionBadges';
-import { dateTime, errorText, money } from '../../utils/formatters';
+import { dateTime, downloadErrorText, errorText, money, saveDownload } from '../../utils/formatters';
 
 const BLANK = { range: EMPTY_RANGE, mrId: '', mode: '', recordedBy: '', entryType: '' };
 const RECORDED_BY = [{ value: 'MR', label: 'By MR' }, { value: 'ADMIN', label: 'By Admin' }];
@@ -61,6 +61,24 @@ export default function AdminCollections() {
     }, 0);
     return () => { active = false; clearTimeout(timer); };
   }, [debouncedSearch, filters, page, refresh]);
+
+  // Export: every ledger entry matching the current filters and search (not just this page).
+  const [exporting, setExporting] = useState(false);
+  const exportExcel = async () => {
+    setExporting(true); setError('');
+    try {
+      saveDownload(await adminApi.exportCollections({
+        ...(search.trim() && { search: search.trim() }),
+        ...(filters.range.from && { date_from: filters.range.from }),
+        ...(filters.range.to && { date_to: filters.range.to }),
+        ...(filters.mrId && { mr_id: filters.mrId }),
+        ...(filters.mode && { mode: filters.mode }),
+        ...(filters.recordedBy && { recorded_by: filters.recordedBy }),
+        ...(filters.entryType && { entry_type: filters.entryType }),
+      }), 'collections.xlsx');
+    } catch (err) { setError(await downloadErrorText(err)); }
+    finally { setExporting(false); }
+  };
 
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
   const onSearch = (value) => { setSearch(value); setPage(1); };
@@ -112,7 +130,8 @@ export default function AdminCollections() {
     </SimpleGrid>
 
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}
-    <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text ta="center" c="dimmed" py="xl">No collections match these filters.</Text> : isMobile ? <CardList>{rows.map((row) => (
+    <Group justify="space-between" gap="xs"><Text fw={700}>{count} {count === 1 ? 'entry' : 'entries'}</Text><Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!count} onClick={exportExcel}>Export</Button></Group>
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && rows.length > 0)}>{loading && !rows.length ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text ta="center" c="dimmed" py="xl">No collections match these filters.</Text> : isMobile ? <CardList>{rows.map((row) => (
       <RowCard
         key={row.payment_id}
         onClick={() => setHistoryId(row.invoice_id)}
@@ -129,7 +148,7 @@ export default function AdminCollections() {
         ]}
         actions={rowActions(row)}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={1200}><Table striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Date</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Assigned MR</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Invoice status</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.payment_id} onClick={() => setHistoryId(row.invoice_id)} style={{ cursor: 'pointer' }} bg={historyId === row.invoice_id ? 'green.0' : undefined}>
+    ))}</CardList> : <Table.ScrollContainer minWidth={1200}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Date</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Assigned MR</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Invoice status</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.payment_id} onClick={() => setHistoryId(row.invoice_id)} style={{ cursor: 'pointer' }} bg={historyId === row.invoice_id ? 'green.0' : undefined} data-selected={historyId === row.invoice_id || undefined}>
       <Table.Td style={{ whiteSpace: 'nowrap' }}>{dateTime(row.payment_date)}</Table.Td>
       <Table.Td fw={600}>{row.invoice_number}</Table.Td>
       <Table.Td>{row.customer_name || '—'}</Table.Td>

@@ -106,3 +106,29 @@ export function isTokenExpired(token) {
   return decoded.exp < nowInSeconds;
 }
 
+
+/**
+ * Saves an Excel (or any file) response from the API. Uses the file name the
+ * server sent in Content-Disposition, falling back to `fallbackName`.
+ */
+export function saveDownload(response, fallbackName) {
+  const header = response.headers?.['content-disposition'] || '';
+  const match = /filename="?([^";]+)"?/i.exec(header);
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = match?.[1] || fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Error text from a failed file download (the error body arrives as a Blob). */
+export async function downloadErrorText(err, fallback = 'Could not export.') {
+  const data = err?.response?.data;
+  if (data instanceof Blob) {
+    try { return JSON.parse(await data.text()).detail || fallback; } catch { return fallback; }
+  }
+  return errorText(err, fallback);
+}

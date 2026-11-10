@@ -29,3 +29,40 @@ textarea {
   }
 }
 
+
+/* Tables wider than the screen: keep the last (action) column pinned to the
+   right edge so "Record" is always reachable without sideways scrolling. */
+.pin-last th:last-child,
+.pin-last td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--mantine-color-white);
+  box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.12);
+}
+
+.pin-last tbody tr:nth-of-type(odd) td:last-child {
+  background: var(--mantine-color-gray-0);
+}
+
+.pin-last tbody tr:hover td:last-child {
+  background: var(--mantine-color-gray-1);
+}
+
+.pin-last tbody tr[data-selected] td:last-child {
+  background: var(--mantine-color-green-0);
+}
+
+/* Phones: page and section headings are smaller so they stay on one line and
+   leave room for real content. Desktop sizes are unchanged. */
+@media (max-width: 47.99em) {
+  .mantine-Title-root[data-order="1"] {
+    font-size: 1.5rem;
+    line-height: 1.25;
+  }
+
+  .mantine-Title-root[data-order="3"] {
+    font-size: 1.0625rem;
+    line-height: 1.3;
+  }
+}

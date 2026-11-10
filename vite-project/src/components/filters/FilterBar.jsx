@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, CloseButton, Drawer, Group, Paper, Pill, Select, Stack, Text, TextInput } from '@mantine/core';
 import { IconAdjustmentsHorizontal, IconFilterOff, IconSearch } from '@tabler/icons-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useBackClose } from '../../hooks/useBackClose';
 import classes from './filters.module.css';
 import { FilterSheetContext, SHEET_DROPDOWN_PROPS, useInFilterSheet } from './filterSheetContext';
 
@@ -61,6 +62,7 @@ export default function FilterBar({ search, onSearch, searchPlaceholder, childre
   const hasFilters = Boolean(children || more);
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
+  useBackClose(sheetOpen && isMobile, () => setSheetOpen(false));
 
   const chipRow = (active.length > 0 || summary) && (
     <Group gap={6} justify="space-between" className={classes.chips} wrap="wrap">

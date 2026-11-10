@@ -60,6 +60,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the browser read the file name of Excel exports.
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(auth.router)

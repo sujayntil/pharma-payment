@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Chip, Group, Modal, Paper, Stack, Text, Textarea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { adminApi } from '../../api/adminApi';
+import { useBackClose } from '../../hooks/useBackClose';
 import { dateTime, errorText, money } from '../../utils/formatters';
 
 const REASONS = ['Cheque bounced', 'Wrong amount', 'Wrong invoice', 'Duplicate entry', 'Other'];
@@ -16,6 +17,7 @@ const REASONS = ['Cheque bounced', 'Wrong amount', 'Wrong invoice', 'Duplicate e
  *            invoice_number, customer_name }
  */
 export default function ReversePaymentModal({ payment, onClose, onSaved }) {
+  useBackClose(!!payment, onClose);
   return (
     <Modal opened={!!payment} onClose={onClose} title={`Reverse payment · ${payment?.invoice_number || ''}`} centered zIndex={250}>
       {payment && <ReverseForm key={payment.payment_id} payment={payment} onClose={onClose} onSaved={onSaved} />}

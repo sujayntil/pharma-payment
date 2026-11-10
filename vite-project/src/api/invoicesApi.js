@@ -11,6 +11,14 @@ export const invoicesApi = {
   },
 
   /**
+   * Admin: Excel file of every invoice matching the same filters as the list.
+   * Returns the raw response (Blob) for saveDownload().
+   */
+  async exportInvoices(params = {}) {
+    return axiosClient.get('/invoices/export', { params, responseType: 'blob' });
+  },
+
+  /**
    * Get current MR's invoices.
    * @param {object} params - { date_from, date_to }
    */

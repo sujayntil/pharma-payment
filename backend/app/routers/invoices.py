@@ -1,17 +1,18 @@
 import os
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .. import models, schemas
 from ..collection_info import RECORDER_ID, last_collection_fields, latest_collections, payment_row, reversed_invoice_ids
 from ..ai.extractor import extract_invoice_from_image  # noqa: F401  (used by the disabled extract route)
 from ..invoice_history import build_invoice_history
 from ..database import get_db
+from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import get_current_user, require_admin
 from ..utils import INVOICE_STATUSES, clean_search, clean_status, compute_status, page_result, query_page
 
@@ -194,6 +195,25 @@ def list_invoices(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
+    q, search = _admin_invoice_query(
+        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order
+    )
+    # Pending total for exactly this filtered set (paged responses only).
+    filtered_outstanding = q.with_entities(
+        func.coalesce(func.sum(models.Invoice.pending_amount), 0)
+    ).order_by(None).scalar()
+    q = _order_invoices(q, sort_order)
+    paged, total, page_size, page_offset = query_page(q, limit, offset, search)
+    items = _to_out_many(db, paged)
+    if limit is None and offset is None and search is None:
+        return items
+    return {**page_result(items, total, page_size, page_offset), "filtered_outstanding": filtered_outstanding}
+
+
+def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order):
+    """Validates the Admin invoice filters and returns (unordered query,
+    cleaned search). One builder for the list and the Excel export, so both
+    always cover exactly the same rows."""
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "date_from must be on or before date_to")
     try:
@@ -230,21 +250,80 @@ def list_invoices(
                 models.Invoice.payment_mode.ilike(term),
             )
         )
-    # Pending total for exactly this filtered set (paged responses only).
-    filtered_outstanding = q.with_entities(
-        func.coalesce(func.sum(models.Invoice.pending_amount), 0)
-    ).order_by(None).scalar()
+    return q, search
+
+
+def _order_invoices(q, sort_order):
     if sort_order == "oldest":
-        q = q.order_by(models.Invoice.invoice_date.asc().nullslast(), models.Invoice.id.asc())
-    elif sort_order == "amount":
-        q = q.order_by(models.Invoice.pending_amount.desc(), models.Invoice.id.desc())
-    else:
-        q = q.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
-    paged, total, page_size, page_offset = query_page(q, limit, offset, search)
-    items = _to_out_many(db, paged)
-    if limit is None and offset is None and search is None:
-        return items
-    return {**page_result(items, total, page_size, page_offset), "filtered_outstanding": filtered_outstanding}
+        return q.order_by(models.Invoice.invoice_date.asc().nullslast(), models.Invoice.id.asc())
+    if sort_order == "amount":
+        return q.order_by(models.Invoice.pending_amount.desc(), models.Invoice.id.desc())
+    return q.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
+
+
+@router.get("/export")
+def export_invoices(
+    mr_id: Optional[int] = None,
+    status: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    search: Optional[str] = None,
+    pending_only: bool = False,
+    sort_order: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Admin-only Excel download of the invoice list with the same filters,
+    search and sort as GET /invoices (all matching rows, not just one page)."""
+    q, _search = _admin_invoice_query(
+        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order
+    )
+    total = q.order_by(None).count()
+    if total > EXPORT_MAX_ROWS:
+        raise HTTPException(
+            413, f"{total} invoices match. Narrow the filters to {EXPORT_MAX_ROWS} or fewer to export."
+        )
+    invoices = (
+        _order_invoices(q, sort_order)
+        .options(joinedload(models.Invoice.customer), joinedload(models.Invoice.mr))
+        .all()
+    )
+    latest: dict = {}
+    ids = [invoice.id for invoice in invoices]
+    for start in range(0, len(ids), 500):
+        latest.update(latest_collections(db, ids[start:start + 500]))
+
+    def rows():
+        for invoice in invoices:
+            last = latest.get(invoice.id) or {}
+            recorder = last.get("recorded_by")
+            if recorder and last.get("recorded_by_admin"):
+                recorder = f"Admin - {recorder}"
+            yield [
+                invoice.invoice_number,
+                invoice.invoice_date,
+                invoice.customer.name if invoice.customer else None,
+                invoice.mr.name if invoice.mr else "Unassigned",
+                float(invoice.total_amount or 0),
+                float(invoice.paid_amount or 0),
+                float(invoice.pending_amount or 0),
+                _STATUS_WORDS.get(invoice.status, invoice.status),
+                "Yes" if last.get("is_reversal") else "",
+                recorder,
+                to_ist(last["payment_date"]) if last.get("payment_date") else None,
+            ]
+
+    stamp = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%Y-%m-%d")
+    return workbook_response(
+        f"invoices-{stamp}.xlsx", "Invoices",
+        ["Invoice", "Invoice date", "Customer", "MR", "Bill", "Collected", "Pending", "Status",
+         "Last entry reversed", "Last recorded by", "Last recorded at"],
+        rows(), widths=[16, 14, 32, 20, 14, 14, 14, 12, 18, 24, 20],
+    )
+
+
+_STATUS_WORDS = {"PAID": "Paid", "PARTIAL": "Part paid", "UNPAID": "Unpaid"}
 
 
 @router.get("/{invoice_id}", response_model=schemas.InvoiceOut)

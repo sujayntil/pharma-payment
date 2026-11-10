@@ -6,8 +6,9 @@ import { customersApi } from '../../api/customersApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import RowCard, { CardList } from '../../components/common/RowCard';
-import { listPaperProps } from '../../components/common/listPaper';
+import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useBackClose } from '../../hooks/useBackClose';
 import FilterBar from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
@@ -28,6 +29,8 @@ export default function MrCustomers({ openCustomer = null }) {
   const [selected, setSelected] = useState(openCustomer); const [ledger, setLedger] = useState(null);
   const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1);
   const isMobile = useIsMobile();
+  // Back closes the open ledger instead of leaving the screen.
+  useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); const [recordingCustomer, setRecordingCustomer] = useState(null); const [historyId, setHistoryId] = useState(null); const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [error, setError] = useState('');
 
@@ -81,7 +84,7 @@ export default function MrCustomers({ openCustomer = null }) {
   return <Stack gap="md"><Group justify="space-between" align="end"><div><Title order={1}>My customers</Title><Text c="dimmed">Customers assigned to you, with invoice and pending totals. Open a customer to see their ledger.</Text></div><Badge size="lg" variant="light">{total} customers</Badge></Group>
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search customer, type or phone" chips={[search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') }]} />
     {error && <Alert color="red">{error}</Alert>}
-    <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text c="dimmed" ta="center" py="xl">{search ? 'No customers match your search.' : 'No customers are assigned to you yet.'}</Text> : isMobile ? <CardList>{customers.map((customer) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text c="dimmed" ta="center" py="xl">{search ? 'No customers match your search.' : 'No customers are assigned to you yet.'}</Text> : isMobile ? <CardList>{customers.map((customer) => (
       <RowCard
         key={customer.id}
         onClick={() => openLedger(customer)}
@@ -115,9 +118,9 @@ export default function MrCustomers({ openCustomer = null }) {
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} />
         </FilterBar>
-        {ledgerLoading || !ledger ? <Group justify="center" p="xl"><Loader /></Group> : !ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
+        {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
           <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} />
-        ))}</CardList> : <ScrollArea><Table miw={820} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td><Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td><Table.Td><StatusCell row={invoice} /></Table.Td><Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td><Table.Td onClick={(event) => event.stopPropagation()}><Group gap={4} wrap="nowrap" justify="flex-end">{ledgerActions(invoice, 'xs')}</Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}
+        ))}</CardList> : <ScrollArea><Table miw={820} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td><Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td><Table.Td><StatusCell row={invoice} /></Table.Td><Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td><Table.Td onClick={(event) => event.stopPropagation()}><Group gap={4} wrap="nowrap" justify="flex-end">{ledgerActions(invoice, 'xs')}</Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
       </Stack>
     </Drawer>
     <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={onCollected} />

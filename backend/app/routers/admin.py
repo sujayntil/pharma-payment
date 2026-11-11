@@ -611,6 +611,18 @@ def create_manual_invoice(
     }
 
 
+MIN_PASSWORD_LENGTH = 8
+
+
+def _check_password(password: str) -> None:
+    """Applies to new users and password resets only; existing passwords and
+    sign-in are untouched."""
+    if len(password or "") < MIN_PASSWORD_LENGTH:
+        raise HTTPException(400, f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if len(password.encode("utf-8")) > 72:
+        raise HTTPException(400, "Password must be 72 characters or fewer")
+
+
 @router.post("/users", response_model=schemas.UserOut)
 def create_user(
     payload: schemas.UserCreate,
@@ -619,6 +631,7 @@ def create_user(
 ):
     if payload.role not in (models.RoleEnum.MR.value, models.RoleEnum.ADMIN.value):
         raise HTTPException(400, "role must be MR or ADMIN")
+    _check_password(payload.password)
     existing = (
         db.query(models.User)
         .filter(models.User.employee_code == payload.employee_code)
@@ -677,6 +690,7 @@ def update_user(
     if "phone" in data:
         target.phone = data["phone"]
     if "password" in data and data["password"]:
+        _check_password(data["password"])
         target.password_hash = hash_password(data["password"])
 
     db.commit()

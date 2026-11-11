@@ -204,6 +204,18 @@ class PushSubscription(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class LoginAttempt(Base):
+    """Failed sign-in counter per employee code / client address (see login_guard.py)."""
+
+    __tablename__ = "login_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(120), nullable=False, unique=True, index=True)
+    failures = Column(Integer, nullable=False, default=0)
+    window_started_at = Column(DateTime)
+    locked_until = Column(DateTime)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 

@@ -156,6 +156,8 @@ class ImportInvoicesTests(unittest.TestCase):
 
     def test_customer_list_exposes_assignment_and_invoice_count_to_mapping_ui(self):
         self.upload([["01-10-2026", "A00008", "Tulsi Pharmacy", 200, 190, 10]])
+        # The mapping screen is Admin-only; an MR now only gets their own customers.
+        self.app.dependency_overrides[get_current_user] = lambda: self.admin
         response = self.client.get("/customers")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()[0]["invoice_count"], 1)

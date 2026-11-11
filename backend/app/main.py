@@ -54,10 +54,19 @@ async def lifespan(_app):
 
 app = FastAPI(title="Pharma Sales & Collection Management System", lifespan=lifespan)
 
+# Which websites may call this API from a browser.
+#   CORS_ORIGINS set   -> only those addresses (comma-separated), e.g.
+#                         CORS_ORIGINS=https://app.example.com,https://www.example.com
+#   CORS_ORIGINS unset -> any address may call (as before), but the server no
+#                         longer tells browsers to send credentials for them.
+# Sign-in uses a bearer token in the Authorization header, not cookies, so
+# nothing in the app relies on credentialed cross-site requests.
+_cors_origins = [origin.strip().rstrip("/") for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins or ["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     # Lets the browser read the file name of Excel exports.

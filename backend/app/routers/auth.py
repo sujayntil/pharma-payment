@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
 from ..deps import get_current_user
+from ..login_guard import client_address, ensure_not_locked, record_failure, record_success
 from ..security import create_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -17,8 +18,13 @@ def current_user(user: models.User = Depends(get_current_user)):
 
 @router.post("/login", response_model=schemas.Token)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
+    # Refuse early (429) while this employee code or address is locked out
+    # after repeated wrong passwords.
+    address = client_address(request)
+    ensure_not_locked(db, form_data.username, address)
     # form_data.username holds the employee code here.
     user = (
         db.query(models.User)
@@ -26,7 +32,9 @@ def login(
         .first()
     )
     if not user or not verify_password(form_data.password, user.password_hash):
+        record_failure(db, form_data.username, address)
         raise HTTPException(status_code=401, detail="Invalid employee code or password")
+    record_success(db, form_data.username)
 
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return schemas.Token(

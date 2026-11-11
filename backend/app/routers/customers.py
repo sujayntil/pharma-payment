@@ -32,7 +32,11 @@ def list_customers(
             models.Customer.type.ilike(term),
             models.Customer.phone.ilike(term),
         ))
-    if mr_id:
+    if user.role != models.RoleEnum.ADMIN.value:
+        # Only an Admin may browse every customer. Anyone else is limited to
+        # the customers assigned to them, whatever mr_id they ask for.
+        q = q.filter(models.Customer.mr_id == user.id)
+    elif mr_id:
         q = q.filter(models.Customer.mr_id == mr_id)
     if customer_type and customer_type.strip():
         q = q.filter(models.Customer.type.ilike(f"%{customer_type.strip()}%"))

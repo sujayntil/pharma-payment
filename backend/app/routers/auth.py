@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import get_current_user, oauth2_scheme
 from ..login_guard import client_address, ensure_not_locked, record_failure, record_success
-from ..security import create_access_token, verify_password
+from ..security import create_access_token, decode_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -14,6 +16,28 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.get("/me", response_model=schemas.UserOut)
 def current_user(user: models.User = Depends(get_current_user)):
     return user
+
+
+@router.post("/logout", status_code=204)
+def logout(
+    token: str = Depends(oauth2_scheme),
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ends this session now: the token is refused from here on, instead of
+    staying usable until it expires. Other devices stay signed in."""
+    payload = decode_access_token(token)  # already validated by get_current_user
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    # Housekeeping: revoked tokens that have expired anyway are no longer needed.
+    db.query(models.RevokedToken).filter(models.RevokedToken.expires_at < now).delete()
+    jti, exp = payload.get("jti"), payload.get("exp")
+    if jti and exp and not db.get(models.RevokedToken, jti):
+        db.add(models.RevokedToken(
+            jti=jti,
+            expires_at=datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None),
+        ))
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/login", response_model=schemas.Token)

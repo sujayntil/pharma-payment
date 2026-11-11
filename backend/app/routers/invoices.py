@@ -11,6 +11,7 @@ from .. import models, schemas
 from ..collection_info import RECORDER_ID, last_collection_fields, latest_collections, payment_row, reversed_invoice_ids
 from ..ai.extractor import extract_invoice_from_image  # noqa: F401  (used by the disabled extract route)
 from ..invoice_history import build_invoice_history
+from ..audit import invoice_snapshot, write_audit
 from ..database import get_db
 from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import get_current_user, require_admin
@@ -405,6 +406,7 @@ def update_invoice(
     if user.role == models.RoleEnum.MR.value:
         raise HTTPException(403, "Only an Admin can edit invoices")
 
+    before = invoice_snapshot(invoice)
     data = payload.model_dump(exclude_unset=True)
 
     if "customer_name" in data:
@@ -446,6 +448,8 @@ def update_invoice(
         invoice.status = status_
         invoice.pending_amount = pending
 
+    db.flush()
+    write_audit(db, "invoice_updated", user, old=before, new=invoice_snapshot(invoice))
     db.commit()
     db.refresh(invoice)
     return _to_out(invoice)
@@ -469,6 +473,9 @@ def delete_invoice(
     if user.role == models.RoleEnum.MR.value:
         raise HTTPException(403, "Only an Admin can delete invoices")
 
+    # The invoice and its full payment history are copied to the audit log
+    # first, so deleting never erases the record of what was collected.
+    write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True))
     db.delete(invoice)
     db.commit()
     return None

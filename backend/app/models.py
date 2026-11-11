@@ -41,6 +41,9 @@ class User(Base):
     phone = Column(String)
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    # Sessions (login tokens) issued before this moment are no longer accepted.
+    # Set when the password is reset. NULL = never reset since this was added.
+    tokens_valid_after = Column(DateTime, nullable=True)
 
     invoices = relationship("Invoice", back_populates="mr")
 
@@ -202,6 +205,15 @@ class PushSubscription(Base):
     p256dh = Column(String, nullable=False)
     auth = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class RevokedToken(Base):
+    """A session ended by "Log out" before its normal expiry."""
+
+    __tablename__ = "revoked_tokens"
+
+    jti = Column(String(64), primary_key=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
 
 
 class LoginAttempt(Base):

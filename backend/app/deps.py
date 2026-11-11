@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -18,14 +20,25 @@ def get_current_user(
     )
     try:
         payload = decode_access_token(token)
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
+        user_id = int(payload.get("sub"))
+    except (JWTError, TypeError, ValueError):
         raise credentials_exception
 
-    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
+        raise credentials_exception
+
+    # Session ended by a password reset: tokens issued before it are refused.
+    # (Tokens from before this check existed carry no "iat" and are treated
+    # as older than any reset.)
+    if user.tokens_valid_after is not None:
+        valid_after = user.tokens_valid_after.replace(tzinfo=timezone.utc).timestamp()
+        if (payload.get("iat") or 0) < valid_after:
+            raise credentials_exception
+
+    # Session ended by "Log out".
+    jti = payload.get("jti")
+    if jti and db.query(models.RevokedToken.jti).filter(models.RevokedToken.jti == jti).first():
         raise credentials_exception
     return user
 

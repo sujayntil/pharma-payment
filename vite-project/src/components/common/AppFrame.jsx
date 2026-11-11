@@ -32,7 +32,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
   const useBottomNav = bottomNav && isMobile;
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { user, role } = useAuth();
+  const { user, role, token } = useAuth();
   const userId = user?.id;
   const userName = user?.name;
   const initials = user?.name?.trim().slice(0, 1).toUpperCase() || '';
@@ -54,6 +54,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
   };
 
   const signOut = () => {
+    // Tell the server to end this session; signing out locally never waits on it.
+    authApi.logout(token).catch(() => {});
     dispatch(logout());
     navigate('/login', { replace: true });
   };

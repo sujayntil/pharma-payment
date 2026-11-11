@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
@@ -18,6 +19,7 @@ from ..collection_info import (
     reversal_fields,
     reversible_amount,
 )
+from ..audit import user_snapshot, write_audit
 from ..database import get_db
 from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import require_admin
@@ -648,6 +650,8 @@ def create_user(
         password_hash=hash_password(payload.password),
     )
     db.add(new_user)
+    db.flush()
+    write_audit(db, "user_created", user, new=user_snapshot(new_user))
     db.commit()
     db.refresh(new_user)
     return new_user
@@ -670,6 +674,8 @@ def update_user(
         raise HTTPException(404, "User not found")
 
     data = payload.model_dump(exclude_unset=True)
+    before = user_snapshot(target)
+    password_changed = False
 
     if "role" in data and data["role"] is not None:
         new_role = data["role"]
@@ -692,7 +698,13 @@ def update_user(
     if "password" in data and data["password"]:
         _check_password(data["password"])
         target.password_hash = hash_password(data["password"])
+        # A password reset signs that user out everywhere: sessions issued
+        # before now are refused (see deps.get_current_user).
+        target.tokens_valid_after = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+        password_changed = True
 
+    write_audit(db, "user_updated", admin_user, old=before,
+                new={**user_snapshot(target), "password_changed": password_changed})
     db.commit()
     db.refresh(target)
     return target
@@ -726,6 +738,16 @@ def delete_user(
             "Deleting them would break that history. Consider leaving the account in place instead.",
         )
 
+    write_audit(db, "user_deleted", admin_user, old=user_snapshot(target))
     db.delete(target)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Collections or audit entries still point at this account.
+        db.rollback()
+        raise HTTPException(
+            400,
+            f"Can't delete {target.name} -- they have activity on record (collections or changes they made). "
+            "Leave the account in place and reset its password instead.",
+        )
     return None

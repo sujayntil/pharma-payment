@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt
@@ -21,8 +22,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_access_token(data: dict, expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=expires_minutes)
+    # iat: lets a password reset end every older session of that user.
+    # jti: lets "Log out" end this one session before it expires.
+    to_encode.update({"exp": expire, "iat": int(now.timestamp()), "jti": uuid.uuid4().hex})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 

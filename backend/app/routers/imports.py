@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 from ..deps import require_admin
+from ..audit import write_audit
 from ..collection_info import log_event
 from ..utils import compute_status
 
@@ -327,7 +328,12 @@ def map_customer_to_mr(
         mr = db.query(models.User).filter(models.User.id == mr_id).first()
         if mr is None or mr.role != models.RoleEnum.MR.value:
             raise HTTPException(400, "Select a valid MR")
+    previous_mr_id = customer.mr_id
     customer.mr_id = mr.id if mr else None
+    if previous_mr_id != customer.mr_id:
+        write_audit(db, "customer_mr_changed", user,
+                    old={"customer_id": customer.id, "name": customer.name, "mr_id": previous_mr_id},
+                    new={"customer_id": customer.id, "name": customer.name, "mr_id": customer.mr_id})
     # A customer has one current MR. Keep every invoice for that customer in
     # sync so a later reassignment is reflected in the MR portal.
     db.query(models.Invoice).filter(

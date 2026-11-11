@@ -19,6 +19,9 @@ _ADDITIVE_COLUMNS = {
         "reversal_of_id": "INTEGER",
         "reason": "TEXT",
     },
+    "users": {
+        "tokens_valid_after": "TIMESTAMP",
+    },
 }
 
 

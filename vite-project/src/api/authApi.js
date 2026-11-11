@@ -1,6 +1,17 @@
 import axiosClient from './axiosClient';
 
 export const authApi = {
+  /**
+   * Ends this session on the server, so the token stops working now and not
+   * only when it expires. The token is passed in because it is removed from
+   * storage straight after. Failing (offline, already expired) is harmless.
+   * @param {string} token
+   */
+  async logout(token) {
+    if (!token) return;
+    await axiosClient.post('/auth/logout', null, { headers: { Authorization: `Bearer ${token}` } });
+  },
+
   async getCurrentUser() {
     const response = await axiosClient.get('/auth/me');
     return response.data;

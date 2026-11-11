@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..collection_info import last_collection_fields, latest_collections
+from ..audit import customer_snapshot, write_audit
 from ..database import get_db
 from ..deps import get_current_user, require_admin
 from ..utils import clean_search, page_result, query_page
@@ -91,6 +92,7 @@ def update_customer(
         raise HTTPException(404, "Customer not found")
 
     data = payload.model_dump(exclude_unset=True)
+    before = customer_snapshot(customer)
     if "name" in data and data["name"]:
         name = data["name"].strip()
         duplicate = db.query(models.Customer).filter(
@@ -112,6 +114,7 @@ def update_customer(
         db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id).update(
             {models.Invoice.mr_id: customer.mr_id}, synchronize_session=False
         )
+    write_audit(db, "customer_updated", user, old=before, new=customer_snapshot(customer))
     db.commit()
     db.refresh(customer)
     return schemas.CustomerOut(
@@ -139,6 +142,7 @@ def delete_customer(
     invoice_count = db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id).count()
     if invoice_count:
         raise HTTPException(400, "Customer has invoices and cannot be deleted. Keep the record to preserve its ledger.")
+    write_audit(db, "customer_deleted", user, old=customer_snapshot(customer))
     db.delete(customer)
     db.commit()
     return None

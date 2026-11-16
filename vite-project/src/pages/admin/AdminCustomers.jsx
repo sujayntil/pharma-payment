@@ -192,7 +192,7 @@ export default function AdminCustomers({ openCustomer = null }) {
         {/* One amount over several invoices, oldest first (per-invoice Collect stays below). */}
         {selected && Number((selected.pending_amount ?? selected.outstanding)) > 0 && (
           <Button fullWidth={isMobile} leftSection={<IconCash size={16} />} onClick={() => setCollectingCustomer({ id: selected.id, name: selected.name })} style={{ alignSelf: isMobile ? undefined : 'flex-start' }}>
-            Collect from this customer
+            Bulk collect
           </Button>
         )}
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>

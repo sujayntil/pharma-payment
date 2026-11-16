@@ -175,7 +175,7 @@ export default function MrCustomers({ openCustomer = null }) {
         {/* Opened from Recent or Home, the list figures aren't there: use the screen's own. */}
         {selected && Number(selected.outstanding ?? ledger?.outstanding) > 0 && (
           <Button fullWidth={isMobile} leftSection={<IconCash size={16} />} onClick={() => setCollectingCustomer({ id: selected.id, name: selected.name })} style={{ alignSelf: isMobile ? undefined : 'flex-start' }}>
-            Collect from this customer
+            Bulk collect
           </Button>
         )}
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>

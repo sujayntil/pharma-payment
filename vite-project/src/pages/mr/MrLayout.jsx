@@ -22,8 +22,9 @@ const MR_TABS = [
   // Disabled (merged into "Invoices"). Re-enable if needed:
   // { id: 'invoices', label: 'My Invoices', icon: IconFileInvoice },
   // { id: 'collections', label: 'My Collections', icon: IconCash },
-  { id: 'invoices', label: 'Invoices', icon: IconFileInvoice },
+  // Customers before Invoices: MRs work shop by shop (Bulk collect, Recent).
   { id: 'customers', label: 'Customers', icon: IconUsers },
+  { id: 'invoices', label: 'Invoices', icon: IconFileInvoice },
 ];
 
 export default function MrLayout() {

@@ -6,7 +6,7 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import { autoFocusOnLaptop } from '../../utils/focus';
-import { errorText, money } from '../../utils/formatters';
+import { errorText, money, shortDate } from '../../utils/formatters';
 import CollectionCelebration from './CollectionCelebration';
 import InvoiceAge from './InvoiceAge';
 import PaymentModeField from './PaymentModeField';
@@ -15,7 +15,7 @@ import { lastPaymentMode, referenceFor, rememberPaymentMode } from './paymentMod
 import { showUndoBar } from './undoBar';
 
 /**
- * "Collect from this customer": one amount the customer hands over, split
+ * "Bulk collect": one amount the customer hands over, split
  * across their pending invoices oldest first.
  *
  *   Amount received [₹ 8,400]       (starts with the full pending total)
@@ -46,7 +46,7 @@ export default function CustomerCollectModal({ customer, onClose, onSaved }) {
   }, [celebration]);
 
   const body = customer && <CollectForm key={customer.id} customer={customer} onClose={onClose} onSaved={onSaved} onCelebrate={setCelebration} />;
-  const title = <Text fw={700} style={{ overflowWrap: 'anywhere' }}>Collect · {customer?.name}</Text>;
+  const title = <Text fw={700} style={{ overflowWrap: 'anywhere' }}>Bulk collect · {customer?.name}</Text>;
   return (
     <>
       {isMobile ? (
@@ -195,8 +195,10 @@ function CollectForm({ customer, onClose, onSaved, onCelebrate }) {
                     <Checkbox checked={!off} readOnly tabIndex={-1} color="green" mt={2} aria-hidden style={{ pointerEvents: 'none' }} />
                     <Box style={{ flex: 1, minWidth: 0 }}>
                       <Group justify="space-between" gap="xs" wrap="nowrap">
-                        <Text size="sm" fw={600} style={{ whiteSpace: 'nowrap' }}>
-                          {item.invoice_number}<InvoiceAge date={item.invoice_date} pending={item.pending_amount} />
+                        {/* Invoice number, then its date and age: "INV-1081 · 30 Sept 2026 · 47 days". */}
+                        <Text size="sm" fw={600} style={{ minWidth: 0 }}>
+                          {item.invoice_number}
+                          <Text span size="xs" c="dimmed" fw={400} style={{ whiteSpace: 'nowrap' }}> · {shortDate(item.invoice_date)}<InvoiceAge date={item.invoice_date} pending={item.pending_amount} /></Text>
                         </Text>
                         <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{money(item.pending_amount)}</Text>
                       </Group>

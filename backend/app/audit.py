@@ -73,6 +73,8 @@ def customer_snapshot(customer: models.Customer) -> dict:
         "name": customer.name,
         "type": customer.type,
         "phone": customer.phone,
+        "alternate_phone": customer.alternate_phone,
+        "whatsapp_on": customer.whatsapp_on,
         "address": customer.address,
         "gstin": customer.gstin,
         "mr_id": customer.mr_id,

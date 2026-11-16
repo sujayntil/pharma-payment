@@ -61,7 +61,7 @@ export default function PaymentAlerts() {
         await notificationsApi.remove(current.endpoint);
         await current.unsubscribe();
         setSubscription(null);
-        setMessage('Payment and 40-day outstanding alerts are disabled on this device.');
+        setMessage('Payment and 40-day pending alerts are disabled on this device.');
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') throw new Error('Allow notifications in browser settings, then enable alerts again.');
@@ -79,7 +79,7 @@ export default function PaymentAlerts() {
         }
         await notificationsApi.save(created.toJSON());
         setSubscription(created);
-        setMessage('Payment and 40-day outstanding alerts are enabled on this device.');
+        setMessage('Payment and 40-day pending alerts are enabled on this device.');
       }
     } catch (error) {
       const text = error.response?.data?.detail || error.message || 'Could not update notification settings.';

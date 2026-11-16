@@ -132,3 +132,31 @@ export async function downloadErrorText(err, fallback = 'Could not export.') {
   }
   return errorText(err, fallback);
 }
+
+/** "9876543210" -> "98765 43210"; landlines are shown as saved. */
+export function displayPhone(value) {
+  if (!value) return '';
+  return /^[6-9]\d{9}$/.test(value) ? `${value.slice(0, 5)} ${value.slice(5)}` : value;
+}
+
+/** Whole days from a date (YYYY-MM-DD or ISO) until today, or null. */
+export function daysSince(value) {
+  if (!value) return null;
+  const start = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((today - start) / 86400000));
+}
+
+/** Date part of a timestamp in India time, e.g. "16 Nov 2026". */
+export function dayOf(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+}
+
+/** Time part of a timestamp in India time, e.g. "2:01 pm". */
+export function timeOf(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+}

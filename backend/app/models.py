@@ -55,6 +55,9 @@ class Customer(Base):
     name = Column(String, nullable=False, index=True)
     type = Column(String)  # Chemist, Doctor, Distributor, Hospital, etc.
     phone = Column(String)
+    alternate_phone = Column(String, nullable=True)
+    # Which saved number the customer uses for WhatsApp: "main", "alternate" or None.
+    whatsapp_on = Column(String(12), nullable=True)
     address = Column(String)
     gstin = Column(String)
     mr_id = Column(

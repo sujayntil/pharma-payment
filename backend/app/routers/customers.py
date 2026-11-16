@@ -2,7 +2,7 @@ from datetime import date
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -10,7 +10,7 @@ from ..collection_info import last_collection_fields, latest_collections
 from ..audit import customer_snapshot, write_audit
 from ..database import get_db
 from ..deps import get_current_user, require_admin
-from ..utils import clean_search, page_result, query_page
+from ..utils import clean_search, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -20,18 +20,28 @@ def list_customers(
     search: str | None = None,
     mr_id: int | None = None,
     customer_type: str | None = None,
+    sort: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
     search = clean_search(search)
-    q = db.query(models.Customer, func.count(models.Invoice.id).label("invoice_count"))
+    if sort not in (None, "", "name", "pending"):
+        raise HTTPException(422, "sort must be name or pending")
+    pending = func.coalesce(func.sum(models.Invoice.pending_amount), 0)
+    q = db.query(
+        models.Customer,
+        func.count(models.Invoice.id).label("invoice_count"),
+        pending.label("pending_amount"),
+        func.max(models.Invoice.invoice_date).label("latest_invoice_date"),
+    )
     if search and search.strip():
         term = f"%{search.strip()}%"
         q = q.filter(or_(
             models.Customer.name.ilike(term),
             models.Customer.type.ilike(term),
             models.Customer.phone.ilike(term),
+            models.Customer.alternate_phone.ilike(term),
         ))
     if user.role != models.RoleEnum.ADMIN.value:
         # Only an Admin may browse every customer. Anyone else is limited to
@@ -45,7 +55,8 @@ def list_customers(
         q
         .outerjoin(models.Invoice, models.Invoice.customer_id == models.Customer.id)
         .group_by(models.Customer.id)
-        .order_by(models.Customer.name)
+        # "pending": who owes most first; otherwise A-Z by name.
+        .order_by(*((pending.desc(), models.Customer.name) if sort == "pending" else (models.Customer.name,)))
     )
     rows, total, page_size, page_offset = query_page(q, limit, offset, search)
     items = [
@@ -54,13 +65,17 @@ def list_customers(
             name=customer.name,
             type=customer.type,
             phone=customer.phone,
+            alternate_phone=customer.alternate_phone,
+            whatsapp_on=customer.whatsapp_on,
             address=customer.address,
             gstin=customer.gstin,
             mr_id=customer.mr_id,
             mr_name=customer.mr.name if customer.mr else None,
             invoice_count=count,
+            pending_amount=float(pending_total or 0),
+            latest_invoice_date=latest,
         )
-        for customer, count in rows
+        for customer, count, pending_total, latest in rows
     ]
     if limit is None and offset is None and search is None:
         return items
@@ -105,6 +120,24 @@ def update_customer(
     for field in ("type", "phone", "address", "gstin"):
         if field in data:
             setattr(customer, field, data[field] or None)
+    if "alternate_phone" in data:
+        # The main phone stays free-form for Admins (older data may not match
+        # the rules); the new alternate number is always checked.
+        try:
+            alternate = normalize_phone(data["alternate_phone"])
+        except ValueError as exc:
+            raise HTTPException(422, f"Alternate phone: {exc}")
+        if alternate and same_phone(alternate, customer.phone):
+            raise HTTPException(422, "Alternate phone is the same as the main phone.")
+        customer.alternate_phone = alternate
+    if {"phone", "alternate_phone", "whatsapp_on"} & data.keys():
+        try:
+            customer.whatsapp_on = resolve_whatsapp_on(
+                data.get("whatsapp_on"), customer.phone, customer.alternate_phone,
+                customer.whatsapp_on, "whatsapp_on" in data,
+            )
+        except ValueError as exc:
+            raise HTTPException(422, f"WhatsApp: {exc}")
     if "mr_id" in data:
         if data["mr_id"] is not None:
             mr = db.get(models.User, data["mr_id"])
@@ -122,6 +155,8 @@ def update_customer(
         name=customer.name,
         type=customer.type,
         phone=customer.phone,
+        alternate_phone=customer.alternate_phone,
+        whatsapp_on=customer.whatsapp_on,
         address=customer.address,
         gstin=customer.gstin,
         mr_id=customer.mr_id,
@@ -194,7 +229,15 @@ def customer_ledger(
         func.coalesce(func.sum(models.Invoice.total_amount), 0),
         func.coalesce(func.sum(models.Invoice.paid_amount), 0),
     ).one()
-    invoice_query = invoice_query.order_by(models.Invoice.invoice_date.desc(), models.Invoice.id.desc())
+    # Pending invoices first, oldest first (the order they are chased in);
+    # then settled ones, newest first.
+    is_pending = models.Invoice.pending_amount > 0
+    invoice_query = invoice_query.order_by(
+        case((is_pending, 0), else_=1),
+        case((is_pending, models.Invoice.invoice_date), else_=None).asc(),
+        models.Invoice.invoice_date.desc(),
+        models.Invoice.id.desc(),
+    )
     invoices, invoice_count, page_size, page_offset = query_page(
         invoice_query, limit, offset, search
     )
@@ -205,6 +248,9 @@ def customer_ledger(
             "id": customer.id,
             "name": customer.name,
             "type": customer.type,
+            "phone": customer.phone,
+            "alternate_phone": customer.alternate_phone,
+            "whatsapp_on": customer.whatsapp_on,
             "mr_name": customer.mr.name if customer.mr else None,
         },
         "total_invoiced": total_invoiced,

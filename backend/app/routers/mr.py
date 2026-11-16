@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from .. import models
+from .. import models, schemas
+from ..audit import customer_snapshot, write_audit
 from ..collection_info import last_collection_fields, latest_collections, reversed_invoice_ids
 from ..database import get_db
 from ..overdue import overdue_customer_summaries
 from ..deps import get_current_user
-from ..utils import INVOICE_STATUSES, clean_search, clean_status, page_result, query_page
+from ..utils import INVOICE_STATUSES, clean_search, clean_status, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone
 
 router = APIRouter(prefix="/mr", tags=["mr"])
 
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/mr", tags=["mr"])
 @router.get("/customers")
 def customers(
     search: str | None = None,
+    customer_type: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
@@ -56,7 +58,11 @@ def customers(
             models.Customer.name.ilike(term),
             models.Customer.type.ilike(term),
             models.Customer.phone.ilike(term),
+            models.Customer.alternate_phone.ilike(term),
         ))
+    if customer_type and customer_type.strip():
+        # Same matching as the Admin customer list.
+        query = query.filter(models.Customer.type.ilike(f"%{customer_type.strip()}%"))
     query = query.order_by(models.Customer.name, models.Customer.id)
     rows, total, page_size, page_offset = query_page(query, limit, offset, search)
     items = [
@@ -65,6 +71,8 @@ def customers(
             "name": customer.name,
             "type": customer.type,
             "phone": customer.phone,
+            "alternate_phone": customer.alternate_phone,
+            "whatsapp_on": customer.whatsapp_on,
             "invoice_count": count,
             "total_invoiced": total,
             "outstanding": pending,
@@ -76,6 +84,56 @@ def customers(
         return items
     return page_result(items, total, page_size, page_offset)
 
+
+
+@router.put("/customers/{customer_id}/contact")
+def update_customer_contact(
+    customer_id: int,
+    payload: schemas.CustomerContactUpdate,
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
+):
+    """Lets an MR add, change or clear a customer's phone numbers.
+
+    Only for customers assigned to this MR (others answer 404, the same as a
+    missing customer). Everything else about the customer stays Admin-only.
+    Rules: numbers must be a 10-digit mobile or a landline with area code;
+    the main number cannot be cleared once saved; the alternate needs a main
+    number and cannot repeat it.
+    """
+    if user.role != models.RoleEnum.MR.value:
+        raise HTTPException(403, "Only an MR can use this. Admins edit customers from Customers.")
+    customer = db.get(models.Customer, customer_id)
+    if not customer or customer.mr_id != user.id:
+        raise HTTPException(404, "Customer not found")
+    data = payload.model_dump(exclude_unset=True)
+    try:
+        phone = normalize_phone(data["phone"]) if "phone" in data else customer.phone
+    except ValueError as exc:
+        raise HTTPException(422, f"Phone: {exc}")
+    try:
+        alternate = normalize_phone(data["alternate_phone"]) if "alternate_phone" in data else customer.alternate_phone
+    except ValueError as exc:
+        raise HTTPException(422, f"Alternate phone: {exc}")
+    if not phone and customer.phone:
+        raise HTTPException(422, "The main phone number can be changed but not removed.")
+    if alternate and not phone:
+        raise HTTPException(422, "Add the main phone number before an alternate one.")
+    if alternate and same_phone(alternate, phone):
+        raise HTTPException(422, "Alternate phone is the same as the main phone.")
+
+    try:
+        whatsapp_on = resolve_whatsapp_on(data.get("whatsapp_on"), phone, alternate, customer.whatsapp_on, "whatsapp_on" in data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    before = customer_snapshot(customer)
+    customer.phone = phone
+    customer.alternate_phone = alternate
+    customer.whatsapp_on = whatsapp_on
+    if before != customer_snapshot(customer):
+        write_audit(db, "customer_contact_updated", user, old=before, new=customer_snapshot(customer))
+    db.commit()
+    return {"id": customer.id, "phone": customer.phone, "alternate_phone": customer.alternate_phone, "whatsapp_on": customer.whatsapp_on}
 
 @router.get("/dashboard")
 def dashboard(
@@ -131,6 +189,7 @@ def outstanding(
     include_settled: bool = False,
     status: str | None = None,
     customer_id: int | None = None,
+    customer_type: str | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
     if date_from and date_to and date_from > date_to:
@@ -153,6 +212,9 @@ def outstanding(
     query = base
     if customer_id is not None:
         query = query.filter(models.Invoice.customer_id == customer_id)
+    if customer_type and customer_type.strip():
+        # Same matching as the customer lists.
+        query = query.filter(models.Invoice.customer.has(models.Customer.type.ilike(f"%{customer_type.strip()}%")))
     if status == "REVERSED":
         query = query.filter(models.Invoice.id.in_(reversed_invoice_ids()))
     elif status:
@@ -193,6 +255,10 @@ def outstanding(
                 "invoice_number": i.invoice_number,
                 "invoice_date": i.invoice_date,
                 "customer": i.customer.name if i.customer else None,
+                # For the call / WhatsApp icons on invoice cards.
+                "customer_phone": i.customer.phone if i.customer else None,
+                "customer_alternate_phone": i.customer.alternate_phone if i.customer else None,
+                "customer_whatsapp_on": i.customer.whatsapp_on if i.customer else None,
                 "pending_amount": i.pending_amount,
                 "total_amount": i.total_amount,
                 "paid_amount": i.paid_amount,

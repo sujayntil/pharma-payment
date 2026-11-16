@@ -17,8 +17,8 @@ const ADMIN_TABS = [
   { id: 'invoices', label: 'Invoices', icon: IconFileInvoice },
   { id: 'customers', label: 'Customers', icon: IconUsers },
   { id: 'collections', label: 'Collections', icon: IconCash },
-  { id: 'import', label: 'Import & mapping', icon: IconFileSpreadsheet },
-  { id: 'performance', label: 'MR Performance', icon: IconTrophy },
+  { id: 'import', label: 'Import & mapping', shortLabel: 'Import', icon: IconFileSpreadsheet },
+  { id: 'performance', label: 'MR Performance', shortLabel: 'Performance', icon: IconTrophy },
   { id: 'users', label: 'Users', icon: IconUserCog },
 ];
 

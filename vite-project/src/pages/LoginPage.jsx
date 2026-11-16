@@ -46,7 +46,7 @@ export default function LoginPage() {
               <Stack>
                 <TextInput
                   label="Employee code"
-                  placeholder="e.g. MR001 or ADMIN01"
+                  placeholder="MR001"
                   leftSection={<IconUser size={17} />}
                   autoComplete="username"
                   value={employeeCode}

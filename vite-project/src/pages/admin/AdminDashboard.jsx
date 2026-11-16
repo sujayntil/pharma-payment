@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title } from '@mantine/core';
 import { IconCategory } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
-import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
+import { useAppDispatch, useAppSelector, useAuth } from '../../hooks/useAppStore';
+import { useGreeting } from '../../hooks/useGreeting';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
 import PaymentAlerts from '../../components/common/PaymentAlerts';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -40,6 +41,8 @@ const CUSTOMER_TYPES = [
 
 /** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
 export default function AdminDashboard({ onOpenCustomer }) {
+  const greeting = useGreeting();
+  const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { dashboard, alerts, alertCount, alertsLoading, dashFilters, error: statsError } = useAppSelector((state) => state.admin);
   // Placeholders until the first real figures arrive (the store starts with
@@ -50,7 +53,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
   const [appliedCustomerType, setAppliedCustomerType] = useState('');
   const [recent, setRecent] = useState([]);
   const [error, setError] = useState('');
-  // Rows open the invoice panel (summary, Record collection, history).
+  // Rows open the invoice panel (summary, Collect, history).
   const [openId, setOpenId] = useState(null); const [recording, setRecording] = useState(null); const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -79,7 +82,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
   return (
     <Stack gap="md">
       <Group justify="space-between" align="end">
-        <div><Title order={1}>Dashboard</Title><Text c="dimmed">Sales, collections, and balances at a glance.</Text></div>
+        <Title order={1}>{greeting}{user?.name ? `, ${user.name}` : ''}</Title>
         <Badge variant="light" size="lg">Admin view</Badge>
       </Group>
 
@@ -92,7 +95,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
         <Stat loading={statsPending} label="Tally sales" value={money(dashboard?.total_sales)} accent />
         <Stat loading={statsPending} label="Collected in selected dates" value={money(dashboard?.collected)} />
-        <Stat loading={statsPending} label="Outstanding on selected invoices" value={money(dashboard?.outstanding)} />
+        <Stat loading={statsPending} label="Pending on selected invoices" value={money(dashboard?.outstanding)} />
       </SimpleGrid>
       <SimpleGrid cols={3} spacing="sm">
         <Stat quiet loading={statsPending} label="Paid invoices" value={dashboard?.paid ?? 0} />
@@ -106,10 +109,10 @@ export default function AdminDashboard({ onOpenCustomer }) {
       <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md" style={{ alignItems: 'start' }}>
       <Paper withBorder p="md">
         <Group justify="space-between" mb="sm">
-          <div><Title order={3}>Outstanding above ₹50,000</Title><Text size="sm" c="dimmed">Invoices that may need follow up.</Text></div>
+          <div><Title order={3}>Pending above ₹50,000</Title><Text size="sm" c="dimmed">Invoices that may need follow up.</Text></div>
           <Badge>{alertCount}</Badge>
         </Group>
-        {alertsLoading ? <Group justify="center" p="lg"><Loader /></Group> : !alerts.length ? <Text c="dimmed" py="md">No high outstanding balances.</Text> : (
+        {alertsLoading ? <Group justify="center" p="lg"><Loader /></Group> : !alerts.length ? <Text c="dimmed" py="md">No high pending balances.</Text> : (
           isMobile ? <Stack gap={0}>{alerts.map((item, index) => (
             <Group key={`${item.invoice_number}-${index}`} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: item.invoice_id ? 'pointer' : undefined }} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined}>
               <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>
@@ -117,7 +120,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
             </Group>
           ))}</Stack> :           <Table.ScrollContainer minWidth={480}>
             <Table striped>
-              <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>MR</Table.Th><Table.Th>Outstanding</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>MR</Table.Th><Table.Th>Pending</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{alerts.map((item, index) => (
                 <Table.Tr key={`${item.invoice_number}-${index}`} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined} style={item.invoice_id ? { cursor: 'pointer' } : undefined}>
                   <Table.Td>{item.customer || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td>{item.mr || '—'}</Table.Td><Table.Td fw={700} c="red">{money(item.pending_amount)}</Table.Td>

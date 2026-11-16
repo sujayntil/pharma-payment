@@ -137,6 +137,10 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "created_at": as_utc(invoice.created_at),
             "customer_id": invoice.customer_id,
             "customer_name": invoice.customer.name if invoice.customer else None,
+            # For the call / WhatsApp icons in the invoice panel.
+            "customer_phone": invoice.customer.phone if invoice.customer else None,
+            "customer_alternate_phone": invoice.customer.alternate_phone if invoice.customer else None,
+            "customer_whatsapp_on": invoice.customer.whatsapp_on if invoice.customer else None,
             "mr_name": invoice.mr.name if invoice.mr else None,
             "payment_mode": invoice.payment_mode,
             "remarks": invoice.remarks,

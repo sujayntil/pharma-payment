@@ -57,9 +57,14 @@ class CustomerCreate(BaseModel):
 class CustomerOut(CustomerCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    alternate_phone: Optional[str] = None
+    whatsapp_on: Optional[str] = None
     mr_id: Optional[int] = None
     mr_name: Optional[str] = None
     invoice_count: int = 0
+    # Admin list: what the customer still owes and when they were last billed.
+    pending_amount: float = 0
+    latest_invoice_date: Optional[date] = None
 
 
 class CustomerMrMapping(BaseModel):
@@ -70,9 +75,19 @@ class CustomerUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     type: Optional[str] = None
     phone: Optional[str] = None
+    alternate_phone: Optional[str] = None
+    whatsapp_on: Optional[str] = None
     address: Optional[str] = None
     gstin: Optional[str] = None
     mr_id: Optional[int] = None
+
+
+class CustomerContactUpdate(BaseModel):
+    """An MR's change to a customer's phone numbers. Blank clears."""
+    phone: Optional[str] = Field(default=None, max_length=40)
+    alternate_phone: Optional[str] = Field(default=None, max_length=40)
+    # "main", "alternate" or blank for none. Left out = keep / pick automatically.
+    whatsapp_on: Optional[str] = Field(default=None, max_length=12)
 
 
 # ---- Invoices ----
@@ -129,6 +144,10 @@ class InvoiceOut(BaseModel):
     remarks: Optional[str] = None
     mr_name: Optional[str] = None
     customer_name: Optional[str] = None
+    # For the call / WhatsApp icons on invoice cards.
+    customer_phone: Optional[str] = None
+    customer_alternate_phone: Optional[str] = None
+    customer_whatsapp_on: Optional[str] = None
     # Latest entry in the payments ledger -- lets an MR see when an Admin
     # recorded or reversed a collection on their invoice.
     last_collection_by: Optional[str] = None

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Group, Loader, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Button, Group, Loader, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDownload, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { invoicesApi } from '../../api/invoicesApi';
@@ -19,6 +19,7 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
+import ContactActions from '../../components/customers/ContactActions';
 import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { downloadErrorText, errorText, money, saveDownload, shortDate } from '../../utils/formatters';
@@ -28,7 +29,7 @@ import { downloadErrorText, errorText, money, saveDownload, shortDate } from '..
  *   Pending / Paid / All tabs (+ "Show only", labelled after the tab),
  *   MR, invoice date and sort filters, all applied by the server.
  * Rows show one action (Record). Clicking a row opens the invoice panel with
- * the summary, Record collection, history and a "⋯" menu for Edit / Delete.
+ * the summary, Collect, history and a "⋯" menu for Edit / Delete.
  */
 const TABS = [{ value: 'pending', label: 'Pending' }, { value: 'paid', label: 'Paid' }, { value: 'all', label: 'All' }];
 const ONLY_OPTIONS = {
@@ -38,7 +39,8 @@ const ONLY_OPTIONS = {
 };
 const ONLY_PLACEHOLDER = { pending: 'All pending', paid: 'All paid', all: 'All invoices' };
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
-const BLANK = { mrId: '', only: '', range: EMPTY_RANGE, sort: 'newest' };
+// sort '' = the tab's default: Pending oldest first, Paid / All newest first.
+const BLANK = { mrId: '', only: '', range: EMPTY_RANGE, sort: '' };
 
 function tabParams(tab, only) {
   if (tab === 'paid') return { status: 'PAID' };
@@ -55,6 +57,11 @@ export default function AdminInvoices() {
   const isMobile = useIsMobile();
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null); const [historyKey, setHistoryKey] = useState(0);
   const panelSpace = useSidePanelSpace(Boolean(historyId));
+  const defaultSort = tab === 'pending' ? 'oldest' : 'newest';
+  const sort = filters.sort || defaultSort;
+  // Laptop: with the invoice panel open, drop Bill, Collected and Recorded by
+  // (all shown in the panel) so the table never scrolls sideways.
+  const panelOpen = Boolean(historyId) && !isMobile;
 
   useEffect(() => {
     let active = true;
@@ -70,7 +77,7 @@ export default function AdminInvoices() {
         const result = await invoicesApi.getInvoices({
           limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
           ...tabParams(tab, filters.only),
-          sort_order: filters.sort,
+          sort_order: sort,
           ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }),
           ...(filters.mrId && { mr_id: filters.mrId }),
           ...(filters.range.from && { date_from: filters.range.from }),
@@ -81,7 +88,7 @@ export default function AdminInvoices() {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [tab, filters, page, refresh, debouncedSearch]);
+  }, [tab, filters, sort, page, refresh, debouncedSearch]);
 
   // Tab counts (unfiltered), refreshed after every change.
   useEffect(() => {
@@ -99,7 +106,7 @@ export default function AdminInvoices() {
     try {
       saveDownload(await invoicesApi.exportInvoices({
         ...tabParams(tab, filters.only),
-        sort_order: filters.sort,
+        sort_order: sort,
         ...(search.trim() && { search: search.trim() }),
         ...(filters.mrId && { mr_id: filters.mrId }),
         ...(filters.range.from && { date_from: filters.range.from }),
@@ -122,7 +129,7 @@ export default function AdminInvoices() {
      A row click now opens the invoice panel; Edit / Delete are in its "⋯" menu.
   const rowActions = (invoice) => (
     <Group gap={4} wrap="nowrap" justify="flex-end">
-          {invoice.pending_amount > 0 && <Button size="xs" variant="light" leftSection={<IconCash size={14} />} onClick={() => setRecording(invoice)}>Record</Button>}
+          {invoice.pending_amount > 0 && <Button size="xs" variant="light" leftSection={<IconCash size={14} />} onClick={() => setRecording(invoice)}>Collect</Button>}
           <Tooltip label="Invoice history" withArrow>
             <ActionIcon variant="light" color="gray" size={isMobile ? 'lg' : 'md'} aria-label={`History for ${invoice.invoice_number}`} onClick={() => setHistoryId(invoice.id)}><IconHistory size={isMobile ? 18 : 16} /></ActionIcon>
           </Tooltip>
@@ -143,7 +150,7 @@ export default function AdminInvoices() {
     filters.only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === filters.only)?.label}`, onRemove: () => update({ only: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
-    filters.sort !== 'newest' && { key: 'sort', label: SORTS.find((s) => s.value === filters.sort)?.label, onRemove: () => update({ sort: 'newest' }) },
+    filters.sort && { key: 'sort', label: SORTS.find((s) => s.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
   ];
 
@@ -154,28 +161,38 @@ export default function AdminInvoices() {
     { label: 'Edit invoice', icon: <IconEdit size={15} />, onClick: openEdit },
     { label: 'Delete invoice', icon: <IconTrash size={15} />, color: 'red', onClick: setDeleting },
   ];
+  const contactFor = (invoice) => <ContactActions name={invoice.customer_name || 'customer'} phone={invoice.customer_phone} alternatePhone={invoice.customer_alternate_phone} whatsappOn={invoice.customer_whatsapp_on} />;
   const recordButton = (invoice) => Number(invoice.pending_amount) > 0 && (
-    <Button size="xs" variant="light" leftSection={<IconCash size={14} />} onClick={(event) => { event.stopPropagation(); setRecording(invoice); }}>Record</Button>
+    <Button size="xs" variant="light" leftSection={<IconCash size={14} />} onClick={(event) => { event.stopPropagation(); setRecording(invoice); }}>Collect</Button>
   );
 
-  return <Stack gap="md" style={panelSpace}><div><Title order={1}>Invoices</Title><Text c="dimmed">Click an invoice to see its history, record a collection, or edit it.</Text></div>
+  return <Stack gap="md" style={panelSpace}><Title order={1}>Invoices</Title>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <SegmentedControl fullWidth={isMobile} style={isMobile ? undefined : { alignSelf: 'flex-start' }} data={tabData} value={tab} onChange={changeTab} aria-label="Invoice status" />
-    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search invoice, customer or MR" chips={chips} onReset={reset}>
+    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}>
       {/* Replaced by the tabs above + "Show only": <StatusTabs value={filters.status} onChange={(status) => update({ status })} /> */}
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} />
-      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={filters.sort} clearable={false} allowDeselect={false} onChange={(sort) => update({ sort: sort || 'newest' })} />
+      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>
-    <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text><Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button></Group></Group>
+    <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text>{isMobile ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} disabled={!total} onClick={exportExcel}><IconDownload size={16} /></ActionIcon></Tooltip> : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>}</Group></Group>
     <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !invoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : isMobile ? <CardList>{invoices.map((invoice) => (
-      <InvoiceCard key={invoice.id} invoice={invoice} onOpen={() => setHistoryId(invoice.id)} />
-    ))}</CardList> : <Table.ScrollContainer minWidth={1180}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
-      <Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td><Table.Td>{invoice.mr_name || <Text span c="dimmed" size="sm">Unassigned</Text>}</Table.Td>
-      <Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td><Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
+      <InvoiceCard
+        key={invoice.id}
+        invoice={invoice}
+        showMr
+        onOpen={() => setHistoryId(invoice.id)}
+        // Same as the MR cards: call / WhatsApp + Collect while pending,
+        // icons beside the status badge once paid.
+        actions={Number(invoice.pending_amount) > 0 ? <>{contactFor(invoice)}<Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(invoice)}>Collect</Button></> : undefined}
+        afterStatus={Number(invoice.pending_amount) > 0 ? undefined : contactFor(invoice)}
+      />
+    ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
+      <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td><Table.Td>{invoice.mr_name || <Text span c="dimmed" size="sm">Unassigned</Text>}</Table.Td>
+      {!panelOpen && <><Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td></>}<Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
       <Table.Td><StatusCell row={invoice} /></Table.Td>
-      <Table.Td maw={200}><RecordedBy row={invoice} /></Table.Td>
+      {!panelOpen && <Table.Td maw={170}><RecordedBy row={invoice} /></Table.Td>}
       <Table.Td><Group justify="flex-end" wrap="nowrap">{recordButton(invoice)}</Group></Table.Td>
     </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />

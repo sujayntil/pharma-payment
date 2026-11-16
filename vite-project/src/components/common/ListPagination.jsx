@@ -3,6 +3,8 @@ import { Group, Pagination, Text } from '@mantine/core';
 export const PAGE_SIZE = 50;
 
 export default function ListPagination({ total, page, onChange, searchActive = false, label = 'records' }) {
+  // An empty list already says so; a "0 records" line would repeat it.
+  if (!total) return null;
   const summary = searchActive
     ? `${total} matching ${label}`
     : total

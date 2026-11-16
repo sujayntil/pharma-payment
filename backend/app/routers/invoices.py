@@ -27,6 +27,10 @@ def _to_out(invoice: models.Invoice, latest: dict | None = None) -> schemas.Invo
     out = schemas.InvoiceOut.model_validate(invoice)
     out.mr_name = invoice.mr.name if invoice.mr else None
     out.customer_name = invoice.customer.name if invoice.customer else None
+    if invoice.customer:
+        out.customer_phone = invoice.customer.phone
+        out.customer_alternate_phone = invoice.customer.alternate_phone
+        out.customer_whatsapp_on = invoice.customer.whatsapp_on
     for key, value in last_collection_fields(latest).items():
         setattr(out, key, value)
     return out

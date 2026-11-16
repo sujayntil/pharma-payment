@@ -4,14 +4,14 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { errorText, money, shortDate } from '../../utils/formatters';
 
 /**
- * "Outstanding for 40+ days" panel shared by the Admin dashboard (all
+ * "Pending 40+ days" panel shared by the Admin dashboard (all
  * customers, with an MR column) and the MR dashboard (only their own
  * customers -- the server filters, see GET /mr/overdue-alerts).
  *
  * load: () => Promise<rows> from adminApi.getOverdueAlerts or mrApi.getOverdueAlerts
  * onSelect: optional (row) => void; makes each customer open on tap/click.
  */
-export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No customers have invoices outstanding for 40 days or more.', onSelect, tableMinWidth }) {
+export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No customers have invoices pending for 40 days or more.', onSelect, tableMinWidth }) {
   const isMobile = useIsMobile();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +32,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
     <Paper withBorder p="md">
       <Group justify="space-between" align="flex-start" mb="sm" wrap="nowrap" gap="sm">
         <div style={{ minWidth: 0 }}>
-          <Title order={3}>Outstanding for 40+ days</Title>
+          <Title order={3}>Pending 40+ days</Title>
           {description && <Text size="sm" c="dimmed">{description}</Text>}
         </div>
         <Badge color={rows.length ? 'red' : 'gray'} style={{ flexShrink: 0 }}>{rows.length} {rows.length === 1 ? 'customer' : 'customers'}</Badge>

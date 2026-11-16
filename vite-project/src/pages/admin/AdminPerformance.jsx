@@ -9,8 +9,11 @@ import { listPaperProps } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { errorText, money } from '../../utils/formatters';
 
-const rateOf = (row) => (Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : 0);
-const RateBadge = ({ rate }) => <Badge color={rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red'}>{rate}%</Badge>;
+// No sales yet means there is no rate to judge, so show a dash, not a red 0%.
+const rateOf = (row) => (Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : null);
+const RateBadge = ({ rate }) => (rate == null
+  ? <Text span c="dimmed" size="sm">—</Text>
+  : <Badge color={rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red'}>{rate}%</Badge>);
 
 export default function AdminPerformance() {
   const [rows, setRows] = useState([]); const [range, setRange] = useState(EMPTY_RANGE); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
@@ -30,7 +33,7 @@ export default function AdminPerformance() {
   }, [range]);
 
   const rangeLabel = describeRange(range);
-  return <Stack gap="md"><Group justify="space-between" align="end"><div><Title order={1}>MR performance</Title><Text c="dimmed">Sales, collections and pending balance by representative.</Text></div><Badge variant="light" size="lg">{rows.length} MRs</Badge></Group>
+  return <Stack gap="md"><Group justify="space-between" align="end"><Title order={1}>MR performance</Title><Badge variant="light" size="lg">{rows.length} MRs</Badge></Group>
     <FilterBar chips={[rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => setRange(EMPTY_RANGE) }]} summary={rangeLabel ? null : 'Showing all time'}>
       <DateRangeFilter label="Invoice date" value={range} onChange={setRange} allLabel="All time" />
     </FilterBar>

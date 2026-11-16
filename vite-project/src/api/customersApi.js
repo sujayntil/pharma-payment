@@ -27,6 +27,12 @@ export const customersApi = {
     return response.data;
   },
 
+  /** MR: add / change / clear phone numbers of one of their own customers. */
+  async updateMyCustomerContact(customerId, data) {
+    const response = await axiosClient.put(`/mr/customers/${customerId}/contact`, data);
+    return response.data;
+  },
+
   async deleteCustomer(customerId) {
     await axiosClient.delete(`/customers/${customerId}`);
   },

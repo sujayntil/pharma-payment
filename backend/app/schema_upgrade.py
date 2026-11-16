@@ -22,6 +22,10 @@ _ADDITIVE_COLUMNS = {
     "users": {
         "tokens_valid_after": "TIMESTAMP",
     },
+    "customers": {
+        "alternate_phone": "VARCHAR",
+        "whatsapp_on": "VARCHAR(12)",
+    },
 }
 
 

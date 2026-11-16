@@ -1,103 +1,57 @@
-import { useEffect, useState } from 'react';
-import { Alert, Button, Group, Loader, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { useCallback, useState } from 'react';
+import { Alert, Button, Group, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { paymentsApi } from '../../api/paymentsApi';
-import { mrApi } from '../../api/mrApi';
 import { useAuth } from '../../hooks/useAppStore';
 import { useBackClose } from '../../hooks/useBackClose';
-import { errorText, money, shortDate } from '../../utils/formatters';
+import { errorText, money } from '../../utils/formatters';
 import { PAYMENT_MODES, toCollectionTarget } from './collectionUtils';
+import CollectionCelebration from './CollectionCelebration';
 
 /**
- * The one "Record collection" form used by both MRs and Admins. When an
+ * The one "Collect" form used by both MRs and Admins. When an
  * Admin records for a customer with an assigned MR, the collection is saved
  * under that MR and the Admin is stored as who recorded it.
  *
- * invoice:  record against this invoice (My Collections, lists, ledgers)
- * customer: { id, name } -- open from a customer's ledger with the customer
- *           pre-selected; the MR then picks one of its pending invoices.
+ * invoice: record against this invoice (My Collections, lists, ledgers)
  */
-export default function RecordCollectionModal({ invoice, customer, onClose, onSaved }) {
+export default function RecordCollectionModal({ invoice, onClose, onSaved }) {
   const target = toCollectionTarget(invoice);
-  const opened = !!target || !!customer;
+  const opened = !!target;
   useBackClose(opened, onClose);
-  const title = target ? `Record collection · ${target.invoiceNumber || ''}` : `Record collection · ${customer?.name || ''}`;
+  const title = `Collect · ${target?.invoiceNumber || ''}`;
+  // MRs get a short celebration after saving (Admins keep the plain toast).
+  const [celebration, setCelebration] = useState(null);
+  const endCelebration = useCallback(() => setCelebration(null), []);
   return (
-    // zIndex 250: above the invoice panel and ledger drawers (200) so it never
-    // opens behind them, and below dropdown lists (300) so Payment mode still works.
+    <>
+    {/* zIndex 250: above the invoice panel and ledger drawers (200) so it never
+        opens behind them, and below dropdown lists (300) so Payment mode still works. */}
     <Modal opened={opened} onClose={onClose} title={title} centered zIndex={250}>
       {/* Remounting per invoice resets the form without effects. */}
-      {target
-        ? <CollectionForm key={target.invoiceId} target={target} onClose={onClose} onSaved={onSaved} />
-        : customer && <CustomerInvoicePicker key={customer.id} customer={customer} onClose={onClose} onSaved={onSaved} />}
+      {target && <CollectionForm key={target.invoiceId} target={target} onClose={onClose} onSaved={onSaved} onCelebrate={setCelebration} />}
     </Modal>
+    <CollectionCelebration celebration={celebration} onDone={endCelebration} />
+    </>
   );
 }
 
-/** Customer is fixed; choose which pending / partly paid invoice to collect against. */
-function CustomerInvoicePicker({ customer, onClose, onSaved }) {
-  const [invoices, setInvoices] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    // Same MR-scoped endpoint as My Collections; only invoices with a balance.
-    mrApi.getOutstanding({ customer_id: customer.id, sort_order: 'oldest', limit: 100, offset: 0 })
-      .then((result) => {
-        if (!active) return;
-        const items = result.items || [];
-        setInvoices(items);
-        if (items.length === 1) setSelectedId(String(items[0].invoice_id));
-      })
-      .catch((err) => { if (active) setError(errorText(err)); });
-    return () => { active = false; };
-  }, [customer.id]);
-
-  if (error) return <Alert color="red">{error}</Alert>;
-  if (!invoices) return <Group justify="center" p="lg"><Loader size="sm" /></Group>;
-  if (!invoices.length) {
-    return (
-      <Stack>
-        <Text size="sm">{customer.name} has no pending or partly paid invoices.</Text>
-        <Group justify="end"><Button variant="default" onClick={onClose}>Close</Button></Group>
-      </Stack>
-    );
-  }
-  const selected = invoices.find((item) => String(item.invoice_id) === selectedId);
-  return (
-    <Stack>
-      <Select
-        label="Invoice"
-        placeholder="Choose a pending invoice"
-        required
-        searchable
-        data={invoices.map((item) => ({ value: String(item.invoice_id), label: `${item.invoice_number} · ${shortDate(item.invoice_date)} · ${money(item.pending_amount)} pending` }))}
-        value={selectedId}
-        onChange={setSelectedId}
-        allowDeselect={false}
-        comboboxProps={{ middlewares: { flip: true, shift: { padding: 8 } } }}
-      />
-      {selected && <CollectionForm key={selected.invoice_id} target={toCollectionTarget({ ...selected, customer_name: customer.name })} onClose={onClose} onSaved={onSaved} />}
-    </Stack>
-  );
-}
-
-function CollectionForm({ target, onClose, onSaved }) {
+function CollectionForm({ target, onClose, onSaved, onCelebrate }) {
   const { role, name } = useAuth();
   const isAdmin = role === 'ADMIN';
-  const [kind, setKind] = useState('full');
+  // One amount box: it opens with the full pending amount selected, so Save
+  // collects in full and typing a number replaces it for a part payment.
   const [amount, setAmount] = useState(target.pending);
   const [mode, setMode] = useState('UPI');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const chooseKind = (value) => {
-    setKind(value);
-    setAmount(value === 'full' ? target.pending : '');
-  };
+  const value = Number(amount);
+  const entered = amount !== '' && Number.isFinite(value) && value > 0;
+  const tooMuch = entered && value > target.pending + 0.01;
+  const clears = entered && !tooMuch && Math.abs(target.pending - value) < 0.01;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -105,8 +59,7 @@ function CollectionForm({ target, onClose, onSaved }) {
       setError('This invoice is already fully paid.');
       return;
     }
-    const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0 || value > target.pending + 0.01) {
+    if (!entered || tooMuch) {
       setError(`Enter an amount between ₹0.01 and ${money(target.pending)}.`);
       return;
     }
@@ -118,7 +71,11 @@ function CollectionForm({ target, onClose, onSaved }) {
         mode: mode || null,
         transaction_reference: reference.trim() || null,
       });
-      notifications.show({ color: 'green', title: 'Collection recorded', message: `${money(value)} received for ${target.invoiceNumber}.` });
+      if (role === 'MR' && onCelebrate) {
+        onCelebrate({ amount: value, left: Math.max(target.pending - value, 0), cleared: clears, customer: target.customer });
+      } else {
+        notifications.show({ color: 'green', title: 'Collection recorded', message: `${money(value)} received for ${target.invoiceNumber}.` });
+      }
       onSaved?.(result, value);
       onClose();
     } catch (err) {
@@ -144,14 +101,37 @@ function CollectionForm({ target, onClose, onSaved }) {
             This collection is saved under {target.mrName} and counts in their totals. Recorded by shows “Admin - {name || 'Admin'}”.
           </Alert>
         )}
-        <SegmentedControl fullWidth value={kind} onChange={chooseKind} data={[{ value: 'full', label: 'Full balance' }, { value: 'part', label: 'Part payment' }]} />
-        <NumberInput label="Amount received (₹)" min={0.01} max={target.pending} decimalScale={2} thousandSeparator="," required readOnly={kind === 'full'} value={amount} onChange={setAmount} data-autofocus={kind === 'part' || undefined} />
+        <div>
+          <NumberInput
+            label="Amount received (₹)"
+            min={0.01}
+            decimalScale={2}
+            thousandSeparator=","
+            hideControls
+            inputMode="decimal"
+            required
+            value={amount}
+            onChange={setAmount}
+            onFocus={(event) => event.currentTarget.select()}
+            data-autofocus
+          />
+          {/* Nothing under the box for the full amount; a balance or a warning otherwise. */}
+          {!clears && (
+            <Text size="sm" mt={6} fw={entered ? 600 : 400} c={tooMuch ? 'red' : entered ? undefined : 'dimmed'} aria-live="polite">
+              {tooMuch
+                ? `More than pending (${money(target.pending)})`
+                : entered
+                  ? `Balance: ${money(target.pending - value)}`
+                  : 'Enter the amount received'}
+            </Text>
+          )}
+        </div>
         <Select label="Payment mode" required data={PAYMENT_MODES} value={mode} onChange={(value) => setMode(value || 'UPI')} allowDeselect={false} />
         <TextInput label="Reference / UTR / cheque number" placeholder="Optional" value={reference} onChange={(e) => setReference(e.currentTarget.value)} />
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="end">
           <Button variant="default" type="button" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={busy}>Save collection</Button>
+          <Button type="submit" loading={busy}>{entered && !tooMuch ? `Save ${money(value)}` : 'Save'}</Button>
         </Group>
       </Stack>
     </form>

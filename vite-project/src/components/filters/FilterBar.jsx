@@ -3,6 +3,7 @@ import { Badge, Button, CloseButton, Drawer, Group, Paper, Pill, Select, Stack, 
 import { IconAdjustmentsHorizontal, IconFilterOff, IconSearch } from '@tabler/icons-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
+import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import classes from './filters.module.css';
 import { FilterSheetContext, SHEET_DROPDOWN_PROPS, useInFilterSheet } from './filterSheetContext';
 
@@ -54,15 +55,18 @@ export function FilterSelect({ value, onChange, data, placeholder, icon, ...prop
  * chips: [{ key, label, onRemove }] (key 'q' = the search chip)
  * more:  secondary filters, shown with the others (moreActive is kept for
  *        backward compatibility; the count now comes from the chips).
+ * activeOutline: draw a green outline round the phone Filters button while
+ *        any filter is on (used on the MR screens).
  */
 // eslint-disable-next-line no-unused-vars
-export default function FilterBar({ search, onSearch, searchPlaceholder, children, more, moreActive = 0, chips = [], onReset, summary, compact = false }) {
+export default function FilterBar({ search, onSearch, searchPlaceholder, children, more, moreActive = 0, chips = [], onReset, summary, compact = false, activeOutline = false }) {
   const active = chips.filter(Boolean);
   const filterCount = active.filter((chip) => chip.key !== 'q').length;
   const hasFilters = Boolean(children || more);
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
   useBackClose(sheetOpen && isMobile, () => setSheetOpen(false));
+  useSwipeDownToClose(sheetOpen && isMobile, () => setSheetOpen(false));
 
   const chipRow = (active.length > 0 || summary) && (
     <Group gap={6} justify="space-between" className={classes.chips} wrap="wrap">
@@ -90,6 +94,7 @@ export default function FilterBar({ search, onSearch, searchPlaceholder, childre
               leftSection={<IconAdjustmentsHorizontal size={16} />}
               rightSection={filterCount ? <Badge size="sm" circle>{filterCount}</Badge> : null}
               onClick={() => setSheetOpen(true)}
+              style={activeOutline && filterCount ? { outline: '2px solid var(--mantine-primary-color-filled)', outlineOffset: 2 } : undefined}
               aria-label={filterCount ? `Filters, ${filterCount} active` : 'Filters'}
             >
               Filters
@@ -104,7 +109,7 @@ export default function FilterBar({ search, onSearch, searchPlaceholder, childre
             position="bottom"
             radius="lg"
             title={<Group gap={8}><Text fw={700}>Filters</Text>{filterCount > 0 && <Badge size="sm" variant="light">{filterCount} active</Badge>}</Group>}
-            classNames={{ content: classes.sheet, body: classes.sheetBody }}
+            classNames={{ content: `${classes.sheet} ${SWIPE_SHEET_CLASS}`, body: classes.sheetBody }}
           >
             <FilterSheetContext.Provider value>
               <Stack gap="sm" className={classes.sheetFields}>

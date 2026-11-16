@@ -4,12 +4,14 @@ import { IconArrowBackUp, IconCash, IconDots, IconFileInvoice, IconFlag } from '
 import { invoicesApi } from '../../api/invoicesApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
+import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import { useAuth } from '../../hooks/useAppStore';
 import { dateTime, errorText, money, shortDate } from '../../utils/formatters';
 import { ReversedBadge, StatusBadge } from './CollectionBadges';
 import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { useActorLabel } from './collectionUtils';
 import ReversePaymentModal from './ReversePaymentModal';
+import ContactActions from '../customers/ContactActions';
 
 const EVENT_STYLE = {
   CREATED: { color: 'blue', icon: IconFileInvoice },
@@ -31,7 +33,7 @@ function eventTitle(event) {
  * a "⋯ > Reverse payment" menu on each collection that can still be reversed.
  *
  * onChanged:  called after an Admin reversal so the list behind can reload.
- * onRecord:   (invoice) => void. When given, a "Record collection" button is
+ * onRecord:   (invoice) => void. When given, a "Collect" button is
  *             shown for invoices that still have a balance (same form, API and
  *             permissions as everywhere else).
  * refreshKey: change it to reload the sheet (e.g. after a collection is saved).
@@ -45,6 +47,7 @@ function eventTitle(event) {
 export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord, refreshKey = 0, actions }) {
   const isMobile = useIsMobile();
   useBackClose(!!invoiceId, onClose);
+  useSwipeDownToClose(!!invoiceId && isMobile, onClose);
   const panelWidth = useSidePanelWidth();
   return (
     <Drawer
@@ -55,6 +58,7 @@ export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord
       radius={isMobile ? 'lg' : 0}
       title={<Text fw={700}>Invoice details</Text>}
       closeButtonProps={{ 'aria-label': 'Close invoice details' }}
+      classNames={isMobile ? { content: SWIPE_SHEET_CLASS } : undefined}
       {...(!isMobile && { withOverlay: false, trapFocus: false, lockScroll: false, closeOnClickOutside: false, shadow: 'xl', styles: { inner: { top: 64, height: 'calc(100% - 64px)' } } })}
     >
       {invoiceId && <HistoryBody key={invoiceId} invoiceId={invoiceId} onChanged={onChanged} onRecord={onRecord} refreshKey={refreshKey} actions={actions} />}
@@ -73,6 +77,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   const [reversing, setReversing] = useState(null);
   const who = useActorLabel();
   const isAdmin = useAuth().role === 'ADMIN';
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     let active = true;
@@ -107,7 +112,17 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
           )}
         </Group>
         <Text size="sm" c="dimmed">Invoice created on {shortDate(invoice.invoice_date || invoice.created_at)}</Text>
-        <Text size="sm" fw={600} mt={2} style={{ overflowWrap: 'anywhere' }}>{invoice.customer_name || '—'}</Text>
+        {/* Customer, with call / WhatsApp icons on the right (MR and Admin). */}
+        <Group justify="space-between" align="center" wrap="nowrap" gap="xs" mt={2}>
+          <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{invoice.customer_name || '—'}</Text>
+          <ContactActions
+            size={isMobile ? 'md' : 'sm'}
+            name={invoice.customer_name || 'customer'}
+            phone={invoice.customer_phone}
+            alternatePhone={invoice.customer_alternate_phone}
+            whatsappOn={invoice.customer_whatsapp_on}
+          />
+        </Group>
         {isAdmin && <Text size="sm" c="dimmed">MR: {invoice.mr_name || 'Unassigned'}</Text>}
         <Group gap={6} wrap="wrap" mt={6}><StatusBadge status={invoice.status} />{invoice.is_reversed && <ReversedBadge />}</Group>
         <SimpleGrid cols={3} spacing="xs" mt="xs">
@@ -117,7 +132,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
         </SimpleGrid>
       </Paper>
       {onRecord && (Number(invoice.pending_amount) > 0
-        ? <Button fullWidth size="md" leftSection={<IconCash size={18} />} onClick={() => onRecord(invoice)}>Record collection</Button>
+        ? <Button fullWidth size="md" leftSection={<IconCash size={18} />} onClick={() => onRecord(invoice)}>Collect</Button>
         : <Text size="sm" c="dimmed" ta="center">Fully paid. Nothing to collect.</Text>)}
       <Text fw={700} size="sm">History</Text>
 

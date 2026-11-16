@@ -32,7 +32,7 @@ const outstandingParams = (page, search, range, sort, status) => ({
   ...(status && { status }),
 });
 
-/** Record collection is offered only while there is something to collect. */
+/** Collect is offered only while there is something to collect. */
 const canRecord = (item) => Number(item.pending_amount) > 0 && (item.status === 'UNPAID' || item.status === 'PARTIAL');
 
 export default function MrCollections() {
@@ -73,7 +73,7 @@ function ToCollect() {
   );
 
   return <Stack gap="md">
-    <Paper withBorder p="md" bg="green.0"><Text size="sm" c="dimmed">{filtered ? 'Outstanding in these results' : 'Outstanding across your invoices'}</Text><Title order={2}>{money(filteredOutstanding)}</Title></Paper>
+    <Paper withBorder p="md" bg="green.0"><Text size="sm" c="dimmed">{filtered ? 'Pending in these results' : 'Pending across your invoices'}</Text><Title order={2}>{money(filteredOutstanding)}</Title></Paper>
     <FilterBar search={searchQuery} onSearch={onSearch} searchPlaceholder="Search invoice or customer" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All statuses" icon={<IconCircleCheck size={16} />} data={STATUSES} value={status} onChange={(next) => { setStatus(next); setPage(1); }} />
       <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} />
@@ -90,13 +90,13 @@ function ToCollect() {
           amountColor={Number(item.pending_amount) > 0 ? 'red' : 'green'}
           badges={<StatusCell row={item} />}
           details={[{ label: 'Recorded by', value: <RecordedBy row={item} />, full: true }]}
-          actions={<>{historyIcon(item)}{canRecord(item) && <Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setActive(item)}>Record collection</Button>}</>}
+          actions={<>{historyIcon(item)}{canRecord(item) && <Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setActive(item)}>Collect</Button>}</>}
         />
       ))}</CardList> : <Table.ScrollContainer minWidth={900}><Table striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{outstanding.map((item) => <Table.Tr key={item.invoice_id}>
         <Table.Td fw={600}>{item.customer || 'Unnamed customer'}</Table.Td><Table.Td>{item.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}</Table.Td><Table.Td ta="right" fw={700} c={Number(item.pending_amount) > 0 ? 'red' : 'green'}>{money(item.pending_amount)}</Table.Td>
         <Table.Td><StatusCell row={item} /></Table.Td>
         <Table.Td maw={200}><RecordedBy row={item} /></Table.Td>
-        <Table.Td><Group gap={6} wrap="nowrap" justify="flex-end">{canRecord(item) && <Button size="xs" onClick={() => setActive(item)}>Record collection</Button>}{historyIcon(item)}</Group></Table.Td>
+        <Table.Td><Group gap={6} wrap="nowrap" justify="flex-end">{canRecord(item) && <Button size="xs" onClick={() => setActive(item)}>Collect</Button>}{historyIcon(item)}</Group></Table.Td>
       </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={outstandingCount} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>

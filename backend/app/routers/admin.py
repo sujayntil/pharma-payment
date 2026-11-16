@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
@@ -19,7 +19,7 @@ from ..collection_info import (
     reversal_fields,
     reversible_amount,
 )
-from ..audit import customer_snapshot, user_snapshot, write_audit
+from ..audit import customer_snapshot, invoice_snapshot, user_snapshot, write_audit
 from ..database import get_db
 from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import require_admin
@@ -278,6 +278,7 @@ def collections(
 
 @router.get("/collections/export")
 def export_collections(
+    request: Request,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     mr_id: Optional[int] = None,
@@ -319,6 +320,9 @@ def export_collections(
             ]
 
     stamp = datetime.now(_IST).strftime("%Y-%m-%d")
+    # Audit log: who downloaded which data (the filters they used).
+    write_audit(db, "collections_exported", user, new={"filters": dict(request.query_params)})
+    db.commit()
     return workbook_response(
         f"collections-{stamp}.xlsx", "Collections",
         ["Date (IST)", "Invoice", "Customer", "Assigned MR", "Entry", "Amount", "Mode", "Reference",
@@ -625,6 +629,9 @@ def create_manual_invoice(
     db.flush()
     # Invoice history: "Invoice created" (by this Admin).
     log_event(db, invoice.id, models.InvoiceEventType.CREATED.value, user, amount=invoice.total_amount)
+    db.flush()
+    db.refresh(invoice)
+    write_audit(db, "invoice_created", user, new=invoice_snapshot(invoice))
     db.commit()
     db.refresh(invoice)
 

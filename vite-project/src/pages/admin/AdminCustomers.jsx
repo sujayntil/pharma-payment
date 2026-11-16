@@ -15,6 +15,7 @@ import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
+import CustomerCollectModal from '../../components/collections/CustomerCollectModal';
 // Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
@@ -35,7 +36,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState({ mrId: '', type: '', sort: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
-  const [selected, setSelected] = useState(openCustomer); const [editingContact, setEditingContact] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
+  const [selected, setSelected] = useState(openCustomer); const [editingContact, setEditingContact] = useState(null); const [collectingCustomer, setCollectingCustomer] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
   // Back closes the open ledger instead of leaving the screen.
   useBackClose(!!selected, () => setSelected(null));
@@ -188,6 +189,12 @@ export default function AdminCustomers({ openCustomer = null }) {
             </Paper>
           )
           : <SimpleGrid cols={3} spacing="xs"><StatCard size="md" label="Invoiced" value={money(ledger.total_invoiced)} /><StatCard size="md" label="Collected" color="green" value={money(ledger.total_paid)} /><StatCard size="md" label="Pending" color="red" value={money(ledger.outstanding)} /></SimpleGrid>)}
+        {/* One amount over several invoices, oldest first (per-invoice Collect stays below). */}
+        {selected && Number((selected.pending_amount ?? selected.outstanding)) > 0 && (
+          <Button fullWidth={isMobile} leftSection={<IconCash size={16} />} onClick={() => setCollectingCustomer({ id: selected.id, name: selected.name })} style={{ alignSelf: isMobile ? undefined : 'flex-start' }}>
+            Collect from this customer
+          </Button>
+        )}
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} />
@@ -202,6 +209,7 @@ export default function AdminCustomers({ openCustomer = null }) {
         </Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
       </Stack>
     </Drawer>
+    <CustomerCollectModal customer={collectingCustomer} onClose={() => setCollectingCustomer(null)} onSaved={() => { setRefresh((value) => value + 1); reloadLedger(); }} />
     <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={reloadLedger} />
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
     <MarkUnpaidModal invoice={reversing && { ...reversing, customer_name: selected?.name }} onClose={() => setReversing(null)} onSaved={reloadLedger} /> */}

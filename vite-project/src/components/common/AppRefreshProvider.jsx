@@ -3,6 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { failureCount, whenIdle } from '../../api/axiosClient';
 import { AppRefreshContext } from '../../hooks/useAppRefresh';
 import { setQuietReload } from './listPaper';
+import { REFRESH_NOW_EVENT } from '../../utils/appEvents';
 
 const MIN_SPIN_MS = 600;
 const AUTO_EVERY_MS = 20000;   // quiet check while the app is on screen (every 20 s)
@@ -62,7 +63,14 @@ export default function AppRefreshProvider({ children }) {
       hiddenAt = null;
     };
     document.addEventListener('visibilitychange', onVisibility);
-    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
+    // Something changed the data on purpose (an Undo): reload right away.
+    const now = () => { busy.current = false; quietRefresh(); };
+    window.addEventListener(REFRESH_NOW_EVENT, now);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener(REFRESH_NOW_EVENT, now);
+    };
   }, [quietRefresh]);
 
   const value = useMemo(() => ({ refreshKey, refreshing, lastUpdated, refresh }), [refreshKey, refreshing, lastUpdated, refresh]);

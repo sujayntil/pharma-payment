@@ -309,6 +309,12 @@ async def import_invoices(
 
     result["unmapped_customers"] = list(result["unmapped_customers"].values())
     result["skipped"] = result["duplicates"] + len(result["conflicts"]) + len(result["row_errors"])
+    # Audit log: one entry per upload (not one per invoice).
+    write_audit(db, "invoices_imported", user, new={
+        "file": file.filename, "created": result["created"], "updated": result["updated"],
+        "skipped": result["skipped"], "row_errors": len(result["row_errors"]),
+    })
+    db.commit()
     return result
 
 

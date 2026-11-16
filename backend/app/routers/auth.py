@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..audit import write_audit
 from ..database import get_db
 from ..deps import get_current_user, oauth2_scheme
 from ..login_guard import client_address, ensure_not_locked, record_failure, record_success
@@ -36,6 +37,7 @@ def logout(
             jti=jti,
             expires_at=datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None),
         ))
+    write_audit(db, "signed_out", user)
     db.commit()
     return Response(status_code=204)
 
@@ -57,8 +59,13 @@ def login(
     )
     if not user or not verify_password(form_data.password, user.password_hash):
         record_failure(db, form_data.username, address)
+        # Audit log: who tried (when the code exists) and from where.
+        write_audit(db, "sign_in_failed", user, new={"employee_code": (form_data.username or "")[:60], "address": address})
+        db.commit()
         raise HTTPException(status_code=401, detail="Invalid employee code or password")
     record_success(db, form_data.username)
+    write_audit(db, "signed_in", user, new={"address": address})
+    db.commit()
 
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return schemas.Token(

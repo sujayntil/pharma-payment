@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -268,6 +268,7 @@ def _order_invoices(q, sort_order):
 
 @router.get("/export")
 def export_invoices(
+    request: Request,
     mr_id: Optional[int] = None,
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
@@ -320,6 +321,9 @@ def export_invoices(
             ]
 
     stamp = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%Y-%m-%d")
+    # Audit log: who downloaded which data (the filters they used).
+    write_audit(db, "invoices_exported", user, new={"rows": len(ids), "filters": dict(request.query_params)})
+    db.commit()
     return workbook_response(
         f"invoices-{stamp}.xlsx", "Invoices",
         ["Invoice", "Invoice date", "Customer", "MR", "Bill", "Collected", "Pending", "Status",

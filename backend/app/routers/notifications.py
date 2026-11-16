@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, func, or_
+from sqlalchemy import String, and_, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
@@ -80,13 +80,19 @@ def _unread_filter(user: models.User):
     return models.Payment.id > seen
 
 
+def _group_key():
+    """A split collection (same batch_id) counts as one entry."""
+    return func.coalesce(models.Payment.batch_id, func.cast(models.Payment.id, String))
+
+
 @router.get("/recent")
 def recent_collections(
     limit: int = Query(20, ge=1, le=50),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Newest collections and reversals for the Admin bell, with how many are new."""
+    """Newest collections and reversals for the Admin bell, with how many are
+    new. A collection split over several invoices is one entry."""
     collector = aliased(models.User)
     recorder = aliased(models.User)
     rows = (
@@ -96,34 +102,54 @@ def recent_collections(
         .outerjoin(collector, collector.id == models.Payment.collected_by)
         .outerjoin(recorder, recorder.id == models.Payment.recorded_by)
         .order_by(models.Payment.id.desc())
-        .limit(limit)
+        .limit(limit * 8)
         .all()
     )
     seen = user.notifications_seen_payment_id
-    unread = db.query(func.count(models.Payment.id)).filter(_not_mine(user), _unread_filter(user)).scalar() or 0
-    items = []
+    unread = (
+        db.query(func.count(func.distinct(_group_key())))
+        .filter(_not_mine(user), _unread_filter(user))
+        .scalar() or 0
+    )
+    cutoff = _last_day_cutoff()
+    groups: dict = {}
+    order = []
     for payment, invoice, customer, collector_name, recorder_name in rows:
-        by_me = (payment.recorded_by or payment.collected_by) == user.id
-        new = not by_me and (payment.id > seen if seen is not None else False)
+        key = payment.batch_id or f"p{payment.id}"
+        if key not in groups:
+            if len(order) == limit:
+                continue
+            order.append(key)
+            groups[key] = {"payments": [], "customer": customer, "collector": collector_name, "recorder": recorder_name}
+        groups[key]["payments"].append((payment, invoice))
+
+    items = []
+    for key in order:
+        group = groups[key]
+        parts = sorted(group["payments"], key=lambda pair: pair[0].id)
+        first_payment, first_invoice = parts[0]
+        newest = max(payment.id for payment, _ in parts)
+        by_me = (first_payment.recorded_by or first_payment.collected_by) == user.id
+        if seen is not None:
+            new = not by_me and newest > seen
+        else:
+            new = not by_me and first_payment.payment_date is not None and first_payment.payment_date >= cutoff
+        numbers = [invoice.invoice_number for _, invoice in parts]
         items.append({
-            "payment_id": payment.id,
-            "invoice_id": invoice.id,
-            "invoice_number": invoice.invoice_number,
-            "customer_name": customer.name if customer else None,
-            "amount": payment.amount,
-            "mode": payment.mode,
-            "is_reversal": payment.reversal_of_id is not None,
-            "mr_name": collector_name,
-            "recorded_by_name": recorder_name or collector_name,
+            "payment_id": first_payment.id,
+            "invoice_id": first_invoice.id,
+            "invoice_number": numbers[0] if len(numbers) == 1 else f"{numbers[0]} +{len(numbers) - 1}",
+            "invoice_count": len(numbers),
+            "customer_name": group["customer"].name if group["customer"] else None,
+            "amount": round(sum(payment.amount for payment, _ in parts), 2),
+            "mode": first_payment.mode,
+            "is_reversal": first_payment.reversal_of_id is not None,
+            "mr_name": group["collector"],
+            "recorded_by_name": group["recorder"] or group["collector"],
             "recorded_by_me": by_me,
-            "payment_date": as_utc(payment.payment_date),  # stored as UTC; send with its zone
+            "payment_date": as_utc(first_payment.payment_date),  # stored as UTC; send with its zone
             "is_new": new,
         })
-    if seen is None:
-        # First time: the last day's entries (by others) are new, matching the count.
-        cutoff = _last_day_cutoff()
-        for item, (payment, *_rest) in zip(items, rows):
-            item["is_new"] = not item["recorded_by_me"] and payment.payment_date is not None and payment.payment_date >= cutoff
     return {"items": items, "unread": unread}
 
 

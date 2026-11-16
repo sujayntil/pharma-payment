@@ -1,3 +1,4 @@
+import time
 import json
 import logging
 import os
@@ -56,9 +57,16 @@ def send_admin_notification(payload: dict, ttl: int = 60) -> bool:
     return delivered
 
 
-def send_payment_notification(payment_id: int):
+# Alerts wait this long so a collection undone from the Undo bar (a typing
+# mistake) never reaches the Admin's phone.
+ALERT_DELAY_SECONDS = 20
+
+
+def send_payment_notification(payment_id: int, delay: float = ALERT_DELAY_SECONDS):
     """Phone alert for a collection an MR recorded. Tapping it opens that
     invoice (its history shows the new payment) in the Admin app."""
+    if delay:
+        time.sleep(delay)
     with SessionLocal() as db:
         row = (
             db.query(models.Payment, models.User, models.Invoice, models.Customer)
@@ -69,10 +77,45 @@ def send_payment_notification(payment_id: int):
             .first()
         )
         if not row:
-            return
+            return  # undone in the meantime
         payment_row, collector, invoice, customer = row
         payload = payment_payload(payment_row, collector, invoice, customer)
     send_admin_notification(payload)
+
+
+def send_batch_notification(batch_id: str, delay: float = ALERT_DELAY_SECONDS):
+    """One alert for a collection split over several invoices."""
+    if delay:
+        time.sleep(delay)
+    with SessionLocal() as db:
+        rows = (
+            db.query(models.Payment, models.User, models.Invoice, models.Customer)
+            .join(models.User, models.User.id == models.Payment.collected_by)
+            .join(models.Invoice, models.Invoice.id == models.Payment.invoice_id)
+            .outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id)
+            .filter(models.Payment.batch_id == batch_id)
+            .order_by(models.Payment.id.asc())
+            .all()
+        )
+        if not rows:
+            return  # undone in the meantime
+        payload = batch_payload(rows)
+    send_admin_notification(payload)
+
+
+def batch_payload(rows) -> dict:
+    """Title, text and link of a split collection's alert."""
+    first_payment, collector, first_invoice, customer = rows[0]
+    total = sum(payment.amount for payment, *_ in rows)
+    if len(rows) == 1:
+        return payment_payload(first_payment, collector, first_invoice, customer)
+    where = " · ".join(part for part in (customer.name if customer else None, f"{len(rows)} invoices") if part)
+    return {
+        "title": f"₹{total:,.0f} collected",
+        "body": f"{where} · by {collector.name}",
+        "url": f"/#/admin/invoices?invoice={first_invoice.id}",
+        "tag": f"batch-{first_payment.batch_id}",
+    }
 
 
 def payment_payload(payment, collector, invoice, customer) -> dict:

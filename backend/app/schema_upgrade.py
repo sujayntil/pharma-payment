@@ -18,6 +18,7 @@ _ADDITIVE_COLUMNS = {
         "recorded_by": "INTEGER",
         "reversal_of_id": "INTEGER",
         "reason": "TEXT",
+        "batch_id": "VARCHAR(36)",
     },
     "users": {
         "tokens_valid_after": "TIMESTAMP",

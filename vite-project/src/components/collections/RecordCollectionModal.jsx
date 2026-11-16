@@ -1,12 +1,14 @@
 import { useCallback, useState } from 'react';
-import { Alert, Button, Group, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { Alert, Button, Group, Modal, NumberInput, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { paymentsApi } from '../../api/paymentsApi';
 import { useAuth } from '../../hooks/useAppStore';
 import { useBackClose } from '../../hooks/useBackClose';
 import { errorText, money } from '../../utils/formatters';
-import { PAYMENT_MODES, toCollectionTarget } from './collectionUtils';
+import { toCollectionTarget } from './collectionUtils';
+import PaymentModeField from './PaymentModeField';
+import { lastPaymentMode, referenceFor, rememberPaymentMode } from './paymentModes';
+import { showUndoBar } from './undoBar';
 import CollectionCelebration from './CollectionCelebration';
 import { pickHeadline } from './celebrationText';
 import { autoFocusOnLaptop } from '../../utils/focus';
@@ -25,7 +27,11 @@ export default function RecordCollectionModal({ invoice, onClose, onSaved }) {
   const title = `Collect · ${target?.invoiceNumber || ''}`;
   // MRs get a short celebration after saving (Admins keep the plain toast).
   const [celebration, setCelebration] = useState(null);
-  const endCelebration = useCallback(() => setCelebration(null), []);
+  // When the celebration ends, the Undo bar takes over for 10 seconds.
+  const endCelebration = useCallback(() => {
+    if (celebration?.undo) showUndoBar(celebration.undo);
+    setCelebration(null);
+  }, [celebration]);
   return (
     <>
     {/* zIndex 250: above the invoice panel and ledger drawers (200) so it never
@@ -45,7 +51,7 @@ function CollectionForm({ target, onClose, onSaved, onCelebrate }) {
   // One amount box: it opens with the full pending amount selected, so Save
   // collects in full and typing a number replaces it for a part payment.
   const [amount, setAmount] = useState(target.pending);
-  const [mode, setMode] = useState('UPI');
+  const [mode, setMode] = useState(lastPaymentMode);
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -71,12 +77,14 @@ function CollectionForm({ target, onClose, onSaved, onCelebrate }) {
         invoice_id: target.invoiceId,
         amount: value,
         mode: mode || null,
-        transaction_reference: reference.trim() || null,
+        transaction_reference: referenceFor(mode, reference),
       });
+      rememberPaymentMode(mode);
+      const undo = { paymentId: result.payment_id, message: `${money(value)} collected · ${target.invoiceNumber}` };
       if (role === 'MR' && onCelebrate) {
-        onCelebrate({ amount: value, left: Math.max(target.pending - value, 0), cleared: clears, customer: target.customer, headline: pickHeadline(clears) });
+        onCelebrate({ amount: value, left: Math.max(target.pending - value, 0), cleared: clears, customer: target.customer, headline: pickHeadline(clears), undo });
       } else {
-        notifications.show({ color: 'green', title: 'Collection recorded', message: `${money(value)} received for ${target.invoiceNumber}.` });
+        showUndoBar(undo);
       }
       onSaved?.(result, value);
       onClose();
@@ -128,8 +136,7 @@ function CollectionForm({ target, onClose, onSaved, onCelebrate }) {
             </Text>
           )}
         </div>
-        <Select label="Payment mode" required data={PAYMENT_MODES} value={mode} onChange={(value) => setMode(value || 'UPI')} allowDeselect={false} />
-        <TextInput label="Reference / UTR / cheque number" placeholder="Optional" value={reference} onChange={(e) => setReference(e.currentTarget.value)} />
+        <PaymentModeField mode={mode} onMode={setMode} reference={reference} onReference={setReference} />
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="end">
           <Button variant="default" type="button" disabled={busy} onClick={onClose}>Cancel</Button>

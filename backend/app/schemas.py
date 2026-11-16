@@ -212,6 +212,16 @@ class PaymentCreate(BaseModel):
     transaction_reference: Optional[str] = None
 
 
+class PaymentBatchCreate(BaseModel):
+    """Collect from customer: one amount split over the ticked invoices,
+    oldest first."""
+    customer_id: int
+    amount: float = Field(gt=0)
+    invoice_ids: list[int] = Field(min_length=1, max_length=200)
+    mode: Optional[str] = None
+    transaction_reference: Optional[str] = None
+
+
 class PaymentReversalCreate(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
     amount: Optional[float] = Field(default=None, gt=0)  # defaults to everything still reversible

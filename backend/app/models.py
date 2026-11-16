@@ -167,6 +167,9 @@ class Payment(Base):
     )
     # Mandatory reason on reversal rows.
     reason = Column(Text, nullable=True)
+    # Same value on every payment saved together by "Collect from customer"
+    # (one amount split across invoices); NULL for single collections.
+    batch_id = Column(String(36), nullable=True, index=True)
 
     invoice = relationship("Invoice", back_populates="payments")
 

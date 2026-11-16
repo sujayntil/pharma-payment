@@ -206,3 +206,4 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
     </Stack>
   );
 }
+

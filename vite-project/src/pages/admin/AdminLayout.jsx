@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Center, Loader } from '@mantine/core';
-import { IconChartBar, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet } from '@tabler/icons-react';
+import { IconChartBar, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet, IconShieldCheck } from '@tabler/icons-react';
 import AppFrame from '../../components/common/AppFrame';
 
 const AdminDashboard = lazy(() => import('./AdminDashboard'));
@@ -11,6 +11,7 @@ const AdminPerformance = lazy(() => import('./AdminPerformance'));
 const AdminUsers = lazy(() => import('./AdminUsers'));
 const AdminCollections = lazy(() => import('./AdminCollections'));
 const AdminImport = lazy(() => import('./AdminImport'));
+const AdminAuditLog = lazy(() => import('./AdminAuditLog'));
 
 const ADMIN_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: IconChartBar },
@@ -20,6 +21,7 @@ const ADMIN_TABS = [
   { id: 'import', label: 'Import & mapping', shortLabel: 'Import', icon: IconFileSpreadsheet },
   { id: 'performance', label: 'MR Performance', shortLabel: 'Performance', icon: IconTrophy },
   { id: 'users', label: 'Users', icon: IconUserCog },
+  { id: 'audit', label: 'Audit log', shortLabel: 'Audit', icon: IconShieldCheck },
 ];
 
 export default function AdminLayout() {
@@ -45,6 +47,7 @@ export default function AdminLayout() {
         {activeTab === 'import' && <AdminImport />}
         {activeTab === 'performance' && <AdminPerformance />}
         {activeTab === 'users' && <AdminUsers />}
+        {activeTab === 'audit' && <AdminAuditLog />}
         </Suspense>
       </main>
     </AppFrame>

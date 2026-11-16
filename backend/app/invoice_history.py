@@ -14,6 +14,7 @@ from . import models
 from .collection_info import RECORDER_ID, as_utc, linked_reversal_totals, reversal_fields
 
 
+
 def _actor(user: models.User | None) -> dict | None:
     if user is None:
         return None
@@ -97,6 +98,7 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "after_reversal": (not is_reversal) and seen_reversal,
             "status_after": _status_for(invoice.total_amount, running),
             **reversal_fields(payment, reversed_totals),
+            "batch_id": payment.batch_id,
         })
 
     # Logged events with no ledger row behind them (other than "created").

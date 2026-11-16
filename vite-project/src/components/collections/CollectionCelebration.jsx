@@ -44,7 +44,7 @@ export default function CollectionCelebration({ celebration, onDone }) {
   }, [celebration, onDone]);
 
   if (!celebration) return null;
-  const { amount, left, cleared, customer, headline } = celebration;
+  const { amount, left, cleared, customer, headline, detail } = celebration;
   const [lead, king] = splitHeadline(headline || (cleared ? HEADLINES.cleared[0] : HEADLINES.part[0]));
   return (
     <Portal>
@@ -70,7 +70,8 @@ export default function CollectionCelebration({ celebration, onDone }) {
               {money(amount)} collected{!cleared && left > 0 ? <Text span c="dimmed" fw={500} fz={15}> · {money(left)} left</Text> : null}
             </Text>
           </Group>
-          {cleared && <Text size="sm" fw={600} c="green.8" ta="center" style={{ position: 'relative' }}>Invoice cleared</Text>}
+          {/* "Invoice cleared", or for a split collection "2 invoices cleared". */}
+          {(detail || cleared) && <Text size="sm" fw={600} c="green.8" ta="center" style={{ position: 'relative' }}>{detail || 'Invoice cleared'}</Text>}
           {customer && <Text size="sm" c="dimmed" ta="center" style={{ position: 'relative', overflowWrap: 'anywhere' }}>{customer}</Text>}
         </div>
       </div>

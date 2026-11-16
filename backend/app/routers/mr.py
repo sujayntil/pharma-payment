@@ -19,11 +19,19 @@ router = APIRouter(prefix="/mr", tags=["mr"])
 def customers(
     search: str | None = None,
     customer_type: str | None = None,
+    sort: str = "oldest",
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
-    """Return only customers currently assigned to this representative."""
+    """Return only customers currently assigned to this representative.
+
+    sort: "oldest" (default) puts the customer with the oldest unpaid invoice
+    first, then larger amounts, with fully paid customers last (A-Z);
+    "pending" is the largest pending first; "name" is A-Z.
+    """
+    if sort not in ("oldest", "pending", "name"):
+        raise HTTPException(422, "sort must be oldest, pending or name")
     search = clean_search(search)
     invoice_count = (
         select(func.count(models.Invoice.id))
@@ -49,7 +57,13 @@ def customers(
         .correlate(models.Customer)
         .scalar_subquery()
     )
-    query = db.query(models.Customer, invoice_count, invoiced, outstanding, latest_invoice).filter(
+    oldest_pending = (
+        select(func.min(models.Invoice.invoice_date))
+        .where(models.Invoice.customer_id == models.Customer.id, models.Invoice.pending_amount > 0)
+        .correlate(models.Customer)
+        .scalar_subquery()
+    )
+    query = db.query(models.Customer, invoice_count, invoiced, outstanding, latest_invoice, oldest_pending).filter(
         models.Customer.mr_id == user.id
     )
     if search and search.strip():
@@ -63,7 +77,12 @@ def customers(
     if customer_type and customer_type.strip():
         # Same matching as the Admin customer list.
         query = query.filter(models.Customer.type.ilike(f"%{customer_type.strip()}%"))
-    query = query.order_by(models.Customer.name, models.Customer.id)
+    if sort == "oldest":
+        query = query.order_by(oldest_pending.is_(None), oldest_pending.asc(), outstanding.desc(), models.Customer.name, models.Customer.id)
+    elif sort == "pending":
+        query = query.order_by(outstanding.desc(), models.Customer.name, models.Customer.id)
+    else:
+        query = query.order_by(models.Customer.name, models.Customer.id)
     rows, total, page_size, page_offset = query_page(query, limit, offset, search)
     items = [
         {
@@ -77,8 +96,9 @@ def customers(
             "total_invoiced": total,
             "outstanding": pending,
             "latest_invoice_date": latest,
+            "oldest_pending_date": oldest,
         }
-        for customer, count, total, pending, latest in rows
+        for customer, count, total, pending, latest, oldest in rows
     ]
     if limit is None and offset is None and search is None:
         return items

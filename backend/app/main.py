@@ -12,7 +12,7 @@ from . import models  # noqa: F401  (ensures models are registered before create
 from .database import Base, SessionLocal, engine
 from .overdue import process_due_overdue_reminders
 from .schema_upgrade import ensure_additive_columns
-from .routers import admin, auth, customers, imports, invoices, mr, notifications, payments, uploads
+from .routers import activity, admin, auth, customers, imports, invoices, mr, notifications, payments, uploads
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +110,7 @@ app.include_router(customers.router)
 app.include_router(admin.router)
 app.include_router(imports.router)
 app.include_router(mr.router)
+app.include_router(activity.router)
 # Uploaded invoice photos now need a login (Admin: any file; MR: own invoices).
 app.include_router(uploads.router)
 

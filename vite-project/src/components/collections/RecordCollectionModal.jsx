@@ -8,6 +8,7 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { errorText, money } from '../../utils/formatters';
 import { PAYMENT_MODES, toCollectionTarget } from './collectionUtils';
 import CollectionCelebration from './CollectionCelebration';
+import { pickHeadline } from './celebrationText';
 import { autoFocusOnLaptop } from '../../utils/focus';
 
 /**
@@ -73,7 +74,7 @@ function CollectionForm({ target, onClose, onSaved, onCelebrate }) {
         transaction_reference: reference.trim() || null,
       });
       if (role === 'MR' && onCelebrate) {
-        onCelebrate({ amount: value, left: Math.max(target.pending - value, 0), cleared: clears, customer: target.customer });
+        onCelebrate({ amount: value, left: Math.max(target.pending - value, 0), cleared: clears, customer: target.customer, headline: pickHeadline(clears) });
       } else {
         notifications.show({ color: 'green', title: 'Collection recorded', message: `${money(value)} received for ${target.invoiceNumber}.` });
       }

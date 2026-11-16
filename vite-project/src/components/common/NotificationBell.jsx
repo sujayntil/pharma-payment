@@ -11,6 +11,9 @@ import { dayOf, money, timeOf } from '../../utils/formatters';
 import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
 
 
+// The bell shows the 5 newest collections; "See all collections" has the rest.
+const BELL_SIZE = 5;
+
 /** "2:01 pm" today, "Yesterday, 2:01 pm", else "14 Nov, 2:01 pm" (India time). */
 function when(value) {
   const day = dayOf(value);
@@ -45,7 +48,7 @@ export default function NotificationBell({ size = 38 }) {
   // Load now, on every refresh (button, pull, or the quiet one each minute), and when an alert arrives.
   useEffect(() => {
     let active = true;
-    notificationsApi.recent(20)
+    notificationsApi.recent(BELL_SIZE)
       .then((result) => { if (active) { setData(result); setFailed(false); } })
       .catch(() => { if (active) setFailed(true); })
       .finally(() => { if (active) setLoading(false); });
@@ -62,7 +65,7 @@ export default function NotificationBell({ size = 38 }) {
     setOpened(true);
     // Load the latest list (with its "new" dots), then mark it all seen.
     // The dots stay while the list is open; the red count clears now.
-    notificationsApi.recent(20)
+    notificationsApi.recent(BELL_SIZE)
       .then((result) => {
         setData({ ...result, unread: 0 }); setFailed(false);
         if (result.unread > 0) return notificationsApi.markSeen();

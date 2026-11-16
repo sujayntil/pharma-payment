@@ -53,7 +53,7 @@ export default function AdminCustomers({ openCustomer = null }) {
     const timer = setTimeout(async () => {
       setLoading(true); setError('');
       try {
-        const result = await customersApi.getCustomers({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }), ...(filters.mrId && { mr_id: filters.mrId }), ...(filters.sort && { sort: filters.sort }), ...(filters.type && { customer_type: filters.type }) });
+        const result = await customersApi.getCustomers({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }), ...(filters.mrId && { mr_id: filters.mrId }), sort: filters.sort || 'pending', ...(filters.type && { customer_type: filters.type }) });
         if (active) { setCustomers(result.items); setTotal(result.total); }
       } catch (err) { if (active) setError(errorText(err)); }
       finally { if (active) setLoading(false); }
@@ -80,7 +80,8 @@ export default function AdminCustomers({ openCustomer = null }) {
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setFilters({ mrId: '', type: '', sort: '' }); setSearch(''); setPage(1); };
   const chips = [
-    filters.sort && { key: 'sort', label: 'Most pending first', onRemove: () => update({ sort: '' }) },
+    // Default order is most pending first; a chip shows only for Name A–Z.
+    filters.sort && { key: 'sort', label: 'Name A–Z', onRemove: () => update({ sort: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     filters.type && { key: 'type', label: `Type: ${filters.type}`, onRemove: () => update({ type: '' }) },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
@@ -136,7 +137,7 @@ export default function AdminCustomers({ openCustomer = null }) {
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
-      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'name'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'pending' ? 'pending' : '' })} />
+      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'name' ? 'name' : '' })} />
     </FilterBar>
     <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match these filters.</Text> : isMobile ? <CardList>{customers.map((customer) => (
       <RowCard

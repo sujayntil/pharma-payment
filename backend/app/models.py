@@ -44,6 +44,8 @@ class User(Base):
     # Sessions (login tokens) issued before this moment are no longer accepted.
     # Set when the password is reset. NULL = never reset since this was added.
     tokens_valid_after = Column(DateTime, nullable=True)
+    # Admin bell: newest payment id this user has seen (NULL = never opened).
+    notifications_seen_payment_id = Column(Integer, nullable=True)
 
     invoices = relationship("Invoice", back_populates="mr")
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Button, Group, Loader, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDownload, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { invoicesApi } from '../../api/invoicesApi';
 import { adminApi } from '../../api/adminApi';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -59,6 +60,24 @@ export default function AdminInvoices() {
   const isMobile = useIsMobile();
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null); const [historyKey, setHistoryKey] = useState(0);
   const panelSpace = useSidePanelSpace(Boolean(historyId));
+  // "?invoice=<id>" (from the bell or a tapped phone alert) opens that
+  // invoice's panel. The link is first swapped for a clean address (so Back
+  // closes the panel and a reload doesn't reopen it); the panel opens once
+  // that has happened, so its Back step sits on top of the clean entry.
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const linkedParam = Number(params.get('invoice')) || null;
+  useEffect(() => {
+    if (linkedParam) navigate(location.pathname, { replace: true, state: { openInvoice: linkedParam, linkId: Date.now() } });
+  }, [linkedParam, location.pathname, navigate]);
+  const wanted = location.state?.openInvoice;
+  const linkId = location.state?.linkId;
+  const [handledLink, setHandledLink] = useState(null);
+  if (wanted && linkId !== handledLink) {
+    setHandledLink(linkId);
+    setHistoryId(wanted);
+  }
   const defaultSort = tab === 'pending' ? 'oldest' : 'newest';
   const sort = filters.sort || defaultSort;
   // Laptop: with the invoice panel open, drop Bill, Collected and Recorded by

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActionIcon, Anchor, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { IconBrandWhatsapp } from '@tabler/icons-react';
+import { autoFocusOnLaptop } from '../../utils/focus';
 
 const WHATSAPP_GREEN = '#25D366';
 
@@ -71,7 +72,7 @@ function NumberRow({ label, required, placeholder, number, onNumber, whatsapp, o
         autoComplete="off"
         value={number}
         onChange={(event) => onNumber(event.currentTarget.value)}
-        data-autofocus={autoFocus || undefined}
+        data-autofocus={autoFocus ? autoFocusOnLaptop() : undefined}
         rightSection={onClear ? <Anchor component="button" type="button" size="xs" c="dimmed" onClick={onClear} aria-label={`Remove ${label.toLowerCase()} number`}>Clear</Anchor> : null}
         rightSectionWidth={onClear ? 52 : undefined}
       />

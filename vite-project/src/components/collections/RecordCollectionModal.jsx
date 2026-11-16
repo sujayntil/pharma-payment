@@ -8,6 +8,7 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { errorText, money } from '../../utils/formatters';
 import { PAYMENT_MODES, toCollectionTarget } from './collectionUtils';
 import CollectionCelebration from './CollectionCelebration';
+import { autoFocusOnLaptop } from '../../utils/focus';
 
 /**
  * The one "Collect" form used by both MRs and Admins. When an
@@ -113,7 +114,7 @@ function CollectionForm({ target, onClose, onSaved, onCelebrate }) {
             value={amount}
             onChange={setAmount}
             onFocus={(event) => event.currentTarget.select()}
-            data-autofocus
+            data-autofocus={autoFocusOnLaptop()}
           />
           {/* Nothing under the box for the full amount; a balance or a warning otherwise. */}
           {!clears && (

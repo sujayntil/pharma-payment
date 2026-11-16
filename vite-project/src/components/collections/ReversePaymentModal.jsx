@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { adminApi } from '../../api/adminApi';
 import { useBackClose } from '../../hooks/useBackClose';
 import { dateTime, errorText, money } from '../../utils/formatters';
+import { autoFocusOnLaptop } from '../../utils/focus';
 
 const REASONS = ['Cheque bounced', 'Wrong amount', 'Wrong invoice', 'Duplicate entry', 'Other'];
 
@@ -68,7 +69,7 @@ function ReverseForm({ payment, onClose, onSaved }) {
         </Chip.Group>
       </div>
       {choice === 'Other' && (
-        <Textarea placeholder="Describe the reason" maxLength={200} autosize minRows={2} value={other} onChange={(e) => setOther(e.currentTarget.value)} data-autofocus />
+        <Textarea placeholder="Describe the reason" maxLength={200} autosize minRows={2} value={other} onChange={(e) => setOther(e.currentTarget.value)} data-autofocus={autoFocusOnLaptop()} />
       )}
       {error && <Alert color="red">{error}</Alert>}
       <Group justify="end">

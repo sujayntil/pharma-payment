@@ -84,12 +84,13 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   useEffect(() => {
     let active = true;
     invoicesApi.getInvoiceHistory(invoiceId)
-      .then((result) => { if (active) setData(result); })
+      .then((result) => { if (active) { setData(result); setError(''); } })
       .catch((err) => { if (active) setError(errorText(err)); });
     return () => { active = false; };
   }, [invoiceId, reload, refreshKey, appRefresh]);
 
-  if (error) return <Alert color="red">{error}</Alert>;
+  // A failed background refresh keeps the invoice on screen.
+  if (error && !data) return <Alert color="red">{error}</Alert>;
   if (!data) return <Group justify="center" p="xl"><Loader /></Group>;
   const { invoice, events } = data;
   const onReversed = () => { setReload((value) => value + 1); onChanged?.(); };

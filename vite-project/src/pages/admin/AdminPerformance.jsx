@@ -40,7 +40,7 @@ export default function AdminPerformance() {
       <DateRangeFilter label="Invoice date" value={range} onChange={setRange} allLabel="All time" />
     </FilterBar>
     {error && <Alert color="red">{error}</Alert>}
-    <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text c="dimmed" ta="center" py="xl">No performance records for this range.</Text> : isMobile ? <CardList>{rows.map((row) => (
+    <Paper {...listPaperProps(isMobile)}>{loading && !rows.length ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text c="dimmed" ta="center" py="xl">No performance records for this range.</Text> : isMobile ? <CardList>{rows.map((row) => (
       <RowCard
         key={row.mr_id}
         title={row.name}

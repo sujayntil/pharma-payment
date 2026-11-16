@@ -1,9 +1,18 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { notifications } from '@mantine/notifications';
 import { failureCount, whenIdle } from '../../api/axiosClient';
 import { AppRefreshContext } from '../../hooks/useAppRefresh';
+import { setQuietReload } from './listPaper';
 
 const MIN_SPIN_MS = 600;
+const AUTO_EVERY_MS = 20000;   // quiet check while the app is on screen (every 20 s)
+const AWAY_MS = 20000;         // coming back after this long refreshes at once
+
+/** Someone is typing in a box: don't move things under their fingers. */
+const typing = () => {
+  const el = document.activeElement;
+  return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable));
+};
 
 /** Holds the app-wide refresh key; see useAppRefresh. */
 export default function AppRefreshProvider({ children }) {
@@ -28,6 +37,33 @@ export default function AppRefreshProvider({ children }) {
     }
     busy.current = false; setRefreshing(false);
   }, []);
+
+  // Automatic, silent refresh: every 20 seconds while the app is on screen, and
+  // straight away when the user comes back to it after 20 seconds or more
+  // (e.g. from WhatsApp or a call). No spinner, no dimming, no error
+  // message; skipped while offline, while typing, or during another refresh.
+  const quietRefresh = useCallback(async () => {
+    if (busy.current || document.hidden || navigator.onLine === false || typing()) return;
+    busy.current = true;
+    setQuietReload(true);
+    setRefreshKey((key) => key + 1);
+    await whenIdle();
+    setQuietReload(false);
+    setLastUpdated(Date.now());
+    busy.current = false;
+  }, []);
+
+  useEffect(() => {
+    let hiddenAt = document.hidden ? Date.now() : null;
+    const timer = setInterval(quietRefresh, AUTO_EVERY_MS);
+    const onVisibility = () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt >= AWAY_MS) quietRefresh();
+      hiddenAt = null;
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [quietRefresh]);
 
   const value = useMemo(() => ({ refreshKey, refreshing, lastUpdated, refresh }), [refreshKey, refreshing, lastUpdated, refresh]);
   return <AppRefreshContext.Provider value={value}>{children}</AppRefreshContext.Provider>;

@@ -26,6 +26,8 @@ import { authApi } from '../../api/authApi';
 import AppRefreshProvider from './AppRefreshProvider';
 import PullToRefresh from './PullToRefresh';
 import RefreshButton from './RefreshButton';
+import NotificationBell from './NotificationBell';
+import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
 
 const NAV_KEY = 'nav-collapsed';
 const readCollapsed = () => { try { return window.localStorage.getItem(NAV_KEY) === '1'; } catch { return false; } };
@@ -64,6 +66,20 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
       .catch(() => { /* Keep the session on transient profile-load errors. */ });
     return () => { active = false; };
   }, [dispatch, userId, userName]);
+
+  // Messages from the service worker: a tapped payment alert asks to open
+  // its invoice (the app was already open), and an alert that arrives while
+  // the app is open refreshes the bell.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (event) => {
+      const message = event.data || {};
+      if (message.type === 'open' && typeof message.path === 'string' && message.path.startsWith('/')) navigate(message.path);
+      if (message.type === 'payment') window.dispatchEvent(new Event(BELL_REFRESH_EVENT));
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [navigate]);
 
   // Phone Back closes the ☰ menu (Admin) instead of leaving the screen.
   const menuOpen = opened && isMobile && !useBottomNav;
@@ -111,6 +127,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
           <Group gap={isMobile ? 'xs' : 'md'} wrap="nowrap">
           {/* Refresh: Admin everywhere, MR on laptop (MR phones pull down instead). */}
           {!useBottomNav && <RefreshButton size={isMobile ? 34 : 38} />}
+          {role === 'ADMIN' && <NotificationBell size={isMobile ? 34 : 38} />}
           <Menu shadow="md" width={190} position="bottom-end">
             <Menu.Target>
               <UnstyledButton aria-label="Open user menu">

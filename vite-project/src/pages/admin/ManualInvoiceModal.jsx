@@ -8,6 +8,7 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { displayPhone, errorText } from '../../utils/formatters';
 import { phonePayload } from '../../utils/phone';
 import { CUSTOMER_TYPES } from '../../utils/customerTypes';
+import { autoFocusOnLaptop } from '../../utils/focus';
 
 const NEW = '__new__';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -106,7 +107,7 @@ function ManualInvoiceForm({ onClose, onSaved, mrOptions }) {
     <form onSubmit={submit}>
       <Stack gap="sm">
         <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
-          <TextInput label="Invoice number" required placeholder="INV-1090" value={invoice.number} onChange={(event) => setInvoice({ ...invoice, number: event.currentTarget.value })} data-autofocus />
+          <TextInput label="Invoice number" required placeholder="INV-1090" value={invoice.number} onChange={(event) => setInvoice({ ...invoice, number: event.currentTarget.value })} data-autofocus={autoFocusOnLaptop()} />
           <TextInput label="Invoice date" required type="date" value={invoice.date} onChange={(event) => setInvoice({ ...invoice, date: event.currentTarget.value })} />
         </SimpleGrid>
 

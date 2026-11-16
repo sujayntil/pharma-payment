@@ -1,4 +1,5 @@
-const CACHE_NAME = 'pharma-app-shell-v3';
+// Bump when this file changes so installed apps pick up the new worker.
+const CACHE_NAME = 'pharma-app-shell-v4';
 const SHELL_FILES = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -49,28 +50,38 @@ self.addEventListener('push', (event) => {
     data = { body: event.data?.text() || '' };
   }
 
-  event.waitUntil(self.registration.showNotification(data.title || 'Payment received', {
-    body: data.body || 'An MR recorded a payment.',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    tag: data.tag || 'payment',
-    data: { url: data.url || '/#/admin' },
-  }));
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(data.title || 'Payment received', {
+      body: data.body || 'An MR recorded a payment.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: data.tag || 'payment',
+      data: { url: data.url || '/#/admin' },
+    }),
+    // App already open: let the bell show the new collection straight away.
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windows) => windows.forEach((client) => client.postMessage({ type: 'payment' }))),
+  ]));
 });
 
+// Tapping an alert opens its invoice: "/#/admin/invoices?invoice=12".
+// Older alerts pointed at "admin.html", which now means the Dashboard.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const requestedUrl = event.notification.data?.url || '/#/admin';
   const target = /(^|\/)admin\.html(?:$|[?#])/.test(requestedUrl)
-    ? new URL('/#/admin', self.location.origin).href
-    : new URL(requestedUrl, self.location.origin).href;
+    ? new URL('/#/admin', self.location.origin)
+    : new URL(requestedUrl, self.location.origin);
+  const path = target.hash ? target.hash.slice(1) : '/admin';
 
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windows) => {
     const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
     if (existing) {
-      await existing.navigate(target);
+      // App already open: switch screens inside it (keeps the session and
+      // avoids a full reload), then bring it to the front.
+      existing.postMessage({ type: 'open', path });
       return existing.focus();
     }
-    return self.clients.openWindow(target);
+    return self.clients.openWindow(target.href);
   }));
 });

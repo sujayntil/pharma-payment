@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Modal, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowsSort, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
+import { IconArrowsSort, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
@@ -132,7 +132,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   const openEdit = (customer) => setEditing(customer);
   const deleteCustomer = async () => { setBusy(true); setError(''); try { await customersApi.deleteCustomer(deleting.id); setDeleting(null); setNotice('Customer deleted.'); setRefresh((value) => value + 1); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
 
-  return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group><Button leftSection={<IconPlus size={16} />} onClick={() => setEditing({})}>{isMobile ? 'Add' : 'Add customer'}</Button></Group>
+  return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />

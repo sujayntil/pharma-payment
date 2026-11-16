@@ -21,6 +21,7 @@ _ADDITIVE_COLUMNS = {
     },
     "users": {
         "tokens_valid_after": "TIMESTAMP",
+        "notifications_seen_payment_id": "INTEGER",
     },
     "customers": {
         "alternate_phone": "VARCHAR",

@@ -7,6 +7,7 @@ import { displayPhone, errorText } from '../../utils/formatters';
 import { phonePayload } from '../../utils/phone';
 import { typeOptions } from '../../utils/customerTypes';
 import PhoneFields from './PhoneFields';
+import { autoFocusOnLaptop } from '../../utils/focus';
 
 /**
  * Admin "Add customer" / "Edit customer", one short card:
@@ -154,7 +155,7 @@ function NameWithMatches({ value, onChange, onPick }) {
             onFocus={() => combobox.openDropdown()}
             onBlur={() => combobox.closeDropdown()}
             error={exact ? 'This customer already exists.' : undefined}
-            data-autofocus
+            data-autofocus={autoFocusOnLaptop()}
           />
         </Combobox.Target>
         <Combobox.Dropdown hidden={!shown.length}>

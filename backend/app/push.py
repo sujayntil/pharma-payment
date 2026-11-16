@@ -57,20 +57,31 @@ def send_admin_notification(payload: dict, ttl: int = 60) -> bool:
 
 
 def send_payment_notification(payment_id: int):
+    """Phone alert for a collection an MR recorded. Tapping it opens that
+    invoice (its history shows the new payment) in the Admin app."""
     with SessionLocal() as db:
-        payment = (
-            db.query(models.Payment, models.User)
+        row = (
+            db.query(models.Payment, models.User, models.Invoice, models.Customer)
             .join(models.User, models.User.id == models.Payment.collected_by)
+            .join(models.Invoice, models.Invoice.id == models.Payment.invoice_id)
+            .outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id)
             .filter(models.Payment.id == payment_id)
             .first()
         )
-        if not payment:
+        if not row:
             return
-        payment_row, collector = payment
-        payload = {
-            "title": "Payment received",
-            "body": f"{collector.name} recorded ₹{payment_row.amount:,.0f}. Open the app for details.",
-            "url": "admin.html",
-            "tag": f"payment-{payment_row.id}",
-        }
+        payment_row, collector, invoice, customer = row
+        payload = payment_payload(payment_row, collector, invoice, customer)
     send_admin_notification(payload)
+
+
+def payment_payload(payment, collector, invoice, customer) -> dict:
+    """Title, text and in-app link of a collection alert."""
+    where = " · ".join(part for part in (customer.name if customer else None, invoice.invoice_number) if part)
+    return {
+        "title": f"₹{payment.amount:,.0f} collected",
+        "body": f"{where} · by {collector.name}" if where else f"by {collector.name}",
+        # Opens the Admin Invoices page with this invoice's panel open.
+        "url": f"/#/admin/invoices?invoice={invoice.id}",
+        "tag": f"payment-{payment.id}",
+    }

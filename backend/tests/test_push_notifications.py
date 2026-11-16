@@ -7,7 +7,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models, schemas
 from app.database import Base
-from app.routers.notifications import delete_subscription, save_subscription
+from app.push import payment_payload
+from app.routers.notifications import delete_subscription, mark_seen, recent_collections, save_subscription
 from app.routers.payments import add_payment
 
 
@@ -73,6 +74,47 @@ class PushNotificationTests(unittest.TestCase):
             self.admin,
         )
         self.assertEqual(background.tasks, [])
+
+
+    def pay(self, user, amount):
+        add_payment(schemas.PaymentCreate(invoice_id=self.invoice.id, amount=amount, mode="UPI"), BackgroundTasks(), self.db, user)
+        return self.db.query(models.Payment).order_by(models.Payment.id.desc()).first()
+
+    def test_bell_lists_newest_first_and_counts_only_others_entries(self):
+        with patch("app.routers.payments.send_payment_notification"):
+            self.pay(self.mr, 10)
+            self.pay(self.admin, 5)   # the Admin's own entry is never "new" for them
+            last = self.pay(self.mr, 20)
+        result = recent_collections(20, self.db, self.admin)
+        self.assertEqual([item["amount"] for item in result["items"]], [20, 5, 10])
+        self.assertEqual(result["unread"], 2)
+        first = result["items"][0]
+        self.assertEqual((first["invoice_number"], first["customer_name"], first["recorded_by_name"], first["is_new"]),
+                         ("A00001", "Tulsi Pharmacy", "MR One", True))
+        self.assertFalse(result["items"][1]["is_new"])
+
+        mark_seen(self.db, self.admin)
+        self.db.refresh(self.admin)
+        self.assertEqual(self.admin.notifications_seen_payment_id, last.id)
+        after = recent_collections(20, self.db, self.admin)
+        self.assertEqual(after["unread"], 0)
+        self.assertFalse(any(item["is_new"] for item in after["items"]))
+
+        with patch("app.routers.payments.send_payment_notification"):
+            self.pay(self.mr, 7)
+        again = recent_collections(20, self.db, self.admin)
+        self.assertEqual(again["unread"], 1)
+        self.assertTrue(again["items"][0]["is_new"])
+
+    def test_alert_text_and_link_open_the_invoice(self):
+        with patch("app.routers.payments.send_payment_notification"):
+            payment = self.pay(self.mr, 40)
+        invoice = self.db.get(models.Invoice, self.invoice.id)
+        payload = payment_payload(payment, self.mr, invoice, invoice.customer)
+        self.assertEqual(payload["title"], "₹40 collected")
+        self.assertEqual(payload["body"], "Tulsi Pharmacy · A00001 · by MR One")
+        self.assertEqual(payload["url"], f"/#/admin/invoices?invoice={invoice.id}")
+        self.assertEqual(payload["tag"], f"payment-{payment.id}")
 
 
 if __name__ == "__main__":

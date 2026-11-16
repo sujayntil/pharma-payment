@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, Anchor, Button, Collapse, Divider, Group, Modal, Select, SimpleGrid, Stack, TextInput } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Alert, Anchor, Button, Collapse, Combobox, Divider, Group, Modal, Select, SimpleGrid, Stack, Text, TextInput, useCombobox } from '@mantine/core';
 import { IconChevronDown } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
 import { useBackClose } from '../../hooks/useBackClose';
@@ -21,17 +21,22 @@ import PhoneFields from './PhoneFields';
  * onSaved(saved) runs after a successful save.
  */
 export default function CustomerFormModal({ customer, mrOptions, onClose, onSaved }) {
+  // While adding, picking an existing customer from the name list switches
+  // the form to editing that customer instead of creating a duplicate.
+  const [existing, setExisting] = useState(null);
+  const close = () => { setExisting(null); onClose(); };
   const opened = Boolean(customer);
-  useBackClose(opened, onClose);
-  const isNew = opened && !customer.id;
+  useBackClose(opened, close);
+  const shown = existing || customer;
+  const isNew = opened && !shown.id;
   return (
-    <Modal opened={opened} onClose={onClose} title={isNew ? 'Add customer' : 'Edit customer'} centered size={480} zIndex={250}>
-      {customer && <CustomerForm key={customer.id || 'new'} customer={customer} mrOptions={mrOptions} onClose={onClose} onSaved={onSaved} />}
+    <Modal opened={opened} onClose={close} title={isNew ? 'Add customer' : 'Edit customer'} centered size={480} zIndex={250}>
+      {customer && <CustomerForm key={shown.id || 'new'} customer={shown} mrOptions={mrOptions} onClose={close} onSaved={onSaved} onPickExisting={setExisting} />}
     </Modal>
   );
 }
 
-function CustomerForm({ customer, mrOptions, onClose, onSaved }) {
+function CustomerForm({ customer, mrOptions, onClose, onSaved, onPickExisting }) {
   const isNew = !customer.id;
   const [form, setForm] = useState({
     name: customer.name || '',
@@ -79,7 +84,9 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved }) {
   return (
     <form onSubmit={submit}>
       <Stack gap="sm">
-        <TextInput label="Name" required placeholder="Sri Balaji Medicals" value={form.name} onChange={(event) => set({ name: event.currentTarget.value })} data-autofocus={isNew || undefined} />
+        {isNew
+          ? <NameWithMatches value={form.name} onChange={(name) => set({ name })} onPick={onPickExisting} />
+          : <TextInput label="Name" required placeholder="Sri Balaji Medicals" value={form.name} onChange={(event) => set({ name: event.currentTarget.value })} />}
         <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
           <Select label="Type" placeholder="Choose type" clearable data={typeOptions(form.type)} value={form.type || null} onChange={(value) => set({ type: value || '' })} comboboxProps={{ zIndex: 300 }} />
           <Select label="Assigned MR" placeholder="Not assigned" clearable searchable data={mrOptions} value={form.mr_id || null} onChange={(value) => set({ mr_id: value || '' })} comboboxProps={{ zIndex: 300 }} />
@@ -107,5 +114,66 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved }) {
         </Group>
       </Stack>
     </form>
+  );
+}
+
+/**
+ * Name box for "Add customer". As the name is typed, customers with a
+ * similar name drop down (with MR and number) so a duplicate isn't added by
+ * mistake; picking one opens that customer for editing instead.
+ */
+function NameWithMatches({ value, onChange, onPick }) {
+  const [matches, setMatches] = useState([]);
+  const combobox = useCombobox({ onDropdownClose: () => combobox.resetSelectedOption() });
+  const typed = value.trim();
+
+  useEffect(() => {
+    if (typed.length < 2) return undefined;
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await customersApi.getCustomers({ limit: 6, search: typed });
+        if (active) setMatches(data.items);
+      } catch { if (active) setMatches([]); }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [typed]);
+
+  const shown = typed.length >= 2 ? matches : [];
+  const exact = shown.find((customer) => customer.name.trim().toLowerCase() === typed.toLowerCase());
+  return (
+    <Stack gap={4}>
+      <Combobox store={combobox} withinPortal zIndex={300} onOptionSubmit={(id) => { const picked = shown.find((customer) => String(customer.id) === id); combobox.closeDropdown(); if (picked) onPick(picked); }}>
+        <Combobox.Target>
+          <TextInput
+            label="Name"
+            required
+            placeholder="Sri Balaji Medicals"
+            value={value}
+            onChange={(event) => { onChange(event.currentTarget.value); combobox.openDropdown(); combobox.updateSelectedOptionIndex(); }}
+            onFocus={() => combobox.openDropdown()}
+            onBlur={() => combobox.closeDropdown()}
+            error={exact ? 'This customer already exists.' : undefined}
+            data-autofocus
+          />
+        </Combobox.Target>
+        <Combobox.Dropdown hidden={!shown.length}>
+          <Combobox.Header><Text size="xs" c="dimmed">Already added. Pick one to edit it</Text></Combobox.Header>
+          <Combobox.Options>
+            {shown.map((customer) => (
+              <Combobox.Option value={String(customer.id)} key={customer.id}>
+                <Text size="sm">{customer.name}</Text>
+                <Text size="xs" c="dimmed">{[customer.mr_name || 'Not assigned', customer.type, displayPhone(customer.phone)].filter(Boolean).join(' · ')}</Text>
+              </Combobox.Option>
+            ))}
+          </Combobox.Options>
+        </Combobox.Dropdown>
+      </Combobox>
+      {exact && (
+        <Anchor component="button" type="button" size="xs" c="green.7" onClick={() => onPick(exact)} style={{ alignSelf: 'flex-start' }}>
+          Edit {exact.name} instead
+        </Anchor>
+      )}
+    </Stack>
   );
 }

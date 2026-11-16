@@ -8,6 +8,7 @@ import RowCard, { CardList } from '../../components/common/RowCard';
 import { listPaperProps } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { errorText, money } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 // No sales yet means there is no rate to judge, so show a dash, not a red 0%.
 const rateOf = (row) => (Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : null);
@@ -16,6 +17,7 @@ const RateBadge = ({ rate }) => (rate == null
   : <Badge color={rate >= 80 ? 'green' : rate >= 50 ? 'yellow' : 'red'}>{rate}%</Badge>);
 
 export default function AdminPerformance() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [rows, setRows] = useState([]); const [range, setRange] = useState(EMPTY_RANGE); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const isMobile = useIsMobile();
 
@@ -30,7 +32,7 @@ export default function AdminPerformance() {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [range]);
+  }, [range, appRefresh]);
 
   const rangeLabel = describeRange(range);
   return <Stack gap="md"><Group justify="space-between" align="end"><Title order={1}>MR performance</Title><Badge variant="light" size="lg">{rows.length} MRs</Badge></Group>

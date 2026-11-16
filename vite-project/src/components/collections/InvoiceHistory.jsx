@@ -12,6 +12,7 @@ import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { useActorLabel } from './collectionUtils';
 import ReversePaymentModal from './ReversePaymentModal';
 import ContactActions from '../customers/ContactActions';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 const EVENT_STYLE = {
   CREATED: { color: 'blue', icon: IconFileInvoice },
@@ -71,6 +72,7 @@ function Meta({ children }) {
 }
 
 function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this in place
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
@@ -85,7 +87,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
       .then((result) => { if (active) setData(result); })
       .catch((err) => { if (active) setError(errorText(err)); });
     return () => { active = false; };
-  }, [invoiceId, reload, refreshKey]);
+  }, [invoiceId, reload, refreshKey, appRefresh]);
 
   if (error) return <Alert color="red">{error}</Alert>;
   if (!data) return <Group justify="center" p="xl"><Loader /></Group>;

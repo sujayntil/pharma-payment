@@ -15,6 +15,7 @@ import { useGreeting } from '../../hooks/useGreeting';
 import { mrApi } from '../../api/mrApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { money, shortDate } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 // Secondary counts: quiet tiles (no border, soft background, smaller number)
 // so the Outstanding figure and its action stand out.
@@ -28,11 +29,12 @@ const Metric = ({ label, value, color }) => <Paper p="sm" h="100%" bg="gray.1" r
  * onOpenCustomer: ({ id, name }) => open that customer's ledger
  */
 export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disabled: onNavigateToUpload */) {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const greeting = useGreeting();
   const dispatch = useAppDispatch(); const { dashboard, totalOutstanding, loading } = useAppSelector((state) => state.mr);
   const isMobile = useIsMobile();
   const [openId, setOpenId] = useState(null); const [historyKey, setHistoryKey] = useState(0); const [recording, setRecording] = useState(null);
-  useEffect(() => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); }, [dispatch]);
+  useEffect(() => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); }, [dispatch, appRefresh]);
   const onSaved = () => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); setHistoryKey((v) => v + 1); };
   const recent = dashboard?.recent || [];
 

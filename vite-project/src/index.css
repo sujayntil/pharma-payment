@@ -77,3 +77,12 @@ textarea {
   background: var(--mantine-color-gray-4);
   margin: 8px auto 0;
 }
+
+/* Refresh icon turning while new data loads (button and pull-to-refresh). */
+@keyframes app-spin { to { transform: rotate(360deg); } }
+.app-spin { animation: app-spin 0.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .app-spin { animation-duration: 2.4s; } }
+
+/* Stop the phone browser's own pull-to-refresh (it would reload the whole
+   app and log nothing); the MR app does its own, which keeps filters. */
+html, body { overscroll-behavior-y: contain; }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text, Title, UnstyledButton } from '@mantine/core';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { errorText, money, shortDate } from '../../utils/formatters';
 
 /**
@@ -13,6 +14,7 @@ import { errorText, money, shortDate } from '../../utils/formatters';
  */
 export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No customers have invoices pending for 40 days or more.', onSelect, tableMinWidth }) {
   const isMobile = useIsMobile();
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,7 +26,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
       .catch((err) => { if (active) setError(errorText(err)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [load]);
+  }, [load, appRefresh]);
 
   const total = rows.reduce((sum, item) => sum + Number(item.overdue_amount || 0), 0);
 

@@ -22,12 +22,14 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import { CustomerContactModal, CustomerContactRow } from '../../components/customers/CustomerContact';
 import ContactActions from '../../components/customers/ContactActions';
 import { displayPhone, errorText, money, shortDate } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 const CUSTOMER_TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital'];
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from Home). */
 export default function MrCustomers({ openCustomer = null }) {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300); const [page, setPage] = useState(1); const [customerType, setCustomerType] = useState('');
   const [selected, setSelected] = useState(openCustomer); const [ledger, setLedger] = useState(null);
@@ -49,7 +51,7 @@ export default function MrCustomers({ openCustomer = null }) {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [page, debouncedSearch, customerType, refresh]);
+  }, [page, debouncedSearch, customerType, refresh, appRefresh]);
 
   useEffect(() => {
     if (!selected) return undefined;
@@ -63,7 +65,7 @@ export default function MrCustomers({ openCustomer = null }) {
       finally { if (active) setLedgerLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [ledgerFilters, ledgerPage, debouncedLedgerSearch, selected, refresh]);
+  }, [ledgerFilters, ledgerPage, debouncedLedgerSearch, selected, refresh, appRefresh]);
 
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const onType = (value) => { setCustomerType(value || ''); setPage(1); };

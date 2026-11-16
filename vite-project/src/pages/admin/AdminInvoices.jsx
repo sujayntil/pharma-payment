@@ -23,6 +23,7 @@ import ContactActions from '../../components/customers/ContactActions';
 import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { downloadErrorText, errorText, money, saveDownload, shortDate } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -49,6 +50,7 @@ function tabParams(tab, only) {
 }
 
 export default function AdminInvoices() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [invoices, setInvoices] = useState([]); const [total, setTotal] = useState(0); const [pendingTotal, setPendingTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [tab, setTab] = useState('pending'); const [counts, setCounts] = useState({});
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -88,7 +90,7 @@ export default function AdminInvoices() {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [tab, filters, sort, page, refresh, debouncedSearch]);
+  }, [tab, filters, sort, page, refresh, debouncedSearch, appRefresh]);
 
   // Tab counts (unfiltered), refreshed after every change.
   useEffect(() => {
@@ -97,7 +99,7 @@ export default function AdminInvoices() {
       .then((results) => { if (active) setCounts({ pending: results[0].total, paid: results[1].total, all: results[2].total }); })
       .catch(() => { /* counts are a convenience; the list shows its own errors */ });
     return () => { active = false; };
-  }, [refresh]);
+  }, [refresh, appRefresh]);
 
   // Export: every invoice matching the current tab, filters, search and sort (not just this page).
   const [exporting, setExporting] = useState(false);

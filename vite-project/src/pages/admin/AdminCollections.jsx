@@ -21,6 +21,7 @@ import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusBadge } from '../../components/collections/CollectionBadges';
 import { recorderOf, useActorLabel } from '../../components/collections/collectionUtils';
 import { downloadErrorText, errorText, money, saveDownload, dayOf, timeOf } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 /**
  * Second line of a phone collection card, kept to one short line:
@@ -42,6 +43,7 @@ const RECORDED_BY = [{ value: 'MR', label: 'By MR' }, { value: 'ADMIN', label: '
 const ENTRY_TYPES = [{ value: 'collection', label: 'Collections only' }, { value: 'reversal', label: 'Reversals only' }];
 
 export default function AdminCollections() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [rows, setRows] = useState([]); const [total, setTotal] = useState(0); const [count, setCount] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState(BLANK); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
@@ -76,7 +78,7 @@ export default function AdminCollections() {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [debouncedSearch, filters, page, refresh]);
+  }, [debouncedSearch, filters, page, refresh, appRefresh]);
 
   // Export: every ledger entry matching the current filters and search (not just this page).
   const [exporting, setExporting] = useState(false);

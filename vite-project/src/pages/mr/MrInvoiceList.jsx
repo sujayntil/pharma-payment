@@ -19,6 +19,7 @@ import ContactActions from '../../components/customers/ContactActions';
 import InvoiceAge from '../../components/collections/InvoiceAge';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { errorText, money, shortDate } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 /*
  * MR "Invoices": one screen for what used to be "My Invoices" and "My
@@ -53,6 +54,7 @@ const contactFor = (item, size) => <ContactActions size={size} fixedWidth={size 
 const canRecord = (item) => Number(item.pending_amount) > 0 && (item.status === 'UNPAID' || item.status === 'PARTIAL');
 
 export default function MrInvoiceList({ initialTab = 'pending' }) {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(initialTab);
   const [only, setOnly] = useState('');
@@ -97,7 +99,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [tab, only, customerType, range, sort, page, debouncedSearch, reload]);
+  }, [tab, only, customerType, range, sort, page, debouncedSearch, reload, appRefresh]);
 
   // Tab counts (unfiltered), refreshed after every collection.
   useEffect(() => {
@@ -106,7 +108,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
       .then((results) => { if (active) setCounts({ pending: results[0].total_count, paid: results[1].total_count, all: results[2].total_count }); })
       .catch(() => { /* counts are a convenience; the list shows its own errors */ });
     return () => { active = false; };
-  }, [reload]);
+  }, [reload, appRefresh]);
 
   const changeTab = (next) => {
     setTab(next);

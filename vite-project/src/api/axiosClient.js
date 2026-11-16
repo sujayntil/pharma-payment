@@ -13,9 +13,28 @@ const axiosClient = axios.create({
   },
 });
 
+// Requests still loading, and how many have failed so far. The refresh
+// button / pull-to-refresh use these to spin until the new data is in and to
+// say so when it could not be loaded.
+const activity = { pending: 0, failures: 0 };
+const settle = () => { activity.pending = Math.max(0, activity.pending - 1); };
+
+/** Resolves once no request is loading (checked every 80 ms, at most ~20 s). */
+export function whenIdle() {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const check = () => (activity.pending === 0 || Date.now() - started > 20000 ? resolve() : setTimeout(check, 80));
+    setTimeout(check, 120);
+  });
+}
+
+/** Number of failed requests so far (compare before / after a refresh). */
+export const failureCount = () => activity.failures;
+
 // Request interceptor: attach Bearer token stored in localStorage
 axiosClient.interceptors.request.use(
   (config) => {
+    activity.pending += 1;
     const token =
       localStorage.getItem('token') || localStorage.getItem('pharma_token');
     if (token) {
@@ -28,8 +47,10 @@ axiosClient.interceptors.request.use(
 
 // Response interceptor: handle 401 Unauthorized (session expired) and normalize error details
 axiosClient.interceptors.response.use(
-  (response) => response,
+  (response) => { settle(); return response; },
   (error) => {
+    settle();
+    if (!axios.isCancel(error)) activity.failures += 1;
     if (error.response?.status === 401) {
       // Clear token from localStorage
       localStorage.removeItem('token');

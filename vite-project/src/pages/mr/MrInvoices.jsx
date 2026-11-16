@@ -16,10 +16,12 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 // Disabled (MR edit invoice): import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { errorText, money, shortDate } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 // Disabled (MR edit invoice): const blank ={ invoice_number: '', invoice_date: '', customer_name: '', total_amount: '', payment_mode: '', remarks: '' };
 
 export default function MrInvoices() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [invoices, setInvoices] = useState([]); const [total, setTotal] = useState(0);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [range, setRange] = useState(EMPTY_RANGE); const [status, setStatus] = useState(''); const [page, setPage] = useState(1);
@@ -47,7 +49,7 @@ export default function MrInvoices() {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [range, status, page, debouncedSearch]);
+  }, [range, status, page, debouncedSearch, appRefresh]);
 
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setRange(EMPTY_RANGE); setStatus(''); setSearch(''); setPage(1); };

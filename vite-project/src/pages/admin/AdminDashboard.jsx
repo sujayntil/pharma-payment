@@ -16,6 +16,7 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { dateTime, money } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 // loading: grey placeholder bar until the figure arrives (never a misleading "₹0").
 // quiet: secondary counts (no border, soft background, smaller number) so the
@@ -41,6 +42,7 @@ const CUSTOMER_TYPES = [
 
 /** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
 export default function AdminDashboard({ onOpenCustomer }) {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const greeting = useGreeting();
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -63,12 +65,12 @@ export default function AdminDashboard({ onOpenCustomer }) {
     if (appliedCustomerType) params.customer_type = appliedCustomerType;
     dispatch(fetchAdminDashboard(params));
     adminApi.getRecentPayments().then(setRecent).catch((err) => setError(err.detail || err.message));
-  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo, appliedCustomerType, refreshKey]);
+  }, [dispatch, dashFilters.dateFrom, dashFilters.dateTo, appliedCustomerType, refreshKey, appRefresh]);
 
 
   useEffect(() => {
     dispatch(fetchOutstandingAlerts({ threshold: 50000, limit: PAGE_SIZE, offset: (alertPage - 1) * PAGE_SIZE }));
-  }, [dispatch, alertPage, refreshKey]);
+  }, [dispatch, alertPage, refreshKey, appRefresh]);
 
   const range = { from: dashFilters.dateFrom || '', to: dashFilters.dateTo || '' };
   const setRange = (next) => dispatch(setDashFilters({ dateFrom: next.from || null, dateTo: next.to || null }));

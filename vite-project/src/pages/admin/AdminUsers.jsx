@@ -5,16 +5,18 @@ import { adminApi } from '../../api/adminApi';
 import { useAuth } from '../../hooks/useAppStore';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import RowCard, { CardList } from '../../components/common/RowCard';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 const emptyUser = { name: '', employee_code: '', role: 'MR', phone: '', password: '' };
 
 export default function AdminUsers() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [users, setUsers] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const [createOpen, setCreateOpen] = useState(false); const [editing, setEditing] = useState(null); const [deleting, setDeleting] = useState(null); const [form, setForm] = useState(emptyUser); const [busy, setBusy] = useState(false);
   const load = () => adminApi.getUsers().then(setUsers).catch((err) => setError(err.detail || err.message)).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [appRefresh]);
   const create = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { await adminApi.createUser({ ...form, name: form.name.trim(), employee_code: form.employee_code.trim(), phone: form.phone.trim() || null }); setNotice('User created.'); setCreateOpen(false); setForm(emptyUser); await load(); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
   const edit = (target) => { setEditing(target); setForm({ name: target.name, employee_code: target.employee_code, role: target.role, phone: target.phone || '', password: '' }); };
   const save = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { const payload = { name: form.name.trim(), role: form.role, phone: form.phone.trim() || null }; if (form.password) payload.password = form.password; await adminApi.updateUser(editing.id, payload); setNotice('User updated.'); setEditing(null); await load(); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };

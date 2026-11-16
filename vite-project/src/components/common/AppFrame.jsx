@@ -23,6 +23,9 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
 import { logout, setUserData } from '../../store/slices/authSlice';
 import { authApi } from '../../api/authApi';
+import AppRefreshProvider from './AppRefreshProvider';
+import PullToRefresh from './PullToRefresh';
+import RefreshButton from './RefreshButton';
 
 const NAV_KEY = 'nav-collapsed';
 const readCollapsed = () => { try { return window.localStorage.getItem(NAV_KEY) === '1'; } catch { return false; } };
@@ -85,6 +88,9 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
   };
 
   return (
+    <AppRefreshProvider>
+    {/* MR on phone: pull down from the top to refresh (no button needed). */}
+    {useBottomNav && <PullToRefresh top={52} />}
     <AppShell
       // Phones get a slimmer header so the lists below have more room.
       header={{ height: isMobile ? 52 : 64 }}
@@ -102,6 +108,9 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               {!isMobile && <Text c="dimmed" size="xs">Collection workspace</Text>}
             </div>
           </Group>
+          <Group gap={isMobile ? 'xs' : 'md'} wrap="nowrap">
+          {/* Refresh: Admin everywhere, MR on laptop (MR phones pull down instead). */}
+          {!useBottomNav && <RefreshButton size={isMobile ? 34 : 38} />}
           <Menu shadow="md" width={190} position="bottom-end">
             <Menu.Target>
               <UnstyledButton aria-label="Open user menu">
@@ -125,6 +134,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               <Menu.Item color="red" leftSection={<IconLogout size={15} />} onClick={signOut}>Log out</Menu.Item>
             </Menu.Dropdown>
           </Menu>
+          </Group>
         </Group>
       </AppShell.Header>
 
@@ -237,5 +247,6 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>{children}</div>
       </AppShell.Main>
     </AppShell>
+    </AppRefreshProvider>
   );
 }

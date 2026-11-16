@@ -25,10 +25,12 @@ import { CustomerContactModal, CustomerContactRow } from '../../components/custo
 import CustomerFormModal from '../../components/customers/CustomerFormModal';
 
 import { CUSTOMER_TYPES } from '../../utils/customerTypes';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
 export default function AdminCustomers({ openCustomer = null }) {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState({ mrId: '', type: '', sort: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
@@ -57,7 +59,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [filters, page, refresh, debouncedSearch]);
+  }, [filters, page, refresh, debouncedSearch, appRefresh]);
 
   useEffect(() => {
     if (!selected) return undefined;
@@ -71,7 +73,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       finally { if (active) setLedgerLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [ledgerFilters, ledgerPage, ledgerRefresh, debouncedLedgerSearch, selected]);
+  }, [ledgerFilters, ledgerPage, ledgerRefresh, debouncedLedgerSearch, selected, appRefresh]);
 
   const mrOptions = useMemo(() => mrs.map((mr) => ({ value: String(mr.id), label: mr.name })), [mrs]);
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };

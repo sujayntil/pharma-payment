@@ -7,9 +7,11 @@ import RowCard, { CardList } from '../../components/common/RowCard';
 import { customersApi } from '../../api/customersApi';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import ManualInvoiceModal from './ManualInvoiceModal';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 
 export default function AdminImport() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const isMobile = useIsMobile();
   const [file, setFile] = useState(null); const [customers, setCustomers] = useState([]); const [customerTotal, setCustomerTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
@@ -33,7 +35,7 @@ export default function AdminImport() {
       finally { if (active) setCustomerLoading(false); }
     }, search ? 250 : 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [page, refresh, search]);
+  }, [page, refresh, search, appRefresh]);
 
 
   const upload = async () => { if (!file) return; setBusy(true); setMessage(''); setError(''); try { const data = await adminApi.importInvoices(file); setResult(data); setMessage(`Import complete: ${data.created} added, ${data.updated || 0} updated.`); setFile(null); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };

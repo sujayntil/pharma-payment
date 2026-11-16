@@ -15,6 +15,7 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { money, shortDate } from '../../utils/formatters';
+import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
 const STATUSES = [{ value: 'UNPAID', label: 'Pending' }, { value: 'PARTIAL', label: 'Partially paid' }, { value: 'PAID', label: 'Paid' }, { value: 'REVERSED', label: 'Reversed' }];
@@ -43,6 +44,7 @@ export default function MrCollections() {
 }
 
 function ToCollect() {
+  const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this in place
   const dispatch = useAppDispatch();
   const { outstanding, outstandingCount, filteredOutstanding, loading, searchQuery } = useAppSelector((state) => state.mr);
   const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
@@ -52,7 +54,7 @@ function ToCollect() {
 
   useEffect(() => {
     dispatch(fetchMrOutstanding(outstandingParams(page, debouncedSearch, range, sort, status)));
-  }, [debouncedSearch, dispatch, page, range, sort, status]);
+  }, [debouncedSearch, dispatch, page, range, sort, status, appRefresh]);
 
   const onSearch = (value) => { dispatch(setSearchQuery(value)); setPage(1); };
   const reset = () => { setRange(EMPTY_RANGE); setSort('newest'); setStatus(''); onSearch(''); };

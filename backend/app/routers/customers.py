@@ -10,7 +10,7 @@ from ..collection_info import last_collection_fields, latest_collections
 from ..audit import customer_snapshot, write_audit
 from ..database import get_db
 from ..deps import get_current_user, require_admin
-from ..utils import clean_search, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone
+from ..utils import clean_search, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone, set_customer_numbers
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -88,8 +88,31 @@ def create_customer(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    customer = models.Customer(**payload.model_dump())
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(422, "Customer name is required")
+    duplicate = db.query(models.Customer).filter(func.lower(func.trim(models.Customer.name)) == name.lower()).first()
+    if duplicate:
+        raise HTTPException(409, f"Customer name '{name}' already exists")
+    if payload.mr_id is not None:
+        mr = db.get(models.User, payload.mr_id)
+        if not mr or mr.role != models.RoleEnum.MR.value:
+            raise HTTPException(422, "mr_id must refer to an MR")
+    customer = models.Customer(
+        name=name,
+        type=(payload.type or "").strip() or None,
+        address=(payload.address or "").strip() or None,
+        gstin=(payload.gstin or "").strip() or None,
+        mr_id=payload.mr_id,
+    )
+    try:
+        set_customer_numbers(customer, payload.phone, payload.alternate_phone, payload.whatsapp_on,
+                             "whatsapp_on" in payload.model_fields_set)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
     db.add(customer)
+    db.flush()
+    write_audit(db, "customer_created", user, new=customer_snapshot(customer))
     db.commit()
     db.refresh(customer)
     return customer
@@ -117,9 +140,19 @@ def update_customer(
         if duplicate:
             raise HTTPException(409, f"Customer name '{name}' already exists")
         customer.name = name
-    for field in ("type", "phone", "address", "gstin"):
+    for field in ("type", "address", "gstin"):
         if field in data:
             setattr(customer, field, data[field] or None)
+    if "phone" in data:
+        # Older numbers may not match today's rules, so an unchanged main
+        # number is kept as it is; a new or changed one is checked like the MR's.
+        if data["phone"] and same_phone(data["phone"], customer.phone):
+            pass
+        else:
+            try:
+                customer.phone = normalize_phone(data["phone"])
+            except ValueError as exc:
+                raise HTTPException(422, f"Phone: {exc}")
     if "alternate_phone" in data:
         # The main phone stays free-form for Admins (older data may not match
         # the rules); the new alternate number is always checked.

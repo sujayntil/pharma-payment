@@ -149,6 +149,33 @@ class CustomerContactApiTests(unittest.TestCase):
         bad = self.client.put(f"/customers/{self.mine.id}", json={"alternate_phone": "123"})
         self.assertEqual(bad.status_code, 422)
 
+    def test_admin_adds_and_changes_main_phone(self):
+        self.current_user = self.admin
+        added = self.client.put(f"/customers/{self.mine.id}", json={"phone": "+91 98765 43210", "whatsapp_on": "main"})
+        self.assertEqual(added.status_code, 200, added.text)
+        self.assertEqual(added.json()["phone"], "9876543210")
+        self.assertEqual(added.json()["whatsapp_on"], "main")
+        self.assertEqual(self.client.put(f"/customers/{self.mine.id}", json={"phone": "12345"}).status_code, 422)
+        # An older number that doesn't fit today's rules is kept when unchanged.
+        self.mine.phone = "Shop 22-334"; self.db.commit()
+        kept = self.client.put(f"/customers/{self.mine.id}", json={"phone": "Shop 22-334", "alternate_phone": "9123456780"})
+        self.assertEqual(kept.status_code, 200, kept.text)
+        self.assertEqual(kept.json()["phone"], "Shop 22-334")
+
+    def test_admin_adds_a_customer_with_numbers(self):
+        self.current_user = self.admin
+        made = self.client.post("/customers", json={"name": " Shree Medicals ", "type": "Chemist", "mr_id": self.mr.id,
+                                                   "phone": "98765 43210", "alternate_phone": "0821 2345678", "whatsapp_on": "alternate"})
+        self.assertEqual(made.status_code, 200, made.text)
+        body = made.json()
+        self.assertEqual((body["name"], body["phone"], body["alternate_phone"], body["whatsapp_on"], body["mr_id"]),
+                         ("Shree Medicals", "9876543210", "0821 2345678", "alternate", self.mr.id))
+        self.assertEqual(self.client.post("/customers", json={"name": "shree medicals"}).status_code, 409)
+        self.assertEqual(self.client.post("/customers", json={"name": "Bad", "phone": "12"}).status_code, 422)
+        self.assertEqual(self.client.post("/customers", json={"name": "Alt only", "alternate_phone": "9876543210"}).status_code, 422)
+        self.current_user = self.mr
+        self.assertEqual(self.client.post("/customers", json={"name": "Nope"}).status_code, 403)
+
     def test_main_mobile_is_ticked_for_whatsapp_automatically(self):
         saved = self.put_contact(self.mine, phone="9876543210", alternate_phone="080-12345678").json()
         self.assertEqual(saved["whatsapp_on"], "main")

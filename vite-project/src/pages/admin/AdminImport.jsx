@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, FileInput, Group, Loader, Modal, NumberInput, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Button, FileInput, Group, Loader, Modal, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { IconFileSpreadsheet, IconPlus, IconSearch } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import RowCard, { CardList } from '../../components/common/RowCard';
 import { customersApi } from '../../api/customersApi';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
+import ManualInvoiceModal from './ManualInvoiceModal';
 
-const today = new Date().toISOString().slice(0, 10);
 
 export default function AdminImport() {
   const isMobile = useIsMobile();
@@ -15,7 +15,6 @@ export default function AdminImport() {
   const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState(null); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [customerLoading, setCustomerLoading] = useState(true);
   const [manualOpen, setManualOpen] = useState(false);
-  const [manual, setManual] = useState({ invoice_number: '', invoice_date: today, customer_id: '', customer_name: '', total_amount: '' }); const [manualCustomerSearch, setManualCustomerSearch] = useState(''); const [manualCustomers, setManualCustomers] = useState([]); const [manualCustomerMode, setManualCustomerMode] = useState('existing');
 
   useEffect(() => {
     let active = true;
@@ -36,17 +35,6 @@ export default function AdminImport() {
     return () => { active = false; clearTimeout(timer); };
   }, [page, refresh, search]);
 
-  useEffect(() => {
-    if (!manualOpen) return undefined;
-    let active = true;
-    const timer = setTimeout(async () => {
-      try {
-        const data = await customersApi.getCustomers({ limit: PAGE_SIZE, ...(manualCustomerSearch.trim() && { search: manualCustomerSearch.trim() }) });
-        if (active) setManualCustomers(data.items);
-      } catch (err) { if (active) setError(err.detail || err.message); }
-    }, manualCustomerSearch ? 250 : 0);
-    return () => { active = false; clearTimeout(timer); };
-  }, [manualCustomerSearch, manualOpen]);
 
   const upload = async () => { if (!file) return; setBusy(true); setMessage(''); setError(''); try { const data = await adminApi.importInvoices(file); setResult(data); setMessage(`Import complete: ${data.created} added, ${data.updated || 0} updated.`); setFile(null); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
   // Changing the MR moves every invoice of that customer, so it is confirmed
@@ -56,7 +44,6 @@ export default function AdminImport() {
   const askMap = (customer, value) => { if (String(value || '') !== String(customer.mr_id || '')) setPendingMap({ customer, value: value || null }); };
   const confirmMap = async () => { const { customer, value } = pendingMap; setPendingMap(null); await map(customer.id, value); };
   const map = async (customerId, value) => { try { await adminApi.mapCustomer(customerId, value ? Number(value) : null); setMessage('Customer assignment saved.'); setRefresh((count) => count + 1); } catch (err) { setError(err.detail || err.message); } };
-  const createManual = async () => { setBusy(true); setError(''); try { const customer = manualCustomerMode === 'existing' ? { customer_id: Number(manual.customer_id) } : { customer_name: manual.customer_name.trim() }; await adminApi.createManualInvoice({ invoice_number: manual.invoice_number, invoice_date: manual.invoice_date, total_amount: Number(manual.total_amount), ...customer }); setMessage(`Invoice ${manual.invoice_number} added.`); setManualOpen(false); setManual({ invoice_number: '', invoice_date: today, customer_id: '', customer_name: '', total_amount: '' }); setManualCustomerSearch(''); setManualCustomerMode('existing'); setRefresh((value) => value + 1); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
 
   return <Stack gap="md"><Group justify="space-between"><Title order={1}>Import & mapping</Title><Button leftSection={<IconPlus size={16} />} onClick={() => setManualOpen(true)}>Add invoice</Button></Group>
     {error && <Alert color="red">{error}</Alert>}{message && <Alert color="green">{message}</Alert>}
@@ -71,7 +58,7 @@ export default function AdminImport() {
     ))}</CardList> : <Table.ScrollContainer minWidth={680}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Invoices</Table.Th><Table.Th>Assigned MR</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.invoice_count || 0}</Table.Td><Table.Td><Select size="xs" clearable placeholder="Unassigned" data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={customer.mr_id ? String(customer.mr_id) : null} onChange={(value) => askMap(customer, value)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={customerTotal} page={page} onChange={setPage} searchActive={Boolean(search.trim())} label="customers" />
     </Paper>
-    <Modal opened={manualOpen} onClose={() => setManualOpen(false)} title="Add invoice manually" centered><Stack><TextInput required label="Invoice / bill number" value={manual.invoice_number} onChange={(e) => setManual({ ...manual, invoice_number: e.currentTarget.value })} /><TextInput required type="date" label="Invoice date" value={manual.invoice_date} onChange={(e) => setManual({ ...manual, invoice_date: e.currentTarget.value })} /><Group justify="space-between"><Text fw={500} size="sm">Customer</Text><Button size="compact-xs" variant="subtle" onClick={() => { const nextMode = manualCustomerMode === 'existing' ? 'new' : 'existing'; setManualCustomerMode(nextMode); setManual({ ...manual, customer_id: '', customer_name: '' }); }}>{manualCustomerMode === 'existing' ? 'Add a new customer' : 'Choose existing customer'}</Button></Group>{manualCustomerMode === 'existing' ? <Select required searchable clearable placeholder="Search existing customers" nothingFoundMessage="No customers found" data={manualCustomers.map((customer) => ({ value: String(customer.id), label: customer.name }))} value={manual.customer_id || null} searchValue={manualCustomerSearch} onSearchChange={setManualCustomerSearch} onChange={(value) => setManual({ ...manual, customer_id: value || '' })} /> : <TextInput required placeholder="Enter new customer name" value={manual.customer_name} onChange={(e) => setManual({ ...manual, customer_name: e.currentTarget.value })} description="A customer record will be created and left unassigned until you map it to an MR." />}<NumberInput required min={0.01} decimalScale={2} label="Bill amount (₹)" value={manual.total_amount} onChange={(value) => setManual({ ...manual, total_amount: value })} /><Button loading={busy} disabled={!manual.invoice_number || !manual.invoice_date || !manual.total_amount || (manualCustomerMode === 'existing' ? !manual.customer_id : !manual.customer_name.trim())} onClick={createManual}>Add invoice</Button></Stack></Modal>
+    <ManualInvoiceModal opened={manualOpen} onClose={() => setManualOpen(false)} mrOptions={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} onSaved={(text) => { setMessage(text); setRefresh((value) => value + 1); }} />
     <Modal opened={!!pendingMap} onClose={() => setPendingMap(null)} title="Change assigned MR" centered>
       {pendingMap && <Stack>
         <Text size="sm">

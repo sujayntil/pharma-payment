@@ -46,7 +46,7 @@ class UserUpdate(BaseModel):
 # ---- Customers ----
 
 
-class CustomerCreate(BaseModel):
+class CustomerBase(BaseModel):
     name: str
     type: Optional[str] = None
     phone: Optional[str] = None
@@ -54,7 +54,15 @@ class CustomerCreate(BaseModel):
     gstin: Optional[str] = None
 
 
-class CustomerOut(CustomerCreate):
+class CustomerCreate(CustomerBase):
+    """Admin "Add customer". Blank numbers are fine; filled ones are checked."""
+    name: str = Field(min_length=1, max_length=255)
+    alternate_phone: Optional[str] = None
+    whatsapp_on: Optional[str] = None
+    mr_id: Optional[int] = None
+
+
+class CustomerOut(CustomerBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     alternate_phone: Optional[str] = None
@@ -126,6 +134,13 @@ class ManualInvoiceCreate(BaseModel):
     customer_id: Optional[int] = None
     customer_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     total_amount: float = Field(gt=0)
+    # A new customer's details. For an existing customer only a missing phone
+    # is filled in; nothing already saved is overwritten from this form.
+    customer_type: Optional[str] = None
+    mr_id: Optional[int] = None
+    phone: Optional[str] = None
+    alternate_phone: Optional[str] = None
+    whatsapp_on: Optional[str] = None
 
 
 class InvoiceOut(BaseModel):

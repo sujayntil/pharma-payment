@@ -22,6 +22,12 @@ export const customersApi = {
     return response.data;
   },
 
+  /** Admin: add a customer (name, type, MR, numbers, address, GSTIN). */
+  async createCustomer(data) {
+    const response = await axiosClient.post('/customers', data);
+    return response.data;
+  },
+
   async updateCustomer(customerId, data) {
     const response = await axiosClient.put(`/customers/${customerId}`, data);
     return response.data;

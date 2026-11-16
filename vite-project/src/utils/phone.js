@@ -32,3 +32,16 @@ export function whatsappNumber({ phone, alternatePhone, whatsappOn }) {
   if (whatsappOn === 'alternate') return alternatePhone || null;
   return null;
 }
+
+/**
+ * Turns a PhoneFields value into what the API expects: trimmed numbers, and a
+ * WhatsApp choice only when that number is filled in.
+ */
+export function phonePayload({ phone = '', alternate_phone: alternate = '', whatsapp_on: whatsappOn = '' }) {
+  const numbers = { main: phone.trim(), alternate: alternate.trim() };
+  return {
+    phone: numbers.main,
+    alternate_phone: numbers.alternate,
+    whatsapp_on: whatsappOn && numbers[whatsappOn] ? whatsappOn : '',
+  };
+}

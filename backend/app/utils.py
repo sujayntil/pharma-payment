@@ -131,3 +131,28 @@ def resolve_whatsapp_on(requested, phone, alternate, current, was_given):
     if phone and len(phone) == 10 and phone.isdigit():
         return "main"
     return None
+
+
+def set_customer_numbers(customer, phone, alternate, whatsapp_on, whatsapp_given=True):
+    """Checks and saves a customer's main / alternate numbers and WhatsApp choice.
+    Used by "Add customer" and "Add invoice". Raises ValueError with a message
+    that names the field, ready to show to the Admin.
+    """
+    try:
+        main = normalize_phone(phone)
+    except ValueError as exc:
+        raise ValueError(f"Phone: {exc}")
+    try:
+        alt = normalize_phone(alternate)
+    except ValueError as exc:
+        raise ValueError(f"Alternate phone: {exc}")
+    if alt and not main:
+        raise ValueError("Add the main phone number first.")
+    if alt and same_phone(alt, main):
+        raise ValueError("Alternate phone is the same as the main phone.")
+    customer.phone = main
+    customer.alternate_phone = alt
+    try:
+        customer.whatsapp_on = resolve_whatsapp_on(whatsapp_on, main, alt, None, whatsapp_given)
+    except ValueError as exc:
+        raise ValueError(f"WhatsApp: {exc}")

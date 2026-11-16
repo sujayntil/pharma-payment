@@ -19,13 +19,13 @@ from ..collection_info import (
     reversal_fields,
     reversible_amount,
 )
-from ..audit import user_snapshot, write_audit
+from ..audit import customer_snapshot, user_snapshot, write_audit
 from ..database import get_db
 from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import require_admin
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password
-from ..utils import clean_search, compute_status, page_result, query_page
+from ..utils import clean_search, compute_status, page_result, query_page, set_customer_numbers
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -581,10 +581,34 @@ def create_manual_invoice(
     if len(matching_customers) > 1:
         raise HTTPException(409, f"Multiple customer records match '{customer_name}'. Resolve the duplicate customer records before adding this invoice.")
     customer = customer or (matching_customers[0] if matching_customers else None)
+    if payload.mr_id is not None:
+        mr = db.get(models.User, payload.mr_id)
+        if not mr or mr.role != models.RoleEnum.MR.value:
+            raise HTTPException(422, "mr_id must refer to an MR")
+    numbers_given = bool((payload.phone or "").strip() or (payload.alternate_phone or "").strip())
+    whatsapp_given = "whatsapp_on" in payload.model_fields_set
     if customer is None:
-        customer = models.Customer(name=customer_name)
+        customer = models.Customer(
+            name=customer_name,
+            type=(payload.customer_type or "").strip() or None,
+            mr_id=payload.mr_id,
+        )
+        try:
+            set_customer_numbers(customer, payload.phone, payload.alternate_phone, payload.whatsapp_on, whatsapp_given)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
         db.add(customer)
         db.flush()
+        write_audit(db, "customer_created", user, new=customer_snapshot(customer))
+    elif numbers_given and not customer.phone and not customer.alternate_phone:
+        # Existing customer with no number yet: fill it in. Saved numbers are
+        # never overwritten from here (that is what Edit customer is for).
+        before = customer_snapshot(customer)
+        try:
+            set_customer_numbers(customer, payload.phone, payload.alternate_phone, payload.whatsapp_on, whatsapp_given)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        write_audit(db, "customer_updated", user, old=before, new=customer_snapshot(customer))
 
     status, pending = compute_status(payload.total_amount, 0)
     invoice = models.Invoice(

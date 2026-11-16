@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Modal, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, TextInput, Select, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Modal, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowsSort, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
+import { IconArrowsSort, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
@@ -21,10 +21,10 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { displayPhone, errorText, money, shortDate } from '../../utils/formatters';
-import ContactActions from '../../components/customers/ContactActions';
+import { CustomerContactModal, CustomerContactRow } from '../../components/customers/CustomerContact';
+import CustomerFormModal from '../../components/customers/CustomerFormModal';
 
-const emptyCustomer = { name: '', type: '', phone: '', alternate_phone: '', whatsapp_on: 'none', address: '', gstin: '', mr_id: '' };
-const CUSTOMER_TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital'];
+import { CUSTOMER_TYPES } from '../../utils/customerTypes';
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
@@ -32,12 +32,12 @@ export default function AdminCustomers({ openCustomer = null }) {
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState({ mrId: '', type: '', sort: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
-  const [selected, setSelected] = useState(openCustomer); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
+  const [selected, setSelected] = useState(openCustomer); const [editingContact, setEditingContact] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
   // Back closes the open ledger instead of leaving the screen.
   useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null);
-  const [editing, setEditing] = useState(null); const [customerForm, setCustomerForm] = useState(emptyCustomer); const [deleting, setDeleting] = useState(null);
+  const [editing, setEditing] = useState(null); const [deleting, setDeleting] = useState(null);
   const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
 
   useEffect(() => {
@@ -126,11 +126,10 @@ export default function AdminCustomers({ openCustomer = null }) {
   );
 
   const openLedger = (customer) => { setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerFilters(BLANK_LEDGER); setLedgerPage(1); };
-  const openEdit = (customer) => { setEditing(customer); setCustomerForm({ name: customer.name, type: customer.type || '', phone: customer.phone || '', alternate_phone: customer.alternate_phone || '', whatsapp_on: customer.whatsapp_on || 'none', address: customer.address || '', gstin: customer.gstin || '', mr_id: customer.mr_id ? String(customer.mr_id) : '' }); };
-  const saveCustomer = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { await customersApi.updateCustomer(editing.id, { ...customerForm, name: customerForm.name.trim(), type: customerForm.type.trim() || null, phone: customerForm.phone.trim() || null, alternate_phone: customerForm.alternate_phone.trim() || null, whatsapp_on: customerForm.whatsapp_on === 'none' ? '' : customerForm.whatsapp_on, address: customerForm.address.trim() || null, gstin: customerForm.gstin.trim() || null, mr_id: customerForm.mr_id ? Number(customerForm.mr_id) : null }); setEditing(null); setNotice('Customer details saved.'); setRefresh((value) => value + 1); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
+  const openEdit = (customer) => setEditing(customer);
   const deleteCustomer = async () => { setBusy(true); setError(''); try { await customersApi.deleteCustomer(deleting.id); setDeleting(null); setNotice('Customer deleted.'); setRefresh((value) => value + 1); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
 
-  return <Stack gap="md"><Group justify="space-between" align="center"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total} customers</Badge></Group>
+  return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group><Button leftSection={<IconPlus size={16} />} onClick={() => setEditing({})}>{isMobile ? 'Add' : 'Add customer'}</Button></Group>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
@@ -162,18 +161,16 @@ export default function AdminCustomers({ openCustomer = null }) {
     </Paper>
     <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" title={<div><Text fw={700} style={{ overflowWrap: 'anywhere' }}>{selected?.name || ''}</Text><Text size="sm" c="dimmed">MR: {ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}</Text></div>}>
       <Stack gap="md">
-        {/* Numbers with call / WhatsApp. Admins change numbers in Edit customer. */}
+        {/* Numbers with call / WhatsApp, Edit, or "+ Add phone" (same as the MR screen). */}
         {selected && (() => {
-          const phone = ledger?.customer ? ledger.customer.phone : selected.phone;
-          const alternate = ledger?.customer ? ledger.customer.alternate_phone : selected.alternate_phone;
-          const whatsappOn = ledger?.customer ? ledger.customer.whatsapp_on : selected.whatsapp_on;
-          if (!phone && !alternate) return <Text size="sm" c="dimmed">No phone number. Add one with Edit customer.</Text>;
-          return (
-            <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
-              <Text size="sm" fw={600}>{[displayPhone(phone), displayPhone(alternate)].filter(Boolean).join(' / ')}</Text>
-              <ContactActions name={selected.name} phone={phone} alternatePhone={alternate} whatsappOn={whatsappOn} size={isMobile ? 'md' : 'sm'} />
-            </Group>
-          );
+          const contact = {
+            id: selected.id,
+            name: selected.name,
+            phone: ledger?.customer ? ledger.customer.phone : selected.phone,
+            alternate_phone: ledger?.customer ? ledger.customer.alternate_phone : selected.alternate_phone,
+            whatsapp_on: ledger?.customer ? ledger.customer.whatsapp_on : selected.whatsapp_on,
+          };
+          return <CustomerContactRow name={contact.name} phone={contact.phone} alternatePhone={contact.alternate_phone} whatsappOn={contact.whatsapp_on} onEdit={() => setEditingContact(contact)} />;
         })()}
         {ledger && (isMobile
           ? (
@@ -204,8 +201,15 @@ export default function AdminCustomers({ openCustomer = null }) {
     <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={reloadLedger} />
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
     <MarkUnpaidModal invoice={reversing && { ...reversing, customer_name: selected?.name }} onClose={() => setReversing(null)} onSaved={reloadLedger} /> */}
+    {/* Saving reloads the customer screen and the list so the new numbers show everywhere. */}
+    <CustomerContactModal admin customer={editingContact} onClose={() => setEditingContact(null)} onSaved={(saved) => { setSelected((current) => (current && current.id === saved.id ? { ...current, ...saved } : current)); reloadLedger(); setRefresh((value) => value + 1); }} />
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} onChanged={reloadLedger} onRecord={setRecording} refreshKey={ledgerRefresh} />
-    <Modal opened={!!editing} onClose={() => setEditing(null)} title={`Edit ${editing?.name || 'customer'}`} centered><form onSubmit={saveCustomer}><Stack><TextInput label="Customer name" required value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.currentTarget.value })} /><TextInput label="Customer type" value={customerForm.type} onChange={(event) => setCustomerForm({ ...customerForm, type: event.currentTarget.value })} /><Select label="Assigned MR" clearable searchable data={mrOptions} value={customerForm.mr_id || null} onChange={(value) => setCustomerForm({ ...customerForm, mr_id: value || '' })} /><TextInput label="Phone" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.currentTarget.value })} /><TextInput label="Alternate phone" placeholder="Optional · mobile or landline with area code" value={customerForm.alternate_phone} onChange={(event) => setCustomerForm({ ...customerForm, alternate_phone: event.currentTarget.value })} /><Select label="WhatsApp number" allowDeselect={false} data={[{ value: 'none', label: 'None' }, { value: 'main', label: 'Main phone', disabled: !customerForm.phone.trim() }, { value: 'alternate', label: 'Alternate phone', disabled: !customerForm.alternate_phone.trim() }]} value={customerForm.whatsapp_on} onChange={(value) => setCustomerForm({ ...customerForm, whatsapp_on: value || 'none' })} /><TextInput label="Address" value={customerForm.address} onChange={(event) => setCustomerForm({ ...customerForm, address: event.currentTarget.value })} /><TextInput label="GSTIN" value={customerForm.gstin} onChange={(event) => setCustomerForm({ ...customerForm, gstin: event.currentTarget.value })} /><Button type="submit" loading={busy}>Save customer</Button></Stack></form></Modal>
+    {/* Add customer ({}) and Edit customer share one form. */}
+    <CustomerFormModal customer={editing} mrOptions={mrOptions} onClose={() => setEditing(null)} onSaved={(saved, isNew) => {
+      setNotice(isNew ? `${saved.name} added.` : 'Customer details saved.');
+      setSelected((current) => (current && current.id === saved.id ? { ...current, ...saved } : current));
+      setRefresh((value) => value + 1); reloadLedger();
+    }} />
     <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete customer" centered><Stack><Alert color="red">Delete {deleting?.name}? Customers with invoices cannot be deleted, so their ledger history stays protected.</Alert><Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" loading={busy} onClick={deleteCustomer}>Delete customer</Button></Group></Stack></Modal>
   </Stack>;
 }

@@ -165,8 +165,8 @@ class SessionsAuditUploadsTests(unittest.TestCase):
         # Saving the same MR again writes nothing new.
         self.client.put(f"/admin/customers/{self.customer_id}/mr", json={"mr_id": self.neha_id}, headers=admin_headers)
         self.assertEqual(len(self.audit("customer_mr_changed")), 1)
-        self.assertEqual(self.client.put(f"/customers/{self.customer_id}", json={"phone": "12345"}, headers=admin_headers).status_code, 200)
-        self.assertEqual(self.audit("customer_updated")[0][2]["phone"], "12345")
+        self.assertEqual(self.client.put(f"/customers/{self.customer_id}", json={"phone": "9876512345"}, headers=admin_headers).status_code, 200)
+        self.assertEqual(self.audit("customer_updated")[0][2]["phone"], "9876512345")
 
     # ---- uploads ----
 

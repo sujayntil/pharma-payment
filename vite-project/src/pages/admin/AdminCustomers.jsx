@@ -26,6 +26,7 @@ import CustomerFormModal from '../../components/customers/CustomerFormModal';
 
 import { CUSTOMER_TYPES } from '../../utils/customerTypes';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import EmptyResults from '../../components/common/EmptyResults';
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
@@ -139,7 +140,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'name' ? 'name' : '' })} />
     </FilterBar>
-    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? <Text ta="center" c="dimmed" py="xl">No customers match these filters.</Text> : isMobile ? <CardList>{customers.map((customer) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="customers" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No customers yet.</Text>) : isMobile ? <CardList>{customers.map((customer) => (
       <RowCard
         key={customer.id}
         onClick={() => openLedger(customer)}
@@ -191,7 +192,7 @@ export default function AdminCustomers({ openCustomer = null }) {
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} />
         </FilterBar>
-        {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
+        {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? (ledgerChips.some(Boolean) ? <EmptyResults search={ledgerSearch} noun="invoices" onClear={resetLedger} /> : <Text ta="center" c="dimmed" py="xl">No invoices for this customer yet.</Text>) : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
           <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} />
         ))}</CardList> : <ScrollArea><Table miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th>{/* Disabled: MR is shown once in the header. Re-enable if needed. <Table.Th>MR</Table.Th> */}<Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}>
           <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}{invoice.mr && invoice.mr !== ledger.customer?.mr_name && <Text size="xs" c="dimmed" fw={400}>MR {invoice.mr}</Text>}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td>{/* <Table.Td>{invoice.mr || '—'}</Table.Td> */}<Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>

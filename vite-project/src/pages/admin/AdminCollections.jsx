@@ -22,6 +22,7 @@ import { RecordedBy, StatusBadge } from '../../components/collections/Collection
 import { recorderOf, useActorLabel } from '../../components/collections/collectionUtils';
 import { downloadErrorText, errorText, money, saveDownload, dayOf, timeOf } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import EmptyResults from '../../components/common/EmptyResults';
 
 /**
  * Second line of a phone collection card, kept to one short line:
@@ -153,7 +154,7 @@ export default function AdminCollections() {
 
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}
     <Group justify="space-between" gap="xs"><Text fw={700}>{count} {count === 1 ? 'entry' : 'entries'}</Text><Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!count} onClick={exportExcel}>Export</Button></Group>
-    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && rows.length > 0)}>{loading && !rows.length ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text ta="center" c="dimmed" py="xl">No collections match these filters.</Text> : isMobile ? <CardList>{rows.map((row) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && rows.length > 0)}>{loading && !rows.length ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="collections" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No collections recorded yet.</Text>) : isMobile ? <CardList>{rows.map((row) => (
       <RowCard
         key={row.payment_id}
         onClick={() => setHistoryId(row.invoice_id)}

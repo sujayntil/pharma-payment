@@ -25,6 +25,7 @@ import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { downloadErrorText, errorText, money, saveDownload, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import EmptyResults from '../../components/common/EmptyResults';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -198,7 +199,7 @@ export default function AdminInvoices() {
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>
     <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text>{isMobile ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} disabled={!total} onClick={exportExcel}><IconDownload size={16} /></ActionIcon></Tooltip> : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>}</Group></Group>
-    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !invoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? <Text ta="center" c="dimmed" py="xl">No invoices match these filters.</Text> : isMobile ? <CardList>{invoices.map((invoice) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !invoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="invoices" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">{tab === 'pending' ? 'Nothing pending. All invoices are settled.' : tab === 'paid' ? 'No paid invoices yet.' : 'No invoices yet.'}</Text>) : isMobile ? <CardList>{invoices.map((invoice) => (
       <InvoiceCard
         key={invoice.id}
         invoice={invoice}

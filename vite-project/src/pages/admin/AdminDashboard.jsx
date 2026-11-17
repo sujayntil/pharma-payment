@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
 import { IconCategory, IconDownload } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
@@ -96,12 +96,16 @@ export default function AdminDashboard({ onOpenCustomer }) {
     <Stack gap="md">
       <GreetingBanner />
 
-      <FilterBar chips={chips} onReset={reset} summary={rangeLabel ? null : 'Showing all time'}>
+      <FilterBar chips={chips} onReset={reset}>
         <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" />
         <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={appliedCustomerType} onChange={setAppliedCustomerType} />
       </FilterBar>
-      <Group justify="flex-end" mt={-6}>
-        <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} onClick={exportByType}>Export by customer type</Button>
+      {/* Like Invoices: what is shown on the left, Export on the right. */}
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <Text fw={700} style={{ minWidth: 0 }}>{rangeLabel || 'All time'}{appliedCustomerType ? ` · ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}` : ''}</Text>
+        {isMobile
+          ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} onClick={exportByType}><IconDownload size={16} /></ActionIcon></Tooltip>
+          : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} onClick={exportByType}>Export</Button>}
       </Group>
 
       {error && <Alert color="red">{error}</Alert>}

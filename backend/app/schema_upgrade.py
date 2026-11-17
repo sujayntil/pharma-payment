@@ -14,6 +14,9 @@ from sqlalchemy import inspect, text
 log = logging.getLogger(__name__)
 
 _ADDITIVE_COLUMNS = {
+    "month_clearances": {
+        "shown_at": "TIMESTAMP",
+    },
     "payments": {
         "recorded_by": "INTEGER",
         "reversal_of_id": "INTEGER",

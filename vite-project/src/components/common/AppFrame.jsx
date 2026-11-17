@@ -22,6 +22,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
 import DailyWelcome from './DailyWelcome';
+import MonthCleared from '../collections/MonthCleared';
 import { getToken, isKeptSignedIn, saveToken } from '../../utils/authToken';
 import { decodeJwt } from '../../utils/formatters';
 import { tokenRenewed } from '../../store/slices/authSlice';
@@ -256,6 +257,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
                     onClick={() => choose(item.id)}
                     variant="light"
                     color="green"
+                    // Softer selected item: faint tint, darker green text and icon.
+                    styles={{ root: { borderRadius: 8, ...(active === item.id && { background: 'var(--mantine-color-green-0)', color: 'var(--mantine-color-green-8)', fontWeight: 600 }) } }}
                   />
                 );
               })}
@@ -307,6 +310,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
     </AppShell>
     {/* First open of the day: a short welcome, then the app. */}
     <DailyWelcome />
+    {role === 'MR' && <MonthCleared />}
     </AppRefreshProvider>
   );
 }

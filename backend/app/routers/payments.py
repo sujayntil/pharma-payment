@@ -8,6 +8,7 @@ from .. import models, schemas
 from ..audit import write_audit
 from ..collection_info import apply_ledger_delta, as_utc, credited_mr_id, log_event
 from ..database import get_db
+from ..month_clear import months_cleared, reopen_months
 from ..deps import get_current_user
 from ..push import send_batch_notification, send_payment_notification
 
@@ -68,6 +69,7 @@ def add_payment(
         )
 
     payment = _record(db, invoice, payload.amount, payload.mode, payload.transaction_reference, user)
+    cleared_months = months_cleared(db, user, [invoice])
     db.commit()
     db.refresh(invoice)
     if user.role == models.RoleEnum.MR.value:
@@ -79,6 +81,7 @@ def add_payment(
         "paid_amount": invoice.paid_amount,
         "pending_amount": invoice.pending_amount,
         "status": invoice.status,
+        "months_cleared": cleared_months,
     }
 
 
@@ -155,10 +158,11 @@ def add_batch_payment(
     """Collect from customer: one amount over the ticked invoices, oldest
     first. All-or-nothing: either every part is saved or none is."""
     batch_id, parts, invoices = _apply_batch(db, payload, user)
+    cleared_months = months_cleared(db, user, invoices)
     db.commit()
     if user.role == models.RoleEnum.MR.value:
         background_tasks.add_task(send_batch_notification, batch_id)
-    return _batch_result(db, payload, batch_id, parts, invoices)
+    return {**_batch_result(db, payload, batch_id, parts, invoices), "months_cleared": cleared_months}
 
 
 @router.post("/batches")
@@ -178,6 +182,7 @@ def add_batch_payments(
     try:
         for group in payload.groups:
             done.append((group, *_apply_batch(db, group, user)))
+        cleared_months = months_cleared(db, user, [invoice for *_, invoices in done for invoice in invoices])
         db.commit()
     except Exception:
         db.rollback()
@@ -186,7 +191,7 @@ def add_batch_payments(
         for _, batch_id, _, _ in done:
             background_tasks.add_task(send_batch_notification, batch_id)
     results = [_batch_result(db, group, batch_id, parts, invoices) for group, batch_id, parts, invoices in done]
-    return {"results": results, "amount": round(sum(group.amount for group in payload.groups), 2)}
+    return {"results": results, "amount": round(sum(group.amount for group in payload.groups), 2), "months_cleared": cleared_months}
 
 
 @router.post("/{payment_id}/undo")
@@ -218,8 +223,10 @@ def undo_payment(
         raise HTTPException(409, "This collection has already been reversed.")
 
     undone = []
+    touched = []
     for item in group:
         invoice = db.get(models.Invoice, item.invoice_id)
+        touched.append(invoice)
         undone.append({"payment_id": item.id, "invoice_id": invoice.id, "invoice_number": invoice.invoice_number,
                        "amount": item.amount, "mode": item.mode, "reference": item.transaction_reference})
         apply_ledger_delta(invoice, -(item.amount or 0))
@@ -240,6 +247,7 @@ def undo_payment(
             .first()
         )
         invoice.payment_mode = latest[0] if latest else None
+    reopen_months(db, touched)
     write_audit(db, "payment_undone", user, old={"batch_id": payment.batch_id, "payments": undone})
     db.commit()
     return {"undone": len(undone), "items": [{k: v for k, v in item.items() if k in ("invoice_id", "invoice_number", "amount")} for item in undone]}

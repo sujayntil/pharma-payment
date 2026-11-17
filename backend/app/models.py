@@ -1,6 +1,7 @@
 import enum
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -220,6 +221,26 @@ class PushSubscription(Base):
     p256dh = Column(String, nullable=False)
     auth = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class MonthClearance(Base):
+    """Every invoice of one invoice month assigned to an MR is paid
+    ("October cleared"). Kept so the celebration shows once; undone_at is set
+    when an undo or reversal opens the month again."""
+
+    __tablename__ = "month_clearances"
+    __table_args__ = (UniqueConstraint("user_id", "month", name="uq_month_clearance_user_month"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    month = Column(String(7), nullable=False)  # "2026-10"
+    on_time = Column(Boolean, nullable=False, default=True)
+    invoice_count = Column(Integer, nullable=False, default=0)
+    cleared_at = Column(DateTime, nullable=False)
+    undone_at = Column(DateTime, nullable=True)
+    # When the MR saw the celebration; empty = show it the next time they open
+    # the app (an Admin collected the last invoice, or the month just ended).
+    shown_at = Column(DateTime, nullable=True)
 
 
 class RevokedToken(Base):

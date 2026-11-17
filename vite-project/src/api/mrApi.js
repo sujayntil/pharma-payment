@@ -24,4 +24,10 @@ export const mrApi = {
     const response = await axiosClient.get('/mr/overdue-alerts');
     return response.data;
   },
+
+  /** Cleared months not celebrated yet (Admin collected the last invoice, or the month just ended). Each comes once. */
+  async claimMonthsCleared() {
+    const response = await axiosClient.post('/mr/months-cleared/claim');
+    return response.data?.months || [];
+  },
 };

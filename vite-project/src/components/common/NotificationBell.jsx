@@ -9,6 +9,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import { dayOf, money, timeOf } from '../../utils/formatters';
 import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
+import PaymentAlerts from './PaymentAlerts';
 
 
 // The bell shows the 5 newest collections; "See all collections" has the rest.
@@ -103,6 +104,8 @@ export default function NotificationBell({ size = 38 }) {
   const footer = (
     <Box px="md" py={10} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
       <Anchor component="button" type="button" size="sm" c="green.7" fw={600} onClick={() => go('/admin/collections')}>See all collections</Anchor>
+      {/* Turning push alerts on/off lives here (moved off the dashboard). */}
+      <Box mt={10} pt={10} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}><PaymentAlerts compact /></Box>
     </Box>
   );
 

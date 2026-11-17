@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { adminApi } from '../../api/adminApi';
 
+
 export const fetchAdminDashboard = createAsyncThunk(
   'admin/fetchAdminDashboard',
   async (params, { rejectWithValue }) => {
@@ -96,7 +97,9 @@ const adminSlice = createSlice({
     mrPerformance: [],
     users: [],
 
-    dashFilters: { dateFrom: null, dateTo: null },
+    // Dashboard opens on "This month" (1st till today, worked out each time
+    // so a tab left open moves on with the date); picking dates clears it.
+    dashFilters: { dateFrom: null, dateTo: null, thisMonth: true },
     perfFilters: { dateFrom: null, dateTo: null },
 
     loading: false,

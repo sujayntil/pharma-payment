@@ -41,7 +41,8 @@ async function activeRegistration({ forceRegister = false } = {}) {
   return fresh;
 }
 
-export default function PaymentAlerts() {
+/** compact: one quiet line for the bell's footer (Admin). */
+export default function PaymentAlerts({ compact = false }) {
   const [subscription, setSubscription] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -86,6 +87,18 @@ export default function PaymentAlerts() {
       setMessage(/no active service worker/i.test(text) ? NOT_READY : text);
     } finally { setBusy(false); }
   };
+
+  if (compact) {
+    return (
+      <div>
+        <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
+          <Text size="sm" c="dimmed">Alerts on this device</Text>
+          <Button size="compact-sm" disabled={!supported} loading={busy} variant={subscription ? 'default' : 'light'} leftSection={subscription ? <IconBellOff size={14} /> : <IconBell size={14} />} onClick={toggle}>{subscription ? 'Turn off' : 'Turn on'}</Button>
+        </Group>
+        {(message || !supported) && <Text size="xs" c="dimmed" mt={4}>{message || 'Needs a supported browser and secure connection.'}</Text>}
+      </div>
+    );
+  }
 
   return <Group justify="space-between" align="center"><div><Text fw={600}>Payment collection alerts</Text><Text size="sm" c="dimmed">{message || (subscription ? 'This device will be notified when a payment is recorded.' : supported ? 'Get notified when a payment is recorded.' : 'Push notifications require a supported browser and secure connection.')}</Text></div><Button disabled={!supported} loading={busy} variant={subscription ? 'default' : 'light'} leftSection={subscription ? <IconBellOff size={16} /> : <IconBell size={16} />} onClick={toggle}>{subscription ? 'Disable alerts' : 'Enable alerts'}</Button></Group>;
 }

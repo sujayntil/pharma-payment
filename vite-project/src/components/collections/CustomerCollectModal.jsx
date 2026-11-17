@@ -13,6 +13,7 @@ import PaymentModeField from './PaymentModeField';
 import { pickHeadline } from './celebrationText';
 import { lastPaymentMode, referenceFor, rememberPaymentMode } from './paymentModes';
 import { showUndoBar } from './undoBar';
+import { announceMonthsCleared } from './monthCleared';
 
 /**
  * The one Collect sheet: amount (pre-filled), payment mode, Save.
@@ -33,6 +34,7 @@ export default function CustomerCollectModal({ customer = null, invoice = null, 
   const [celebration, setCelebration] = useState(null);
   const endCelebration = useCallback(() => {
     if (celebration?.undo) showUndoBar(celebration.undo);
+    announceMonthsCleared(celebration?.months);
     setCelebration(null);
   }, [celebration]);
 
@@ -109,6 +111,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
     try {
       let items;
       let paymentId;
+      let months = [];
       if (data.customer) {
         const result = await paymentsApi.createBatch({
           customer_id: data.customer.id,
@@ -119,6 +122,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
         });
         items = result.items;
         paymentId = items[0].payment_id;
+        months = result.months_cleared || [];
       } else {
         // An invoice with no customer on it: collect on that invoice alone.
         const result = await paymentsApi.createPayment({
@@ -126,6 +130,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
         });
         items = [{ invoice_number: chosen[0].invoice_number, pending_amount: result.pending_amount }];
         paymentId = result.payment_id;
+        months = result.months_cleared || [];
       }
       rememberPaymentMode(mode);
       const count = items.length;
@@ -142,6 +147,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
         headline: pickHeadline(everyTickedCleared),
         detail: cleared > 1 ? `${cleared} invoices cleared` : null,
         undo,
+        months,
       });
       onSaved?.();
       onClose();

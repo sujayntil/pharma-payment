@@ -21,6 +21,7 @@ from ..collection_info import (
 )
 from ..audit import customer_snapshot, invoice_snapshot, user_snapshot, write_audit
 from ..database import get_db
+from ..month_clear import months_cleared, reopen_months
 from ..excel_export import _XLSX, EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..type_export import build_workbook, collect_rows, range_label
 from fastapi.responses import Response
@@ -496,6 +497,11 @@ def override_collection_status(
         log_event(db, invoice.id, event_type, user, payment=ledger_entry)
     # Same balance helper as every other collection/reversal.
     apply_ledger_delta(invoice, round((target_paid or 0) - (invoice.paid_amount or 0), 2))
+    # Month-cleared moments for the invoice's MR (shown when they next open the app).
+    if status == models.StatusEnum.PAID.value:
+        months_cleared(db, user, [invoice])
+    else:
+        reopen_months(db, [invoice])
     db.add(models.AuditLog(
         action="admin_collection_status_override",
         user_id=user.id,
@@ -574,6 +580,7 @@ def reverse_payment(
     db.flush()
     apply_ledger_delta(invoice, -amount)
     log_event(db, invoice.id, models.InvoiceEventType.REVERSED.value, user, payment=reversal)
+    reopen_months(db, [invoice])
     db.add(models.AuditLog(
         action="admin_payment_reversal",
         user_id=user.id,
@@ -826,6 +833,7 @@ def delete_user(
         )
 
     write_audit(db, "user_deleted", admin_user, old=user_snapshot(target))
+    db.query(models.MonthClearance).filter(models.MonthClearance.user_id == target.id).delete(synchronize_session=False)
     db.delete(target)
     try:
         db.commit()

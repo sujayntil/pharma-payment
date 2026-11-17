@@ -12,6 +12,7 @@ import PaymentModeField from './PaymentModeField';
 import { pickHeadline } from './celebrationText';
 import { lastPaymentMode, referenceFor, rememberPaymentMode } from './paymentModes';
 import { showUndoBar } from './undoBar';
+import { announceMonthsCleared } from './monthCleared';
 
 const round = (number) => Math.round(number * 100) / 100;
 
@@ -31,6 +32,7 @@ export default function MultiCollectModal({ groups, onClose, onSaved }) {
   const [celebration, setCelebration] = useState(null);
   const endCelebration = useCallback(() => {
     if (celebration?.undo) showUndoBar(celebration.undo);
+    announceMonthsCleared(celebration?.months);
     setCelebration(null);
   }, [celebration]);
   const title = <Text fw={700}>Collect · {groups?.length || 0} customers</Text>;
@@ -96,6 +98,7 @@ function MultiForm({ groups, onClose, onSaved, onCelebrate }) {
         headline: pickHeadline(cleared),
         detail: null,
         undo,
+        months: saved.months_cleared,
       });
       onSaved?.();
       onClose();

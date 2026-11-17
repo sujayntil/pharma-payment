@@ -4,7 +4,7 @@ import { IconRefresh } from '@tabler/icons-react';
 import { isUpdateHeld, onUpdateHoldChange } from '../../utils/updateGate';
 
 /* global __APP_VERSION__ */
-const CURRENT = typeof __APP_VERSION__ === 'undefined' ? 'dev' : __APP_VERSION__;
+const BUILD = typeof __APP_VERSION__ === 'undefined' ? 'dev' : __APP_VERSION__;
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 
 async function latestVersion() {
@@ -26,9 +26,14 @@ async function update() {
 
 /**
  * "Update available. Please update to continue." Shown over everything (login
- * included) once a newer version is live. Checks on open, on coming back to
- * the app, and every 5 minutes. Waits while a collection is being saved or
- * its Undo bar is showing.
+ * included) once a newer version goes live WHILE the app is open. Checks on
+ * open, on coming back to the app, and every 5 minutes. Waits while a
+ * collection is being saved or its Undo bar is showing.
+ *
+ * The version the server reports when the app opens is the starting point;
+ * only a later change counts. So a host that caches /version.json (or the
+ * page) a little out of step with the app can never trap people in a loop:
+ * after Update the app simply starts again from whatever the server says.
  */
 export default function UpdateRequired() {
   const [outdated, setOutdated] = useState(false);
@@ -38,12 +43,17 @@ export default function UpdateRequired() {
   useEffect(() => onUpdateHoldChange(setHeld), []);
 
   useEffect(() => {
-    if (CURRENT === 'dev') return undefined;
+    if (BUILD === 'dev') return undefined;
     let active = true;
+    let baseline = null; // what the server said when this app opened
     const check = () => {
       if (document.visibilityState !== 'visible') return;
       latestVersion()
-        .then((latest) => { if (active && latest && latest !== CURRENT) setOutdated(true); })
+        .then((latest) => {
+          if (!active || !latest) return;
+          if (baseline === null) { baseline = latest; return; }
+          if (latest !== baseline) setOutdated(true);
+        })
         .catch(() => { /* offline: try again later */ });
     };
     check();

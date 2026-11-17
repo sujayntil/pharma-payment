@@ -4,8 +4,8 @@
 /* Sky decorations stay on the right, away from the words. */
 .sky { position: absolute; top: 0; right: 0; bottom: 0; width: 46%; overflow: hidden; pointer-events: none; }
 @media (max-width: 767px) { .sky { width: 52%; } }
-.hello { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 800; letter-spacing: -0.2px; }
-.line { margin: 4px 0 0; font-size: 14px; opacity: 0.92; }
+.hello { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 800; letter-spacing: -0.2px; }
+.line { margin: 4px 0 0; font-size: 15px; opacity: 0.92; }
 /* No badge: a soft dark edge keeps the gold crown visible on every sky. */
 .crown { display: inline-block; margin-left: 6px; font-size: 1.05em; line-height: 1; filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 3px rgba(0,0,0,.35)); }
 @media (min-width: 768px) { .banner { min-height: 128px; padding: 22px 26px; } .hello { font-size: 28px; } .line { font-size: 15px; } .text { max-width: calc(100% - 120px); } }

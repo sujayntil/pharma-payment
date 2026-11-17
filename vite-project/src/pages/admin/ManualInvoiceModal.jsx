@@ -157,7 +157,7 @@ function ManualInvoiceForm({ onClose, onSaved, mrOptions }) {
         {needsNumbers && <PhoneFields value={numbers} onChange={(next) => { setNumbers(next); setError(''); }} />}
 
         <Divider mt={4} />
-        <NumberInput label="Bill amount" required placeholder="0" leftSection="₹" min={0.01} decimalScale={2} thousandSeparator="," hideControls value={invoice.amount} onChange={(value) => setInvoice({ ...invoice, amount: value })} />
+        <NumberInput label="Bill amount" required placeholder="0" leftSection="₹" min={0.01} decimalScale={2} thousandSeparator="," thousandsGroupStyle="lakh" hideControls value={invoice.amount} onChange={(value) => setInvoice({ ...invoice, amount: value })} />
 
         {error && <Alert color="red" variant="light">{error}</Alert>}
         <Group justify="flex-end" gap="xs" mt={4}>

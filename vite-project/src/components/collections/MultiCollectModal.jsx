@@ -115,16 +115,18 @@ function MultiForm({ groups, onClose, onSaved, onCelebrate }) {
             <Paper key={row.customerId} withBorder radius="md" p="sm">
               <Stack gap={8}>
                 <Group justify="space-between" wrap="nowrap" gap="xs" align="flex-start">
-                  <div style={{ minWidth: 0 }}>
+                  {/* Long names wrap; the amount box never shrinks. */}
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <Text fw={700} style={{ overflowWrap: 'anywhere' }}>{row.customer}</Text>
                     <Text size="xs" c="dimmed" style={{ overflowWrap: 'anywhere' }}>{row.invoices.map((item) => item.invoice_number).join(' · ')}</Text>
                   </div>
                   <NumberInput
                     aria-label={`Amount from ${row.customer}`}
-                    w={120}
+                    w={130}
+                    style={{ flexShrink: 0 }}
                     min={0}
                     decimalScale={2}
-                    thousandSeparator=","
+                    thousandSeparator="," thousandsGroupStyle="lakh"
                     hideControls
                     inputMode="decimal"
                     leftSection="₹"

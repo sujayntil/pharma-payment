@@ -162,7 +162,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
           label="Amount received (₹)"
           min={0.01}
           decimalScale={2}
-          thousandSeparator=","
+          thousandSeparator="," thousandsGroupStyle="lakh"
           hideControls
           inputMode="decimal"
           value={amount}

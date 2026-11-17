@@ -10,6 +10,8 @@ import RowCard, { CardList } from '../../components/common/RowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
+import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
+import { useInvoiceTicks } from '../../hooks/useInvoiceTicks';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
@@ -26,6 +28,8 @@ import { displayPhone, errorText, money, shortDate } from '../../utils/formatter
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { recentCustomers, rememberCustomer } from '../../utils/recentCustomers';
 import InvoiceAge from '../../components/collections/InvoiceAge';
+import { useAuth } from '../../hooks/useAppStore';
+import { saveResume } from '../../utils/resume';
 
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 const CUSTOMER_TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital'];
@@ -48,6 +52,7 @@ export default function MrCustomers({ openCustomer = null }) {
   // Back closes the open ledger instead of leaving the screen.
   useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); const [editingContact, setEditingContact] = useState(null); const [collectingCustomer, setCollectingCustomer] = useState(null); const [historyId, setHistoryId] = useState(null); const [refresh, setRefresh] = useState(0);
+  const ticks = useInvoiceTicks(selected?.id);
   const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [error, setError] = useState('');
 
   useEffect(() => {
@@ -77,6 +82,12 @@ export default function MrCustomers({ openCustomer = null }) {
     return () => { active = false; clearTimeout(timer); };
   }, [ledgerFilters, ledgerPage, debouncedLedgerSearch, selected, refresh, appRefresh]);
 
+  // Remember the open customer, so the app can reopen on it (see utils/resume).
+  const { userId } = useAuth();
+  useEffect(() => {
+    saveResume(userId, { customer: selected ? { id: selected.id, name: selected.name } : null });
+  }, [selected, userId]);
+
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const onType = (value) => { setCustomerType(value || ''); setPage(1); };
   const onSort = (value) => { setSort(value === 'oldest' ? '' : value || ''); setPage(1); };
@@ -88,7 +99,7 @@ export default function MrCustomers({ openCustomer = null }) {
   const resetLedger = () => { setLedgerFilters(BLANK_LEDGER); setLedgerSearch(''); setLedgerPage(1); };
   const ledgerRange = describeRange(ledgerFilters.range);
   // Reloads both the ledger and the customer list so outstanding totals update.
-  const onCollected = () => setRefresh((value) => value + 1);
+  const onCollected = () => { setRefresh((value) => value + 1); ticks.clearSoon(); };
   // Collect is offered per invoice, only while something is pending.
   const recordButton = (invoice, size) => Number(invoice.pending_amount) > 0 && <Button size={size} leftSection={<IconCash size={size === 'sm' ? 15 : 14} />} onClick={() => setRecording({ ...invoice, customer_name: selected?.name })}>Collect</Button>;
   const ledgerActions = (invoice, size) => <>
@@ -131,8 +142,27 @@ export default function MrCustomers({ openCustomer = null }) {
         amount={money(customer.outstanding)}
         amountLabel="pending"
         amountColor={customer.outstanding ? 'red' : 'green'}
-        badges={(
-          // Info line, with the call / WhatsApp icons on its right.
+        badges={Number(customer.outstanding) > 0 ? (
+          // Pending: info line, then its own action row (fits small phones):
+          // call / WhatsApp on the left, Collect on the right.
+          <Stack gap={8} w="100%">
+            <Text size="sm" c="dimmed">
+              <Text span size="sm" fw={600} c="var(--mantine-color-text)">{customer.invoice_count}</Text> {Number(customer.invoice_count) === 1 ? 'invoice' : 'invoices'}
+              {/* Pending: how long the oldest unpaid invoice has waited (amber 30+, red 40+); settled: last invoice date. */}
+              {Number(customer.outstanding) > 0 && customer.oldest_pending_date
+                ? <InvoiceAge date={customer.oldest_pending_date} pending={customer.outstanding} size="sm" prefix=" · Oldest " />
+                : customer.latest_invoice_date && <> · Last <Text span size="sm" fw={600} c="var(--mantine-color-text)">{shortDate(customer.latest_invoice_date)}</Text></>}
+            </Text>
+            <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
+              <ContactActions name={customer.name} phone={customer.phone} alternatePhone={customer.alternate_phone} whatsappOn={customer.whatsapp_on} />
+              {/* Every pending invoice, without opening the customer. */}
+              <Button size="sm" leftSection={<IconCash size={15} />} onClick={(event) => { event.stopPropagation(); setCollectingCustomer({ id: customer.id, name: customer.name }); }} onKeyDown={(event) => event.stopPropagation()} aria-label={`Collect all from ${customer.name}`} style={{ flexShrink: 0 }}>
+                Collect all
+              </Button>
+            </Group>
+          </Stack>
+        ) : (
+          // Settled: info line, with the call / WhatsApp icons on its right.
           <Group justify="space-between" align="center" wrap="nowrap" gap="xs" w="100%">
             <Text size="sm" c="dimmed">
               <Text span size="sm" fw={600} c="var(--mantine-color-text)">{customer.invoice_count}</Text> {Number(customer.invoice_count) === 1 ? 'invoice' : 'invoices'}
@@ -145,7 +175,7 @@ export default function MrCustomers({ openCustomer = null }) {
           </Group>
         )}
       />
-    ))}</CardList> : <ScrollArea><Table highlightOnHover miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Total billed</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{customer.name}<Text size="xs" c="dimmed">{[displayPhone(customer.phone), displayPhone(customer.alternate_phone)].filter(Boolean).join(' · ')}</Text></Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right">{money(customer.total_invoiced)}</Table.Td><Table.Td ta="right" fw={700} c={customer.outstanding ? 'red' : 'green'}>{money(customer.outstanding)}<InvoiceAge block date={customer.oldest_pending_date} pending={customer.outstanding} prefix="Oldest " /></Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(customer.latest_invoice_date)}</Table.Td><Table.Td><ContactActions size="sm" fixedWidth name={customer.name} phone={customer.phone} alternatePhone={customer.alternate_phone} whatsappOn={customer.whatsapp_on} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
+    ))}</CardList> : <ScrollArea><Table highlightOnHover miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Total billed</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{customer.name}<Text size="xs" c="dimmed">{[displayPhone(customer.phone), displayPhone(customer.alternate_phone)].filter(Boolean).join(' · ')}</Text></Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right">{money(customer.total_invoiced)}</Table.Td><Table.Td ta="right" fw={700} c={customer.outstanding ? 'red' : 'green'}>{money(customer.outstanding)}<InvoiceAge block date={customer.oldest_pending_date} pending={customer.outstanding} prefix="Oldest " /></Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(customer.latest_invoice_date)}</Table.Td><Table.Td><Group gap={8} wrap="nowrap" justify="flex-end"><ContactActions size="sm" fixedWidth name={customer.name} phone={customer.phone} alternatePhone={customer.alternate_phone} whatsappOn={customer.whatsapp_on} />{Number(customer.outstanding) > 0 ? <Button size="xs" leftSection={<IconCash size={14} />} onClick={(event) => { event.stopPropagation(); setCollectingCustomer({ id: customer.id, name: customer.name }); }} aria-label={`Collect all from ${customer.name}`}>Collect all</Button> : <div style={{ width: 104 }} />}</Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(760px, 100%)" title={<Text fw={700}>{selected?.name}</Text>}>
@@ -171,20 +201,14 @@ export default function MrCustomers({ openCustomer = null }) {
             </Paper>
           )
           : <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="xs"><StatCard size="md" label="Invoiced" value={money(ledger.total_invoiced)} /><StatCard size="md" label="Collected" color="green" value={money(ledger.total_paid)} /><StatCard size="md" label="Pending" color="red" value={money(ledger.outstanding)} /></SimpleGrid>)}
-        {/* One amount over several invoices, oldest first (per-invoice Collect stays below). */}
-        {/* Opened from Recent or Home, the list figures aren't there: use the screen's own. */}
-        {selected && Number(selected.outstanding ?? ledger?.outstanding) > 0 && (
-          <Button fullWidth={isMobile} leftSection={<IconCash size={16} />} onClick={() => setCollectingCustomer({ id: selected.id, name: selected.name })} style={{ alignSelf: isMobile ? undefined : 'flex-start' }}>
-            Bulk collect
-          </Button>
-        )}
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} />
         </FilterBar>
         {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? <EmptyResults search={ledgerSearch} noun="invoices" onClear={resetLedger} /> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
-          <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} actions={recordButton(invoice, 'sm') || undefined} />
-        ))}</CardList> : <ScrollArea><Table miw={820} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td><Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td><Table.Td><StatusCell row={invoice} /></Table.Td><Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td><Table.Td onClick={(event) => event.stopPropagation()}><Group gap={4} wrap="nowrap" justify="flex-end">{ledgerActions(invoice, 'xs')}</Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
+          <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} actions={recordButton(invoice, 'sm') || undefined} onSelect={ticks.toggle} selected={ticks.isTicked(invoice)} selecting={ticks.count > 0} />
+        ))}</CardList> : <ScrollArea><Table miw={820} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}>{ledger && <TickAllCell ticks={ticks} invoices={ledger.invoices} />}</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}><Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td><Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td><Table.Td><StatusCell row={invoice} /></Table.Td><Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td><Table.Td onClick={(event) => event.stopPropagation()}><Group gap={4} wrap="nowrap" justify="flex-end">{ledgerActions(invoice, 'xs')}</Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
+        <TickedBar ticks={ticks} invoices={ledger?.invoices} onCollect={() => setCollectingCustomer({ id: selected.id, name: selected.name, invoiceIds: ticks.ids() })} />
       </Stack>
     </Drawer>
     <CustomerCollectModal customer={collectingCustomer} onClose={() => setCollectingCustomer(null)} onSaved={onCollected} />

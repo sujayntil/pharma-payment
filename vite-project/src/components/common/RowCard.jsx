@@ -8,7 +8,7 @@ import classes from './RowCard.module.css';
  *
  * details: [{ label, value, full }] (falsy entries are skipped; full spans both columns)
  */
-export default function RowCard({ title, subtitle, amount, amountLabel, amountColor, badges, details = [], actions, highlight, onClick }) {
+export default function RowCard({ title, subtitle, amount, amountLabel, amountColor, badges, details = [], actions, highlight, onClick, leading, press }) {
   const shown = details.filter(Boolean);
   return (
     <Paper
@@ -17,7 +17,8 @@ export default function RowCard({ title, subtitle, amount, amountLabel, amountCo
       radius="md"
       bg={highlight}
       onClick={onClick}
-      style={onClick ? { cursor: 'pointer' } : undefined}
+      {...press}
+      style={press ? { cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } : onClick ? { cursor: 'pointer' } : undefined}
       {...(onClick && {
         role: 'button',
         tabIndex: 0,
@@ -25,7 +26,9 @@ export default function RowCard({ title, subtitle, amount, amountLabel, amountCo
       })}
     >
       <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-        <div style={{ minWidth: 0 }}>
+        {/* Optional control before the title (a tick box); its taps don't open the card. */}
+        {leading && <div style={{ flexShrink: 0, paddingTop: 2 }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{leading}</div>}
+        <div style={{ minWidth: 0, flex: leading ? 1 : undefined }}>
           <Text fw={700} lineClamp={2} style={{ overflowWrap: 'anywhere' }}>{title}</Text>
           {subtitle && <Text size="xs" c="dimmed">{subtitle}</Text>}
         </div>

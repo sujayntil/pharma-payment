@@ -69,6 +69,11 @@ class BatchCollectUndoTests(unittest.TestCase):
         self.assertEqual(len(batch_ids), 1)
         self.assertIsNotNone(batch_ids.pop())
 
+    def test_opened_invoice_is_filled_first(self):
+        body = schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=4000, invoice_ids=[self.a.id, self.c.id], first_invoice_id=self.c.id)
+        result = add_batch_payment(body, BackgroundTasks(), self.db, self.mr)
+        self.assertEqual([(item["invoice_number"], item["amount"]) for item in result["items"]], [("INV-C", 3000), ("INV-A", 1000)])
+
     def test_unticked_invoice_is_skipped(self):
         result = self.batch(8400, [self.a.id, self.c.id])
         self.assertEqual([item["invoice_number"] for item in result["items"]], ["INV-A", "INV-C"])
@@ -139,8 +144,16 @@ class BatchCollectUndoTests(unittest.TestCase):
 
     def test_pending_invoices_oldest_first(self):
         self.batch(5400, [self.a.id])
-        result = pending_invoices(self.customer.id, self.db, self.mr)
+        result = pending_invoices(self.customer.id, None, self.db, self.mr)
         self.assertEqual([item["invoice_number"] for item in result["items"]], ["INV-B", "INV-C"])
+
+    def test_pending_invoices_from_one_invoice(self):
+        result = pending_invoices(None, self.b.id, self.db, self.mr)
+        self.assertEqual(result["customer"]["name"], "Dr. Mehta Clinic")
+        self.assertEqual(result["selected_invoice_id"], self.b.id)
+        self.assertEqual([item["invoice_number"] for item in result["items"]], ["INV-A", "INV-B", "INV-C"])
+        with self.assertRaises(HTTPException):
+            pending_invoices(None, self.b.id, self.db, self.other)
 
     def test_mr_customers_oldest_pending_first(self):
         newer = models.Customer(name="Aaa Newer Shop", mr_id=self.mr.id)

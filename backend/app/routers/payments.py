@@ -115,6 +115,8 @@ def add_batch_payment(
     if payload.amount > selected_pending + 0.01:
         raise HTTPException(400, f"₹{payload.amount:,.0f} is more than the selected invoices (₹{selected_pending:,.0f}).")
 
+    if payload.first_invoice_id is not None:
+        invoices.sort(key=lambda invoice: invoice.id != payload.first_invoice_id)  # stable: rest stay oldest first
     batch_id = str(uuid.uuid4())
     remaining = round(payload.amount, 2)
     parts = []
@@ -198,26 +200,48 @@ def undo_payment(
 
 @router.get("/pending-invoices")
 def pending_invoices(
-    customer_id: int,
+    customer_id: int | None = None,
+    invoice_id: int | None = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
-    """A customer's pending invoices, oldest first, for Collect from customer."""
-    customer = db.get(models.Customer, customer_id)
-    if not customer or (user.role == models.RoleEnum.MR.value and customer.mr_id != user.id):
-        raise HTTPException(404, "Customer not found")
+    """A customer's pending invoices, oldest first, for the Collect sheet.
+    Give customer_id (Bulk collect) or invoice_id (Collect on one invoice:
+    its customer is looked up, and the invoice is returned as "selected")."""
+    is_mr = user.role == models.RoleEnum.MR.value
+    selected = None
+    if invoice_id is not None:
+        invoice = db.get(models.Invoice, invoice_id)
+        if not invoice or (is_mr and invoice.mr_id != user.id):
+            raise HTTPException(404, "Invoice not found")
+        selected = invoice.id
+        customer = invoice.customer
+        if customer is None:
+            # No customer on this invoice: collect on it alone.
+            return {"customer": None, "selected_invoice_id": selected, "items": [_pending_item(invoice)] if (invoice.pending_amount or 0) > 0 else []}
+    elif customer_id is not None:
+        customer = db.get(models.Customer, customer_id)
+        if not customer or (is_mr and customer.mr_id != user.id):
+            raise HTTPException(404, "Customer not found")
+    else:
+        raise HTTPException(422, "Give customer_id or invoice_id")
     query = db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id, models.Invoice.pending_amount > 0)
-    if user.role == models.RoleEnum.MR.value:
+    if is_mr:
         query = query.filter(models.Invoice.mr_id == user.id)
     rows = query.order_by(models.Invoice.invoice_date.is_(None), models.Invoice.invoice_date.asc(), models.Invoice.id.asc()).all()
     return {
         "customer": {"id": customer.id, "name": customer.name},
-        "items": [{
-            "id": invoice.id,
-            "invoice_number": invoice.invoice_number,
-            "invoice_date": invoice.invoice_date,
-            "total_amount": invoice.total_amount,
-            "pending_amount": invoice.pending_amount,
-            "status": invoice.status,
-        } for invoice in rows],
+        "selected_invoice_id": selected,
+        "items": [_pending_item(invoice) for invoice in rows],
+    }
+
+
+def _pending_item(invoice: models.Invoice) -> dict:
+    return {
+        "id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "invoice_date": invoice.invoice_date,
+        "total_amount": invoice.total_amount,
+        "pending_amount": invoice.pending_amount,
+        "status": invoice.status,
     }

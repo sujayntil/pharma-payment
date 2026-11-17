@@ -218,6 +218,8 @@ class PaymentBatchCreate(BaseModel):
     customer_id: int
     amount: float = Field(gt=0)
     invoice_ids: list[int] = Field(min_length=1, max_length=200)
+    # Collect opened from one invoice: fill that one first, then oldest first.
+    first_invoice_id: Optional[int] = None
     mode: Optional[str] = None
     transaction_reference: Optional[str] = None
 

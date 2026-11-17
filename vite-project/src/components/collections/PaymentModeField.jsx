@@ -1,17 +1,18 @@
-import { Chip, Menu, SimpleGrid, TextInput, UnstyledButton } from '@mantine/core';
+import { useState } from 'react';
+import { Anchor, Chip, Menu, SimpleGrid, TextInput, UnstyledButton } from '@mantine/core';
 import { IconChevronDown } from '@tabler/icons-react';
 import { MORE_MODES, REFERENCE_LABEL } from './paymentModes';
 
 /**
  * Payment mode as one-tap chips: Cash · UPI · Cheque · More ▾ (Bank
- * Transfer, NEFT, RTGS, Other), then the box that fits the mode: nothing
- * for Cash, an optional cheque number for Cheque, an optional UTR /
- * reference for the rest.
+ * Transfer, NEFT, RTGS, Other). Under it, "+ Add cheque number" or
+ * "+ Add UTR / reference" (nothing for Cash) opens the optional box.
  */
 // Compact chips so all four fit on one row, even on small phones.
 const CHIP_STYLES = { root: { width: '100%' }, label: { width: '100%', justifyContent: 'center', paddingInline: 6 }, iconWrapper: { marginRight: 4 } };
 
 export default function PaymentModeField({ mode, onMode, reference, onReference }) {
+  const [showRef, setShowRef] = useState(false);
   const moreChosen = MORE_MODES.includes(mode);
   const label = REFERENCE_LABEL[mode];
   return (
@@ -33,9 +34,14 @@ export default function PaymentModeField({ mode, onMode, reference, onReference 
           </Menu.Dropdown>
         </Menu>
       </SimpleGrid>
-      {label && (
-        <TextInput mt="sm" label={label} placeholder="Optional" value={reference} onChange={(event) => onReference(event.currentTarget.value)} />
-      )}
+      {/* Optional, rarely used at the counter: a link until tapped. */}
+      {label && (showRef || reference ? (
+        <TextInput mt="sm" label={label} placeholder="Optional" value={reference} onChange={(event) => onReference(event.currentTarget.value)} autoFocus={showRef && !reference} />
+      ) : (
+        <Anchor component="button" type="button" size="sm" c="green.7" mt={8} onClick={() => setShowRef(true)} style={{ display: 'block' }}>
+          + Add {label === 'Cheque number' ? 'cheque number' : label === 'Reference / note' ? 'note' : 'UTR / reference'}
+        </Anchor>
+      ))}
     </div>
   );
 }

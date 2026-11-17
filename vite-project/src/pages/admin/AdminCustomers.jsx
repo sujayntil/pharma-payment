@@ -10,6 +10,8 @@ import RowCard, { CardList } from '../../components/common/RowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
+import { useInvoiceTicks } from '../../hooks/useInvoiceTicks';
+import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
@@ -42,6 +44,8 @@ export default function AdminCustomers({ openCustomer = null }) {
   useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null);
   const [editing, setEditing] = useState(null); const [deleting, setDeleting] = useState(null);
+  const ticks = useInvoiceTicks(selected?.id);
+  const collectAll = (customer) => (event) => { event.stopPropagation(); setCollectingCustomer({ id: customer.id, name: customer.name }); };
   const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
 
   useEffect(() => {
@@ -101,7 +105,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   const reloadLedger = () => setLedgerRefresh((value) => value + 1);
   // Clicking the row opens the ledger; Edit/Delete stop the click so they don't also open it.
   const customerActions = (customer) => <Group gap="xs" wrap="nowrap" justify="flex-end" onClick={(event) => event.stopPropagation()}>{/* Disabled: replaced by clicking the row. Re-enable if needed.
-  <Button size="xs" variant="light" onClick={() => openLedger(customer)}>Ledger</Button> */}<Button size="xs" variant="default" onClick={() => openEdit(customer)}>Edit</Button><Button size="xs" variant="subtle" color="red" onClick={() => setDeleting(customer)}>Delete</Button></Group>;
+  <Button size="xs" variant="light" onClick={() => openLedger(customer)}>Ledger</Button> */}{Number(customer.pending_amount) > 0 && <Button size="xs" leftSection={<IconCash size={14} />} onClick={collectAll(customer)} aria-label={`Collect all from ${customer.name}`}>Collect all</Button>}<Button size="xs" variant="default" onClick={() => openEdit(customer)}>Edit</Button><Button size="xs" variant="subtle" color="red" onClick={() => setDeleting(customer)}>Delete</Button></Group>;
   // Phones: Edit / Delete live in a ⋯ menu so Delete is not one slip away.
   const customerMenu = (customer) => (
     <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
@@ -157,7 +161,10 @@ export default function AdminCustomers({ openCustomer = null }) {
               {customer.mr_name ? <Text span size="sm" fw={600} c="var(--mantine-color-text)">{customer.mr_name}</Text> : 'Unassigned'}
               {' · '}{customer.invoice_count} {Number(customer.invoice_count) === 1 ? 'invoice' : 'invoices'}
             </Text>
-            {customerMenu(customer)}
+            <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+              {Number(customer.pending_amount) > 0 && <Button size="sm" leftSection={<IconCash size={15} />} onClick={collectAll(customer)} onKeyDown={(event) => event.stopPropagation()} aria-label={`Collect all from ${customer.name}`}>Collect all</Button>}
+              {customerMenu(customer)}
+            </Group>
           </Group>
         )}
       />
@@ -189,28 +196,24 @@ export default function AdminCustomers({ openCustomer = null }) {
             </Paper>
           )
           : <SimpleGrid cols={3} spacing="xs"><StatCard size="md" label="Invoiced" value={money(ledger.total_invoiced)} /><StatCard size="md" label="Collected" color="green" value={money(ledger.total_paid)} /><StatCard size="md" label="Pending" color="red" value={money(ledger.outstanding)} /></SimpleGrid>)}
-        {/* One amount over several invoices, oldest first (per-invoice Collect stays below). */}
-        {selected && Number((selected.pending_amount ?? selected.outstanding)) > 0 && (
-          <Button fullWidth={isMobile} leftSection={<IconCash size={16} />} onClick={() => setCollectingCustomer({ id: selected.id, name: selected.name })} style={{ alignSelf: isMobile ? undefined : 'flex-start' }}>
-            Bulk collect
-          </Button>
-        )}
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} />
         </FilterBar>
         {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? (ledgerChips.some(Boolean) ? <EmptyResults search={ledgerSearch} noun="invoices" onClear={resetLedger} /> : <Text ta="center" c="dimmed" py="xl">No invoices for this customer yet.</Text>) : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
-          <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} />
-        ))}</CardList> : <ScrollArea><Table miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th>{/* Disabled: MR is shown once in the header. Re-enable if needed. <Table.Th>MR</Table.Th> */}<Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}>
+          <InvoiceCard key={invoice.invoice_id} invoice={invoice} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} onSelect={ticks.toggle} selected={ticks.isTicked(invoice)} selecting={ticks.count > 0} />
+        ))}</CardList> : <ScrollArea><Table miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}>{ledger && <TickAllCell ticks={ticks} invoices={ledger.invoices} />}</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th>{/* Disabled: MR is shown once in the header. Re-enable if needed. <Table.Th>MR</Table.Th> */}<Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}>
+          <Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td>
           <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}{invoice.mr && invoice.mr !== ledger.customer?.mr_name && <Text size="xs" c="dimmed" fw={400}>MR {invoice.mr}</Text>}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td>{/* <Table.Td>{invoice.mr || '—'}</Table.Td> */}<Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
           <Table.Td><StatusCell row={invoice} /></Table.Td>
           <Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td>
           <Table.Td>{ledgerActions(invoice)}</Table.Td>
         </Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
+        <TickedBar ticks={ticks} invoices={ledger?.invoices} onCollect={() => setCollectingCustomer({ id: selected.id, name: selected.name, invoiceIds: ticks.ids() })} />
       </Stack>
     </Drawer>
-    <CustomerCollectModal customer={collectingCustomer} onClose={() => setCollectingCustomer(null)} onSaved={() => { setRefresh((value) => value + 1); reloadLedger(); }} />
-    <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={reloadLedger} />
+    <CustomerCollectModal customer={collectingCustomer} onClose={() => setCollectingCustomer(null)} onSaved={() => { setRefresh((value) => value + 1); reloadLedger(); ticks.clearSoon(); }} />
+    <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={() => { reloadLedger(); ticks.clearSoon(); }} />
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
     <MarkUnpaidModal invoice={reversing && { ...reversing, customer_name: selected?.name }} onClose={() => setReversing(null)} onSaved={reloadLedger} /> */}
     {/* Saving reloads the customer screen and the list so the new numbers show everywhere. */}

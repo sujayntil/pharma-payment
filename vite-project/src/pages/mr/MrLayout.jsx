@@ -1,8 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Center, Loader } from '@mantine/core';
 import { IconHome, /* IconChartBar, IconFileUpload, IconCash, */ IconFileInvoice, IconUsers } from '@tabler/icons-react';
 import AppFrame from '../../components/common/AppFrame';
+import { useAuth } from '../../hooks/useAppStore';
+import { resumePlace, saveResume } from '../../utils/resume';
 
 const MrDashboard = lazy(() => import('./MrDashboard'));
 // Disabled: Add Invoice (Upload Invoice) removed. Re-enable if needed.
@@ -38,6 +40,26 @@ export default function MrLayout() {
   // Set when Home opens a customer directly; the key remounts Customers on it.
   const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
   const choose = (tab) => { if (tab !== activeTab || openCustomer) navigate(tabPath(tab)); };
+
+  // Reopen where the MR left off (tab and open customer) if the app comes
+  // back within 30 minutes; a fresh start later still opens Home.
+  const { userId } = useAuth();
+  const [resume] = useState(() => (
+    location.pathname.replace(/\/$/, '') === '/mr' && !location.state ? resumePlace(userId) : null
+  ));
+  useEffect(() => {
+    if (resume) navigate(resume.path, { replace: true, state: resume.customer ? { openCustomer: resume.customer } : undefined });
+  }, [resume, navigate]);
+  useEffect(() => {
+    const path = tabPath(activeTab);
+    saveResume(userId, path === '/mr/customers' ? { path } : { path, customer: null });
+  }, [activeTab, userId]);
+  useEffect(() => {
+    // Leaving the app (call, WhatsApp): note the time so the 30 minutes count from here.
+    const onHide = () => { if (document.hidden) saveResume(userId, {}); };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [userId]);
 
   return (
     <AppFrame items={MR_TABS} active={activeTab} onChange={choose} bottomNav>

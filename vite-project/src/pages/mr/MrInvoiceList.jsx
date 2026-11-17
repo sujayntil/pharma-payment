@@ -179,7 +179,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
               onOpen={() => setOpenId(item.invoice_id)}
               // Pending: icons share the bottom row with Collect. Settled: no
               // Collect, so the icons sit beside the status badge instead.
-              actions={canRecord(item) ? <>{contactFor(item)}<Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(item)}>Collect</Button></> : undefined}
+              actions={canRecord(item) ? <>{contactFor(item)}<Button className="collect-button" size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(item)}>Collect</Button></> : undefined}
               afterStatus={canRecord(item) ? undefined : contactFor(item)}
               onSelect={ticks.toggle}
               selected={ticks.isTicked(item)}

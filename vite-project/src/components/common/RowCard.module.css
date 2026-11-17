@@ -9,6 +9,7 @@
   min-width: 36px;
 }
 
-.actions > :global(.mantine-Button-root) {
+.actions > :global(.mantine-Button-root),
+.actions > div > :global(.mantine-Button-root) {
   flex: 1 0 auto;
 }

@@ -8,7 +8,7 @@ import classes from './RowCard.module.css';
  *
  * details: [{ label, value, full }] (falsy entries are skipped; full spans both columns)
  */
-export default function RowCard({ title, subtitle, amount, amountLabel, amountColor, badges, details = [], actions, highlight, onClick, leading, press }) {
+export default function RowCard({ title, subtitle, amount, amountLabel, amountColor, badges, details = [], actions, highlight, onClick, marker, press, borderColor }) {
   const shown = details.filter(Boolean);
   return (
     <Paper
@@ -16,20 +16,22 @@ export default function RowCard({ title, subtitle, amount, amountLabel, amountCo
       p="sm"
       radius="md"
       bg={highlight}
+      pos={marker ? 'relative' : undefined}
       onClick={onClick}
       {...press}
-      style={press ? { cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } : onClick ? { cursor: 'pointer' } : undefined}
+      style={{
+        ...(press ? { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } : null),
+        ...(onClick ? { cursor: 'pointer' } : null),
+        ...(borderColor ? { borderColor } : null),
+      }}
       {...(onClick && {
         role: 'button',
         tabIndex: 0,
         onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(); } },
       })}
     >
-      {leading ? (
-        // A tick box in its own column; everything else lines up to its right.
-        <Group align="flex-start" wrap="nowrap" gap="sm">
-          <div style={{ flexShrink: 0, paddingTop: 1 }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{leading}</div>
-          <div style={{ minWidth: 0, flex: 1 }}>
+      {/* Optional mark on the card's left edge (selection); takes no space inside. */}
+      {marker && <div style={{ position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 1, lineHeight: 0 }}>{marker}</div>}
       <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
         <div style={{ minWidth: 0 }}>
           <Text fw={700} lineClamp={2} style={{ overflowWrap: 'anywhere' }}>{title}</Text>
@@ -57,40 +59,6 @@ export default function RowCard({ title, subtitle, amount, amountLabel, amountCo
         <Group className={classes.actions} gap="xs" mt="sm" justify="flex-end" wrap="wrap" onClick={(event) => event.stopPropagation()}>
           {actions}
         </Group>
-      )}
-          </div>
-        </Group>
-      ) : (
-        <>
-      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-        <div style={{ minWidth: 0 }}>
-          <Text fw={700} lineClamp={2} style={{ overflowWrap: 'anywhere' }}>{title}</Text>
-          {subtitle && <Text size="xs" c="dimmed" component="div">{subtitle}</Text>}
-        </div>
-        {amount != null && (
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <Text fw={700} c={amountColor} style={{ whiteSpace: 'nowrap' }}>{amount}</Text>
-            {amountLabel && <Text size="xs" c="dimmed">{amountLabel}</Text>}
-          </div>
-        )}
-      </Group>
-      {badges && <Group gap={6} mt={8} wrap="wrap">{badges}</Group>}
-      {shown.length > 0 && (
-        <SimpleGrid cols={2} spacing="xs" verticalSpacing={6} mt="xs">
-          {shown.map((detail) => (
-            <div key={detail.label} style={{ minWidth: 0, gridColumn: detail.full ? '1 / -1' : undefined }}>
-              <Text size="xs" c="dimmed">{detail.label}</Text>
-              <Text size="sm" style={{ overflowWrap: 'anywhere' }}>{detail.value}</Text>
-            </div>
-          ))}
-        </SimpleGrid>
-      )}
-      {actions && (
-        <Group className={classes.actions} gap="xs" mt="sm" justify="flex-end" wrap="wrap" onClick={(event) => event.stopPropagation()}>
-          {actions}
-        </Group>
-      )}
-        </>
       )}
     </Paper>
   );

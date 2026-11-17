@@ -101,7 +101,7 @@ export default function MrCustomers({ openCustomer = null }) {
   // Reloads both the ledger and the customer list so outstanding totals update.
   const onCollected = () => { setRefresh((value) => value + 1); ticks.clearSoon(); };
   // Collect is offered per invoice, only while something is pending.
-  const recordButton = (invoice, size) => Number(invoice.pending_amount) > 0 && <Button size={size} leftSection={<IconCash size={size === 'sm' ? 15 : 14} />} onClick={() => setRecording({ ...invoice, customer_name: selected?.name })}>Collect</Button>;
+  const recordButton = (invoice, size) => Number(invoice.pending_amount) > 0 && <Button className="collect-button" size={size} leftSection={<IconCash size={size === 'sm' ? 15 : 14} />} onClick={() => setRecording({ ...invoice, customer_name: selected?.name })}>Collect</Button>;
   const ledgerActions = (invoice, size) => <>
     <Tooltip label="Invoice history" withArrow>
       <ActionIcon variant="light" color="gray" size={size === 'sm' ? 'lg' : 'md'} aria-label={`History for ${invoice.invoice_number}`} onClick={() => setHistoryId(invoice.invoice_id)}><IconHistory size={size === 'sm' ? 18 : 16} /></ActionIcon>
@@ -195,7 +195,7 @@ export default function MrCustomers({ openCustomer = null }) {
             <Paper withBorder p="sm" radius="md">
               <SimpleGrid cols={3} spacing="xs">
                 {[['Invoiced', ledger.total_invoiced, undefined], ['Collected', ledger.total_paid, 'green'], ['Pending', ledger.outstanding, 'red']].map(([label, value, color]) => (
-                  <div key={label} style={{ minWidth: 0 }}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" fw={700} c={color} style={{ overflowWrap: 'anywhere' }}>{money(value)}</Text></div>
+                  <div key={label} style={{ minWidth: 0, textAlign: 'center', borderLeft: label === 'Invoiced' ? undefined : '1px solid var(--mantine-color-gray-2)' }}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" fw={700} c={color} style={{ overflowWrap: 'anywhere' }}>{money(value)}</Text></div>
                 ))}
               </SimpleGrid>
             </Paper>

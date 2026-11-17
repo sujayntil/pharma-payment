@@ -222,7 +222,7 @@ export default function AdminInvoices() {
         onOpen={() => setHistoryId(invoice.id)}
         // Same as the MR cards: call / WhatsApp + Collect while pending,
         // icons beside the status badge once paid.
-        actions={Number(invoice.pending_amount) > 0 ? <>{contactFor(invoice)}<Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(invoice)}>Collect</Button></> : undefined}
+        actions={Number(invoice.pending_amount) > 0 ? <>{contactFor(invoice)}<Button className="collect-button" size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(invoice)}>Collect</Button></> : undefined}
         afterStatus={Number(invoice.pending_amount) > 0 ? undefined : contactFor(invoice)}
         onSelect={ticks.toggle}
         selected={ticks.isTicked(invoice)}

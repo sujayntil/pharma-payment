@@ -1,0 +1,4 @@
+/* The actions row keeps its children's layout (RowCard sets the flex row). */
+.actionsWrap { display: contents; }
+/* While selecting, Collect greys out and can't be tapped; it keeps its place so nothing moves. */
+.actionsWrap[data-selecting] :global(.collect-button) { opacity: .35; filter: grayscale(1); pointer-events: none; }

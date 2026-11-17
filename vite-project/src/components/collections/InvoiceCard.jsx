@@ -1,4 +1,6 @@
-import { Checkbox, Text } from '@mantine/core';
+import { Text, UnstyledButton } from '@mantine/core';
+import { IconCheck } from '@tabler/icons-react';
+import classes from './InvoiceCard.module.css';
 import RowCard from '../common/RowCard';
 import { money, shortDate } from '../../utils/formatters';
 import { StatusCell } from './CollectionBadges';
@@ -39,10 +41,11 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
     <RowCard
       onClick={press.onClick}
       press={canSelect && !selecting ? press : undefined}
+      // Selecting: same layout; a ticked card turns green with a ✓ on its left edge.
       highlight={selecting && selected ? 'var(--mantine-color-green-0)' : undefined}
-      leading={selecting && canSelect ? <Checkbox size="md" color="green" checked={selected} onChange={() => onSelect(invoice)} aria-label={`Select ${invoice.invoice_number}`} /> : null}
-      // While selecting there is a tick on the left: the date drops to its own line.
-      title={selecting ? invoice.invoice_number : <>
+      borderColor={selecting && selected ? 'var(--mantine-color-green-5)' : undefined}
+      marker={selecting && canSelect ? <SelectMark selected={selected} onToggle={() => onSelect(invoice)} label={invoice.invoice_number} /> : null}
+      title={<>
         <span style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}</span>
         {date && (
           // The date never splits across lines: it stays whole beside the number.
@@ -51,11 +54,7 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
           </Text>
         )}
       </>}
-      subtitle={(() => {
-        const who = [showCustomer && (customer || '—'), showMr && (invoice.mr_name || 'Unassigned')].filter(Boolean).join(' · ') || null;
-        if (!selecting || !date) return who;
-        return <><div style={{ whiteSpace: 'nowrap' }}>{shortDate(date)}<InvoiceAge date={date} pending={pending} /></div>{who && <div>{who}</div>}</>;
-      })()}
+      subtitle={[showCustomer && (customer || '—'), showMr && (invoice.mr_name || 'Unassigned')].filter(Boolean).join(' · ') || null}
       amount={money(settled && bill != null ? bill : pending)}
       amountLabel={settled ? 'paid' : 'pending'}
       amountColor={settled ? 'dimmed' : 'red'}
@@ -68,7 +67,28 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
           </Text>
         )}
       </>}
-      actions={selecting ? undefined : actions}
+      // While selecting, Collect greys out in place (nothing moves); call / WhatsApp stay.
+      actions={actions && <div data-selecting={selecting || undefined} className={classes.actionsWrap}>{actions}</div>}
     />
+  );
+}
+
+/** Round ✓ on the card's edge: filled green when ticked, an empty ring otherwise. */
+function SelectMark({ selected, onToggle, label }) {
+  return (
+    <UnstyledButton
+      role="checkbox"
+      aria-checked={selected}
+      aria-label={`Select ${label}`}
+      onClick={(event) => { event.stopPropagation(); onToggle(); }}
+      style={{
+        width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
+        background: selected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-body)',
+        border: `2px solid ${selected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-4)'}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,.15)',
+      }}
+    >
+      {selected && <IconCheck size={14} stroke={3} color="white" />}
+    </UnstyledButton>
   );
 }

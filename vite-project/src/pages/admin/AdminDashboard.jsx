@@ -86,7 +86,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
     <Stack gap="md">
       <Group justify="space-between" align="end">
         <div>
-          <Title order={1}>{greeting}{user?.name ? `, ${user.name}` : ''} 👑</Title>
+          <Title order={1}>{greeting}{user?.name ? `, ${user.name}` : ''} <span aria-hidden style={{ fontSize: '1.25em', lineHeight: 1, verticalAlign: '-0.08em' }}>👑</span></Title>
           {user?.id && <Text size="sm" c="dimmed" mt={2}>{dailyLine(user.id)}</Text>}
         </div>
         <Badge variant="light" size="lg">Admin view</Badge>

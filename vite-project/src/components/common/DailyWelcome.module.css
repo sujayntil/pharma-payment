@@ -15,7 +15,7 @@
   animation: fadeIn 250ms ease-out both;
 }
 .leaving { animation: fadeOut 350ms ease-in both; }
-.crown { font-size: 64px; line-height: 1; animation: drop 650ms cubic-bezier(.3, 1.6, .5, 1) both; }
+.crown { font-size: 76px; line-height: 1; animation: drop 650ms cubic-bezier(.3, 1.6, .5, 1) both; }
 .hello { font-size: 26px; font-weight: 800; animation: rise 400ms 250ms ease-out both; }
 .line { font-size: 16px; opacity: .9; max-width: 320px; animation: rise 400ms 450ms ease-out both; }
 @keyframes drop { from { transform: translateY(-90px) rotate(-18deg); opacity: 0; } to { transform: none; opacity: 1; } }

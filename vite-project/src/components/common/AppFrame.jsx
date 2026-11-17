@@ -22,6 +22,15 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
 import DailyWelcome from './DailyWelcome';
+
+/* global __APP_VERSION__ */
+// "17 Nov, 3:58 pm" in India time for a build; "dev" when running locally.
+const APP_VERSION_LABEL = (() => {
+  const stamp = typeof __APP_VERSION__ === 'undefined' ? 'dev' : __APP_VERSION__;
+  const at = new Date(stamp);
+  if (Number.isNaN(at.getTime())) return stamp;
+  return at.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+})();
 import { logout, setUserData } from '../../store/slices/authSlice';
 import { authApi } from '../../api/authApi';
 import AppRefreshProvider from './AppRefreshProvider';
@@ -148,6 +157,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               <Box px="sm" py={6}>
                 <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{user?.name || 'User'}</Text>
                 <Text size="xs" c="dimmed">{role === 'ADMIN' ? 'Administrator' : 'Medical representative'}</Text>
+                {/* Which build this is, so anyone can check they have the latest update. */}
+                <Text size="xs" c="dimmed" mt={4}>Version: {APP_VERSION_LABEL}</Text>
               </Box>
               <Menu.Divider />
               <Menu.Item color="red" leftSection={<IconLogout size={15} />} onClick={signOut}>Log out</Menu.Item>

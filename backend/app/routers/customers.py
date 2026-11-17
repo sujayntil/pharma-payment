@@ -26,8 +26,8 @@ def list_customers(
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
     search = clean_search(search)
-    if sort not in (None, "", "name", "pending"):
-        raise HTTPException(422, "sort must be name or pending")
+    if sort not in (None, "", "name", "pending", "invoices", "assignment"):
+        raise HTTPException(422, "sort must be name, pending, invoices or assignment")
     pending = func.coalesce(func.sum(models.Invoice.pending_amount), 0)
     q = db.query(
         models.Customer,
@@ -57,8 +57,16 @@ def list_customers(
         q
         .outerjoin(models.Invoice, models.Invoice.customer_id == models.Customer.id)
         .group_by(models.Customer.id)
-        # "pending": who owes most first; otherwise A-Z by name.
-        .order_by(*((pending.desc(), models.Customer.name) if sort == "pending" else (models.Customer.name,)))
+        # "pending": who owes most first; "invoices": most invoices first;
+        # "assignment": unassigned first, then most invoices (Customer to MR
+        # assignment); otherwise A-Z by name.
+        .order_by(*(
+            (pending.desc(), models.Customer.name) if sort == "pending"
+            else (func.count(models.Invoice.id).desc(), models.Customer.name) if sort == "invoices"
+            # "assignment": customers with no MR on top, then most invoices first.
+            else (models.Customer.mr_id.isnot(None), func.count(models.Invoice.id).desc(), models.Customer.name) if sort == "assignment"
+            else (models.Customer.name,)
+        ))
     )
     rows, total, page_size, page_offset = query_page(q, limit, offset, search)
     items = [

@@ -39,6 +39,24 @@ class UnassignedFilterTests(unittest.TestCase):
         self.assertEqual(self.names(list_customers(mr_id=0, limit=50, offset=0, db=self.db, user=self.admin)), ["Orphan"])
         self.assertEqual(self.names(list_customers(mr_id=self.mr.id, limit=50, offset=0, db=self.db, user=self.admin)), ["Mine"])
 
+    def test_most_invoices_first(self):
+        orphan = self.db.query(models.Customer).filter_by(name="Orphan").one()
+        for number in ("B2", "B3"):
+            self.db.add(models.Invoice(invoice_number=number, invoice_date=date(2026, 11, 2), customer_id=orphan.id,
+                                       total_amount=50, paid_amount=50, pending_amount=0, status="PAID"))
+        self.db.commit()
+        self.assertEqual(self.names(list_customers(sort="invoices", limit=50, offset=0, db=self.db, user=self.admin)), ["Orphan", "Mine"])
+        self.assertEqual(self.names(list_customers(mr_id=0, sort="invoices", limit=50, offset=0, db=self.db, user=self.admin)), ["Orphan"])
+
+    def test_assignment_puts_unassigned_first(self):
+        mine = self.db.query(models.Customer).filter_by(name="Mine").one()
+        for number in ("A2", "A3"):  # "Mine" now has more invoices, but has an MR
+            self.db.add(models.Invoice(invoice_number=number, invoice_date=date(2026, 11, 2), customer_id=mine.id, mr_id=self.mr.id,
+                                       total_amount=50, paid_amount=50, pending_amount=0, status="PAID"))
+        self.db.commit()
+        self.assertEqual(self.names(list_customers(sort="assignment", limit=50, offset=0, db=self.db, user=self.admin)), ["Orphan", "Mine"])
+        self.assertEqual(self.names(list_customers(sort="invoices", limit=50, offset=0, db=self.db, user=self.admin)), ["Mine", "Orphan"])
+
     def test_invoices_unassigned(self):
         q, _ = _admin_invoice_query(self.db, 0, None, None, None, None, None, False, None)
         self.assertEqual([invoice.invoice_number for invoice in q.all()], ["B"])

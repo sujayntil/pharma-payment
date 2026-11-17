@@ -31,7 +31,7 @@ export default function AdminImport() {
     const timer = setTimeout(async () => {
       setCustomerLoading(true);
       try {
-        const data = await customersApi.getCustomers({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, ...(search.trim() && { search: search.trim() }), ...(mrFilter && { mr_id: mrFilter }) });
+        const data = await customersApi.getCustomers({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, ...(search.trim() && { search: search.trim() }), ...(mrFilter && { mr_id: mrFilter }), sort: 'assignment' });
         if (active) { setCustomers(data.items); setCustomerTotal(data.total); }
       } catch (err) { if (active) setError(err.detail || err.message); }
       finally { if (active) setCustomerLoading(false); }

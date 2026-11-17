@@ -197,8 +197,10 @@ def undo_payment(
 ):
     """The person who saved a collection removes it straight away from the
     Undo bar (a mistyped amount, wrong invoice). A collection split over
-    several invoices is undone together. The removal is kept in the audit
-    log; after the bar is gone only an Admin reversal can correct it."""
+    several invoices is undone together. The invoice history keeps the
+    collection (marked undone) plus an "Undone" line, and the audit log
+    keeps the details; after the bar is gone only an Admin reversal can
+    correct it."""
     payment = db.get(models.Payment, payment_id)
     if not payment or (payment.amount or 0) <= 0 or payment.reversal_of_id is not None:
         raise HTTPException(404, "Collection not found")
@@ -221,7 +223,14 @@ def undo_payment(
         undone.append({"payment_id": item.id, "invoice_id": invoice.id, "invoice_number": invoice.invoice_number,
                        "amount": item.amount, "mode": item.mode, "reference": item.transaction_reference})
         apply_ledger_delta(invoice, -(item.amount or 0))
-        db.query(models.InvoiceEvent).filter(models.InvoiceEvent.payment_id == item.id).delete(synchronize_session=False)
+        # Keep the story in the invoice history: the collection stays, marked
+        # undone, and an "Undone" line is added. Neither counts in balances.
+        db.query(models.InvoiceEvent).filter(
+            models.InvoiceEvent.payment_id == item.id,
+            models.InvoiceEvent.event_type == models.InvoiceEventType.COLLECTED.value,
+        ).update({"event_type": models.InvoiceEventType.COLLECTED_UNDONE.value, "payment_id": None}, synchronize_session=False)
+        db.query(models.InvoiceEvent).filter(models.InvoiceEvent.payment_id == item.id).update({"payment_id": None}, synchronize_session=False)
+        log_event(db, invoice.id, models.InvoiceEventType.UNDONE.value, user, amount=item.amount, mode=item.mode, reference=item.transaction_reference)
         db.delete(item)
         db.flush()
         latest = (

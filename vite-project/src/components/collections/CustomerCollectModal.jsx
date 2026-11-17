@@ -132,19 +132,17 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
       const cleared = items.filter((item) => (item.pending_amount || 0) <= 0.009).length;
       const everyTickedCleared = leftOnSelected <= 0.01;
       const undo = { paymentId, message: `${money(value)} collected · ${count === 1 ? items[0].invoice_number : `${count} invoices`}` };
-      if (role === 'MR') {
-        onCelebrate({
-          amount: value,
-          left: leftOnSelected,
-          cleared: everyTickedCleared,
-          customer: data.customer?.name || invoice?.customer,
-          headline: pickHeadline(everyTickedCleared),
-          detail: cleared > 1 ? `${cleared} invoices cleared` : null,
-          undo,
-        });
-      } else {
-        showUndoBar(undo);
-      }
+      // MR: Sales King celebration. Admin: dancing mascot + big tick. Then the Undo bar.
+      onCelebrate({
+        variant: role === 'MR' ? 'mr' : 'admin',
+        amount: value,
+        left: leftOnSelected,
+        cleared: everyTickedCleared,
+        customer: data.customer?.name || invoice?.customer,
+        headline: pickHeadline(everyTickedCleared),
+        detail: cleared > 1 ? `${cleared} invoices cleared` : null,
+        undo,
+      });
       onSaved?.();
       onClose();
     } catch (err) {

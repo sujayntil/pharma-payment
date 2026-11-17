@@ -9,6 +9,7 @@ import SalesKingMascot from './SalesKingMascot';
 import { HEADLINES } from './celebrationText';
 
 const SHOW_MS = 3000; // long enough to enjoy, closes on a tap too
+const ADMIN_SHOW_MS = 2200;
 
 const prefersReducedMotion = () => {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
@@ -24,6 +25,8 @@ const prefersReducedMotion = () => {
  * with "reduce motion" on there is no confetti, only the tick and text.
  *
  * celebration: { amount, left, cleared, customer } or null.
+ * variant 'admin': the mascot dancing and a big green tick; no confetti,
+ * no graffiti words, a little shorter.
  */
 export default function CollectionCelebration({ celebration, onDone }) {
   // The celebration (and the Undo bar after it) plays out before any update screen.
@@ -31,7 +34,8 @@ export default function CollectionCelebration({ celebration, onDone }) {
   useEffect(() => {
     if (!celebration) return undefined;
     const reduced = prefersReducedMotion();
-    if (!reduced) {
+    const isAdmin = celebration.variant === 'admin';
+    if (!reduced && !isAdmin) {
       const colors = ['#40c057', '#2f9e44', '#fcc419', '#ffffff', '#ff6b6b', '#4dabf7'];
       if (celebration.cleared) {
         confetti({ particleCount: 140, spread: 80, startVelocity: 45, origin: { y: 0.65 }, zIndex: 1000, colors, disableForReducedMotion: true });
@@ -42,12 +46,35 @@ export default function CollectionCelebration({ celebration, onDone }) {
       }
     }
     try { navigator.vibrate?.(celebration.cleared ? [40, 60, 40] : 30); } catch { /* not supported */ }
-    const timer = setTimeout(onDone, SHOW_MS);
+    const timer = setTimeout(onDone, isAdmin ? ADMIN_SHOW_MS : SHOW_MS);
     return () => clearTimeout(timer);
   }, [celebration, onDone]);
 
   if (!celebration) return null;
   const { amount, left, cleared, customer, headline, detail } = celebration;
+  if (celebration.variant === 'admin') {
+    return (
+      <Portal>
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label={`${money(amount)} collected${cleared ? '. Invoice cleared.' : left > 0 ? `, ${money(left)} left` : ''}`}
+          onClick={onDone}
+          className="sk-backdrop"
+        >
+          <style>{CELEBRATION_CSS}</style>
+          <div className="sk-card">
+            <div className="sk-dance"><SalesKingMascot size={130} /></div>
+            <ThemeIcon className="sk-tick sk-big-tick" size={64} radius="xl" color="green" aria-hidden><IconCheck size={40} stroke={3} /></ThemeIcon>
+            <Text fw={700} fz={20} ta="center" mt={8}>
+              {money(amount)} collected{!cleared && left > 0 ? <Text span c="dimmed" fw={500} fz={15}> · {money(left)} left</Text> : null}
+            </Text>
+            {customer && <Text size="sm" c="dimmed" ta="center" style={{ overflowWrap: 'anywhere' }}>{customer}</Text>}
+          </div>
+        </div>
+      </Portal>
+    );
+  }
   const [lead, king] = splitHeadline(headline || (cleared ? HEADLINES.cleared[0] : HEADLINES.part[0]));
   return (
     <Portal>
@@ -119,9 +146,13 @@ const CELEBRATION_CSS = `
 .sk-king{font-size:38px;color:#fcc419;-webkit-text-stroke:2px #1b1b1b;paint-order:stroke fill;text-shadow:3px 3px 0 #2f9e44,5px 5px 0 rgba(0,0,0,0.15);animation:sk-spray 420ms ease-out 140ms both;white-space:nowrap}
 @keyframes sk-tick{0%{transform:scale(0)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
 .sk-tick{flex-shrink:0;animation:sk-tick 380ms cubic-bezier(.2,1.4,.4,1) 260ms both}
+/* Admin: the mascot dances (sway + hop), big tick pops in under it. */
+.sk-dance{animation:sk-dance 700ms ease-in-out 200ms infinite;transform-origin:50% 100%}
+@keyframes sk-dance{0%{transform:translateY(0) rotate(0)}25%{transform:translateY(-10px) rotate(-8deg)}50%{transform:translateY(0) rotate(0)}75%{transform:translateY(-10px) rotate(8deg)}100%{transform:translateY(0) rotate(0)}}
+.sk-big-tick{margin-top:-6px;box-shadow:0 4px 14px rgba(47,158,68,.35)}
 @keyframes sk-fade{from{opacity:0}to{opacity:1}}
 @keyframes sk-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes sk-bounce{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-8px) rotate(3deg)}}
 @keyframes sk-spray{0%{opacity:0;transform:scale(1.4);filter:blur(4px)}100%{opacity:1;transform:scale(1);filter:blur(0)}}
-@media (prefers-reduced-motion: reduce){.sk-card,.sk-mascot,.sk-king,.sk-backdrop,.sk-tick{animation:none!important}}
+@media (prefers-reduced-motion: reduce){.sk-card,.sk-mascot,.sk-dance,.sk-king,.sk-backdrop,.sk-tick{animation:none!important}}
 `;

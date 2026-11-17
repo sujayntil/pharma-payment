@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models, schemas
 from app.database import Base
+from app.invoice_history import build_invoice_history
 from app.push import batch_payload
 from app.routers.mr import customers as mr_customers
 from app.routers.notifications import recent_collections
@@ -146,6 +147,12 @@ class BatchCollectUndoTests(unittest.TestCase):
         self.assertEqual((self.pending(self.a), self.pending(self.b)), (5400, 4800))
         self.assertEqual(self.db.query(models.Payment).count(), 0)
         self.assertEqual(self.db.query(models.InvoiceEvent).filter(models.InvoiceEvent.event_type == "COLLECTED").count(), 0)
+        # History keeps the story: the collection, marked undone, then "Undone".
+        history = build_invoice_history(self.db, self.a)
+        self.assertEqual([event["type"] for event in history["events"]], ["CREATED", "COLLECTED_UNDONE", "UNDONE"])
+        self.assertEqual(history["events"][1]["amount"], 5400)
+        self.assertEqual(history["events"][2]["actor"]["name"], "Rahul")
+        self.assertEqual(history["invoice"]["pending_amount"], 5400)
         audit = self.db.query(models.AuditLog).filter_by(action="payment_undone").one()
         self.assertEqual([part["invoice_number"] for part in audit.old_value["payments"]], ["INV-A", "INV-B"])
 

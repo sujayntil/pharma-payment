@@ -87,18 +87,16 @@ function MultiForm({ groups, onClose, onSaved, onCelebrate }) {
         paymentIds: saved.results.map((result) => result.items[0]?.payment_id).filter(Boolean),
         message: `${money(total)} · ${paying.length === 1 ? paying[0].customer : `${paying.length} customers`}`,
       };
-      if (role !== 'MR') showUndoBar(undo);
-      if (role === 'MR') {
-        onCelebrate({
-          amount: total,
-          left,
-          cleared,
-          customer: paying.length === 1 ? paying[0].customer : `${paying.length} customers`,
-          headline: pickHeadline(cleared),
-          detail: null,
-          undo,
-        });
-      }
+      onCelebrate({
+        variant: role === 'MR' ? 'mr' : 'admin',
+        amount: total,
+        left,
+        cleared,
+        customer: paying.length === 1 ? paying[0].customer : `${paying.length} customers`,
+        headline: pickHeadline(cleared),
+        detail: null,
+        undo,
+      });
       onSaved?.();
       onClose();
     } catch (err) {

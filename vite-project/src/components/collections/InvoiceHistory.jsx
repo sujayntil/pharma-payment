@@ -18,12 +18,17 @@ const EVENT_STYLE = {
   CREATED: { color: 'blue', icon: IconFileInvoice },
   COLLECTED: { color: 'green', icon: IconCash },
   REVERSED: { color: 'orange', icon: IconArrowBackUp },
+  // Undone from the Undo bar: the collection stays (crossed out), then "Undone".
+  COLLECTED_UNDONE: { color: 'gray', icon: IconCash },
+  UNDONE: { color: 'gray', icon: IconArrowBackUp },
 };
 
 function eventTitle(event) {
   if (event.type === 'CREATED') return 'Invoice created';
   if (event.type === 'REVERSED') return 'Payment reversed';
   if (event.type === 'COLLECTED') return event.after_reversal ? 'Collection recorded again' : 'Collection recorded';
+  if (event.type === 'COLLECTED_UNDONE') return 'Collection recorded';
+  if (event.type === 'UNDONE') return 'Undone';
   return event.type;
 }
 
@@ -146,6 +151,8 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
           const isReversal = event.type === 'REVERSED';
           const remarks = event.reason || event.reference;
           const reversedOut = event.type === 'COLLECTED' && event.fully_reversed;
+          const undone = event.type === 'COLLECTED_UNDONE';
+          const isUndo = event.type === 'UNDONE';
           return (
             <Timeline.Item
               key={event.id}
@@ -157,6 +164,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
                     <Text fw={700} size="sm" c={isReversal ? 'orange.8' : undefined}>{eventTitle(event)}</Text>
                     {event.kind && <Badge size="xs" variant="light" color={event.kind === 'full' ? 'green' : 'yellow'}>{event.kind === 'full' ? 'Full' : 'Partial'}</Badge>}
                     {reversedOut && <Badge size="xs" variant="light" color="orange">Reversed</Badge>}
+                    {undone && <Badge size="xs" variant="light" color="gray">Undone</Badge>}
                   </Group>
                   {canReverse(event) && (
                     <Menu position="bottom-end" shadow="md" withinPortal>
@@ -180,16 +188,16 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
               }
             >
               <Meta>{event.type === 'CREATED' ? shortDate(event.invoice_date || event.at) : dateTime(event.at)}</Meta>
-              {event.amount != null && (
+              {event.amount != null && !isUndo && (
                 <Group gap={6} wrap="wrap" mt={2}>
-                  <Text size="sm" fw={700} td={reversedOut ? 'line-through' : undefined} c={isReversal ? 'orange.8' : reversedOut ? 'dimmed' : event.type === 'COLLECTED' ? 'green.8' : undefined}>
+                  <Text size="sm" fw={700} td={reversedOut || undone ? 'line-through' : undefined} c={isReversal ? 'orange.8' : reversedOut || undone ? 'dimmed' : event.type === 'COLLECTED' ? 'green.8' : undefined}>
                     {isReversal ? '−' : ''}{money(event.amount)}
                   </Text>
                   {event.mode && <Badge size="sm" variant="light" color={isReversal ? 'orange' : 'gray'}>{event.mode}</Badge>}
                 </Group>
               )}
               {event.actor && <Meta>{who(event.actor)}</Meta>}
-              {remarks && <Meta>{event.reason ? `Reason: ${event.reason}` : remarks}</Meta>}
+              {remarks && !isUndo && <Meta>{event.reason ? `Reason: ${event.reason}` : remarks}</Meta>}
             </Timeline.Item>
           );
         })}

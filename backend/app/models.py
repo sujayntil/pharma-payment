@@ -178,6 +178,10 @@ class InvoiceEventType(str, enum.Enum):
     CREATED = "CREATED"
     COLLECTED = "COLLECTED"
     REVERSED = "REVERSED"
+    # Undo from the Undo bar: the collection line stays in history, marked
+    # as undone, followed by an "undone" line (balances count neither).
+    COLLECTED_UNDONE = "COLLECTED_UNDONE"
+    UNDONE = "UNDONE"
 
 
 class InvoiceEvent(Base):

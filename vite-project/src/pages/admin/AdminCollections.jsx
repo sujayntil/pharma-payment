@@ -139,7 +139,7 @@ export default function AdminCollections() {
     <Title order={1}>Collections</Title>
 
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search invoice, customer, MR…" chips={chips} onReset={reset} moreActive={[filters.mrId, filters.mode, filters.recordedBy, filters.entryType].filter(Boolean).length} more={<>
-      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
+      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
         <FilterSelect placeholder="All modes" icon={<IconWallet size={16} />} data={[...PAYMENT_MODES, 'Admin adjustment', 'Reversal']} value={filters.mode} onChange={(mode) => update({ mode })} />
         <FilterSelect placeholder="Recorded by" icon={<IconUserShield size={16} />} data={RECORDED_BY} value={filters.recordedBy} onChange={(recordedBy) => update({ recordedBy })} />
         <FilterSelect placeholder="All entries" data={ENTRY_TYPES} value={filters.entryType} onChange={(entryType) => update({ entryType })} />

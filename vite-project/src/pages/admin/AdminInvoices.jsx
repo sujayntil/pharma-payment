@@ -240,7 +240,7 @@ export default function AdminInvoices() {
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}>
       {/* Replaced by the tabs above + "Show only": <StatusTabs value={filters.status} onChange={(status) => update({ status })} /> */}
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}
-      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
+      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>

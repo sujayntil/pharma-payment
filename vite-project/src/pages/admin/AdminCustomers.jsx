@@ -171,7 +171,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
-      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} searchable data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
+      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'name' ? 'name' : '' })} />
     </FilterBar>

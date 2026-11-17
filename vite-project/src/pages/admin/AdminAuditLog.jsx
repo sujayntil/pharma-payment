@@ -108,7 +108,7 @@ export default function AdminAuditLog() {
         <Group gap="sm" wrap="nowrap"><Title order={1}>Audit log</Title><Badge variant="light" size="lg">{data.total}</Badge></Group>
       </Group>
       <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, person" chips={chips} onReset={reset} activeOutline>
-        <FilterSelect placeholder="Everyone" icon={<IconUser size={16} />} data={people} value={filters.userId} onChange={(userId) => update({ userId: userId || '' })} searchable />
+        <FilterSelect placeholder="Everyone" icon={<IconUser size={16} />} data={people} value={filters.userId} onChange={(userId) => update({ userId: userId || '' })} />
         <FilterSelect placeholder="All roles" icon={<IconUsers size={16} />} data={ROLES} value={filters.role} onChange={(role) => update({ role: role || '' })} />
         <FilterSelect placeholder="All actions" icon={<IconShieldCheck size={16} />} data={TYPES} value={filters.type} onChange={(type) => update({ type: type || '' })} />
         <DateRangeFilter label="Date" value={filters.range} onChange={(value) => update({ range: value })} />

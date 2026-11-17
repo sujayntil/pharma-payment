@@ -229,7 +229,9 @@ def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, sea
         raise HTTPException(422, "sort_order must be newest, oldest, or amount")
     search = clean_search(search)
     q = db.query(models.Invoice)
-    if mr_id:
+    if mr_id == 0:
+        q = q.filter(models.Invoice.mr_id.is_(None))  # "Unassigned" in the MR filter
+    elif mr_id:
         q = q.filter(models.Invoice.mr_id == mr_id)
     if pending_only:
         q = q.filter(models.Invoice.pending_amount > 0)

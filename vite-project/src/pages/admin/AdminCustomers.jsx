@@ -83,13 +83,15 @@ export default function AdminCustomers({ openCustomer = null }) {
   }, [ledgerFilters, ledgerPage, ledgerRefresh, debouncedLedgerSearch, selected, appRefresh]);
 
   const mrOptions = useMemo(() => mrs.map((mr) => ({ value: String(mr.id), label: mr.name })), [mrs]);
+  // The MR filter also offers "Unassigned" (sent as mr_id 0: no MR).
+  const mrFilterOptions = useMemo(() => [...mrOptions, { value: '0', label: 'Unassigned' }], [mrOptions]);
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setFilters({ mrId: '', type: '', sort: '' }); setSearch(''); setPage(1); };
   const chips = [
     // Default order is most pending first; a chip shows only for Name A–Z.
     filters.sort && { key: 'sort', label: 'Name A–Z', onRemove: () => update({ sort: '' }) },
-    filters.mrId && { key: 'mr', label: `MR: ${mrOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
+    filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     filters.type && { key: 'type', label: `Type: ${filters.type}`, onRemove: () => update({ type: '' }) },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
   ];
@@ -171,7 +173,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
-      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
+      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'name' ? 'name' : '' })} />
     </FilterBar>

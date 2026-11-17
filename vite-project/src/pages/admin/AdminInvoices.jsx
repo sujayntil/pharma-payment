@@ -160,6 +160,8 @@ export default function AdminInvoices() {
     else setCollectingMany(list);
   };
   const mrOptions = useMemo(() => mrs.map((mr) => ({ value: String(mr.id), label: mr.name })), [mrs]);
+  // The MR filter also offers "Unassigned" (sent as mr_id 0: no MR).
+  const mrFilterOptions = useMemo(() => [...mrOptions, { value: '0', label: 'Unassigned' }], [mrOptions]);
   const rangeLabel = describeRange(filters.range);
   const onlyOptions = ONLY_OPTIONS[tab];
   const tabData = TABS.map((t) => ({ value: t.value, label: counts[t.value] == null ? t.label : `${t.label} ${counts[t.value]}` }));
@@ -186,7 +188,7 @@ export default function AdminInvoices() {
   */
   const chips = [
     filters.only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === filters.only)?.label}`, onRemove: () => update({ only: '' }) },
-    filters.mrId && { key: 'mr', label: `MR: ${mrOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
+    filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
     filters.sort && { key: 'sort', label: SORTS.find((s) => s.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
@@ -240,7 +242,7 @@ export default function AdminInvoices() {
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}>
       {/* Replaced by the tabs above + "Show only": <StatusTabs value={filters.status} onChange={(status) => update({ status })} /> */}
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}
-      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
+      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>

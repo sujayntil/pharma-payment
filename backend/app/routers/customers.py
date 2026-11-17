@@ -47,6 +47,8 @@ def list_customers(
         # Only an Admin may browse every customer. Anyone else is limited to
         # the customers assigned to them, whatever mr_id they ask for.
         q = q.filter(models.Customer.mr_id == user.id)
+    elif mr_id == 0:
+        q = q.filter(models.Customer.mr_id.is_(None))  # "Unassigned" in the MR filter
     elif mr_id:
         q = q.filter(models.Customer.mr_id == mr_id)
     if customer_type and customer_type.strip():

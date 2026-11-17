@@ -121,7 +121,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
             {!useBottomNav && <Burger opened={opened} onClick={() => setOpened((value) => !value)} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />}
             <ThemeIcon size={isMobile ? 28 : 34} radius="md" variant="filled"><IconPill size={isMobile ? 16 : 19} /></ThemeIcon>
             <div>
-              <Text fw={700} size="sm">Pharma Sales</Text>
+              <Text fw={700} size="sm">Portal</Text>
               {!isMobile && <Text c="dimmed" size="xs">Collection workspace</Text>}
             </div>
           </Group>

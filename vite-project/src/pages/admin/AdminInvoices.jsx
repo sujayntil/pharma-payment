@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Alert, Button, Group, Loader, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Button, Group, Loader, Menu, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDownload, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
+import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDots, IconDownload, IconEdit, IconEye, IconTrash, IconUser } from '@tabler/icons-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { invoicesApi } from '../../api/invoicesApi';
 import { adminApi } from '../../api/adminApi';
@@ -20,6 +20,7 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
+import { deleteWithUndo } from '../../components/collections/deleteWithUndo';
 import CustomerCollectModal from '../../components/collections/CustomerCollectModal';
 import MultiCollectModal from '../../components/collections/MultiCollectModal';
 import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
@@ -193,16 +194,46 @@ export default function AdminInvoices() {
 
   const openEdit = (invoice) => { setEditing(invoice); setForm({ invoice_number: invoice.invoice_number, invoice_date: invoice.invoice_date || '', customer_name: invoice.customer_name || '', total_amount: invoice.total_amount, payment_mode: invoice.payment_mode || '', remarks: invoice.remarks || '' }); };
   const save = async (event) => { event.preventDefault(); setBusy(true); setError(''); try { await invoicesApi.updateInvoice(editing.id, { ...form, invoice_number: form.invoice_number.trim(), customer_name: form.customer_name.trim(), total_amount: Number(form.total_amount), payment_mode: form.payment_mode || null, remarks: form.remarks.trim() || null }); setEditing(null); setNotice('Invoice updated.'); reload(); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
-  const remove = async () => { setBusy(true); setError(''); try { await invoicesApi.deleteInvoice(deleting.id); if (historyId === deleting.id) setHistoryId(null); setDeleting(null); setNotice('Invoice and its collection history were deleted.'); reload(); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
+  // Deleted invoices leave the list at once; the server delete waits for the Undo bar.
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const setHidden = (id, hidden) => setHiddenIds((current) => { const next = new Set(current); if (hidden) next.add(id); else next.delete(id); return next; });
+  const remove = () => {
+    const invoice = deleting;
+    setDeleting(null);
+    if (historyId === invoice.id) setHistoryId(null);
+    if (ticks.isTicked(invoice)) ticks.toggle(invoice);
+    deleteWithUndo({
+      path: `/invoices/${invoice.id}`,
+      message: `${invoice.invoice_number} deleted`,
+      onHide: () => setHidden(invoice.id, true),
+      onRestore: () => setHidden(invoice.id, false),
+      onDone: reload,
+    });
+  };
   const panelActions = [
     { label: 'Edit invoice', icon: <IconEdit size={15} />, onClick: openEdit },
     { label: 'Delete invoice', icon: <IconTrash size={15} />, color: 'red', onClick: setDeleting },
   ];
   const contactFor = (invoice) => <ContactActions name={invoice.customer_name || 'customer'} phone={invoice.customer_phone} alternatePhone={invoice.customer_alternate_phone} whatsappOn={invoice.customer_whatsapp_on} />;
-  const recordButton = (invoice) => Number(invoice.pending_amount) > 0 && (
+  // Laptop rows: [Collect] [⋯]. Paid rows keep an empty slot so ⋯ lines up.
+  const recordButton = (invoice) => (Number(invoice.pending_amount) > 0 ? (
     <Button size="xs" variant="light" leftSection={<IconCash size={14} />} onClick={(event) => { event.stopPropagation(); setRecording(invoice); }}>Collect</Button>
+  ) : <div style={{ width: 82 }} />);
+  const rowMenu = (invoice) => (
+    <div onClick={(event) => event.stopPropagation()}>
+      <Menu position="bottom-end" shadow="md" withinPortal>
+        <Menu.Target><ActionIcon variant="subtle" color="gray" aria-label={`More actions for ${invoice.invoice_number}`}><IconDots size={16} /></ActionIcon></Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item leftSection={<IconEye size={15} />} onClick={() => setHistoryId(invoice.id)}>View details</Menu.Item>
+          <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => openEdit(invoice)}>Edit invoice</Menu.Item>
+          <Menu.Divider />
+          <Menu.Item color="red" leftSection={<IconTrash size={15} />} onClick={() => setDeleting(invoice)}>Delete invoice</Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+    </div>
   );
 
+  const shownInvoices = invoices.filter((invoice) => !hiddenIds.has(invoice.id));
   return <Stack gap="md" style={panelSpace}><Title order={1}>Invoices</Title>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <SegmentedControl fullWidth={isMobile} style={isMobile ? undefined : { alignSelf: 'flex-start' }} data={tabData} value={tab} onChange={changeTab} aria-label="Invoice status" />
@@ -214,7 +245,7 @@ export default function AdminInvoices() {
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>
     <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text>{isMobile ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} disabled={!total} onClick={exportExcel}><IconDownload size={16} /></ActionIcon></Tooltip> : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>}</Group></Group>
-    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !invoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="invoices" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">{tab === 'pending' ? 'Nothing pending. All invoices are settled.' : tab === 'paid' ? 'No paid invoices yet.' : 'No invoices yet.'}</Text>) : isMobile ? <CardList>{invoices.map((invoice) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !shownInvoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !shownInvoices.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="invoices" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">{tab === 'pending' ? 'Nothing pending. All invoices are settled.' : tab === 'paid' ? 'No paid invoices yet.' : 'No invoices yet.'}</Text>) : isMobile ? <CardList>{shownInvoices.map((invoice) => (
       <InvoiceCard
         key={invoice.id}
         invoice={invoice}
@@ -228,13 +259,13 @@ export default function AdminInvoices() {
         selected={ticks.isTicked(invoice)}
         selecting={ticks.count > 0}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={invoices} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
+    ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={invoices} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownInvoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
       <Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td>
       <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td><Table.Td>{invoice.mr_name || <Text span c="dimmed" size="sm">Unassigned</Text>}</Table.Td>
       {!panelOpen && <><Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td></>}<Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
       <Table.Td><StatusCell row={invoice} /></Table.Td>
       {!panelOpen && <Table.Td maw={170}><RecordedBy row={invoice} /></Table.Td>}
-      <Table.Td><Group justify="flex-end" wrap="nowrap">{recordButton(invoice)}</Group></Table.Td>
+      <Table.Td><Group justify="flex-end" gap={6} wrap="nowrap">{recordButton(invoice)}{rowMenu(invoice)}</Group></Table.Td>
     </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>

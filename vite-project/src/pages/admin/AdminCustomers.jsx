@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Modal, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { ActionIcon, Tooltip, Alert, Badge, Button, Drawer, Group, Loader, Menu, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowsSort, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
+import { IconArrowsSort, IconBook, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
@@ -11,6 +11,7 @@ import { listPaperProps, reloadingStyle } from '../../components/common/listPape
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { useInvoiceTicks } from '../../hooks/useInvoiceTicks';
+import { deleteWithUndo } from '../../components/collections/deleteWithUndo';
 import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
@@ -43,10 +44,10 @@ export default function AdminCustomers({ openCustomer = null }) {
   // Back closes the open ledger instead of leaving the screen.
   useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null);
-  const [editing, setEditing] = useState(null); const [deleting, setDeleting] = useState(null);
+  const [editing, setEditing] = useState(null);
   const ticks = useInvoiceTicks(selected?.id);
   const collectAll = (customer) => (event) => { event.stopPropagation(); setCollectingCustomer({ id: customer.id, name: customer.name }); };
-  const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+  const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -105,15 +106,33 @@ export default function AdminCustomers({ openCustomer = null }) {
   const reloadLedger = () => setLedgerRefresh((value) => value + 1);
   // Clicking the row opens the ledger; Edit/Delete stop the click so they don't also open it.
   const customerActions = (customer) => <Group gap="xs" wrap="nowrap" justify="flex-end" onClick={(event) => event.stopPropagation()}>{/* Disabled: replaced by clicking the row. Re-enable if needed.
-  <Button size="xs" variant="light" onClick={() => openLedger(customer)}>Ledger</Button> */}{Number(customer.pending_amount) > 0 && <Button size="xs" leftSection={<IconCash size={14} />} onClick={collectAll(customer)} aria-label={`Collect all from ${customer.name}`}>Collect all</Button>}<Button size="xs" variant="default" onClick={() => openEdit(customer)}>Edit</Button><Button size="xs" variant="subtle" color="red" onClick={() => setDeleting(customer)}>Delete</Button></Group>;
+  <Button size="xs" variant="light" onClick={() => openLedger(customer)}>Ledger</Button> */}{/* Laptop rows: [Collect all] [⋯]; settled rows keep an empty slot so ⋯ lines up. */}{Number(customer.pending_amount) > 0 ? <Button size="xs" leftSection={<IconCash size={14} />} onClick={collectAll(customer)} aria-label={`Collect all from ${customer.name}`}>Collect all</Button> : <div style={{ width: 98 }} />}{customerMenu(customer)}</Group>;
   // Phones: Edit / Delete live in a ⋯ menu so Delete is not one slip away.
   const customerMenu = (customer) => (
     <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
       <Menu position="bottom-end" shadow="md" withinPortal>
         <Menu.Target><ActionIcon variant="subtle" color="gray" size="lg" aria-label={`More actions for ${customer.name}`}><IconDots size={18} /></ActionIcon></Menu.Target>
         <Menu.Dropdown>
+          <Menu.Item leftSection={<IconBook size={15} />} onClick={() => openLedger(customer)}>View ledger</Menu.Item>
           <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => openEdit(customer)}>Edit customer</Menu.Item>
-          <Menu.Item color="red" leftSection={<IconTrash size={15} />} onClick={() => setDeleting(customer)}>Delete customer</Menu.Item>
+          <Menu.Divider />
+          {/* Customers with invoices can't be deleted (their ledger stays): greyed, blocked cursor, short tip. */}
+          {Number(customer.invoice_count) > 0 ? (
+            <Tooltip label="Has invoices" position="left" withArrow withinPortal>
+              <Menu.Item
+                leftSection={<IconTrash size={15} />}
+                closeMenuOnClick={false}
+                aria-disabled
+                c="dimmed"
+                style={{ cursor: 'not-allowed', opacity: 0.6 }}
+                onClick={(event) => event.preventDefault()}
+              >
+                Delete customer
+              </Menu.Item>
+            </Tooltip>
+          ) : (
+            <Menu.Item color="red" leftSection={<IconTrash size={15} />} onClick={() => deleteCustomer(customer)}>Delete customer</Menu.Item>
+          )}
         </Menu.Dropdown>
       </Menu>
     </div>
@@ -136,8 +155,19 @@ export default function AdminCustomers({ openCustomer = null }) {
 
   const openLedger = (customer) => { setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerFilters(BLANK_LEDGER); setLedgerPage(1); };
   const openEdit = (customer) => setEditing(customer);
-  const deleteCustomer = async () => { setBusy(true); setError(''); try { await customersApi.deleteCustomer(deleting.id); setDeleting(null); setNotice('Customer deleted.'); setRefresh((value) => value + 1); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
+  // No confirm box for customers (only ones without invoices can be deleted): it leaves the list
+  // at once and the server delete waits for the Undo bar.
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const setHidden = (id, hidden) => setHiddenIds((current) => { const next = new Set(current); if (hidden) next.add(id); else next.delete(id); return next; });
+  const deleteCustomer = (customer) => deleteWithUndo({
+    path: `/customers/${customer.id}`,
+    message: `${customer.name} deleted`,
+    onHide: () => setHidden(customer.id, true),
+    onRestore: () => setHidden(customer.id, false),
+    onDone: () => setRefresh((value) => value + 1),
+  });
 
+  const shownCustomers = customers.filter((customer) => !hiddenIds.has(customer.id));
   return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
@@ -145,7 +175,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'name' ? 'name' : '' })} />
     </FilterBar>
-    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !customers.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="customers" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No customers yet.</Text>) : isMobile ? <CardList>{customers.map((customer) => (
+    <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !shownCustomers.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="customers" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No customers yet.</Text>) : isMobile ? <CardList>{shownCustomers.map((customer) => (
       <RowCard
         key={customer.id}
         onClick={() => openLedger(customer)}
@@ -168,7 +198,7 @@ export default function AdminCustomers({ openCustomer = null }) {
           </Group>
         )}
       />
-    ))}</CardList> : <ScrollArea><Table miw={900} highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{displayPhone(customer.phone) || '—'}{customer.whatsapp_on === 'main' && <IconBrandWhatsapp size={14} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}{customer.alternate_phone && <Text size="xs" c="dimmed">Alt {displayPhone(customer.alternate_phone)}{customer.whatsapp_on === 'alternate' && <IconBrandWhatsapp size={13} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}</Text>}</Table.Td><Table.Td>{customer.mr_name || <Badge color="gray" variant="light">Unassigned</Badge>}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right" fw={700} c={Number(customer.pending_amount) > 0 ? 'red' : 'dimmed'} style={{ whiteSpace: 'nowrap' }}>{money(customer.pending_amount)}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{customer.latest_invoice_date ? shortDate(customer.latest_invoice_date) : '—'}</Table.Td><Table.Td>{customerActions(customer)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
+    ))}</CardList> : <ScrollArea><Table miw={900} highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownCustomers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{displayPhone(customer.phone) || '—'}{customer.whatsapp_on === 'main' && <IconBrandWhatsapp size={14} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}{customer.alternate_phone && <Text size="xs" c="dimmed">Alt {displayPhone(customer.alternate_phone)}{customer.whatsapp_on === 'alternate' && <IconBrandWhatsapp size={13} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}</Text>}</Table.Td><Table.Td>{customer.mr_name || <Badge color="gray" variant="light">Unassigned</Badge>}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right" fw={700} c={Number(customer.pending_amount) > 0 ? 'red' : 'dimmed'} style={{ whiteSpace: 'nowrap' }}>{money(customer.pending_amount)}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{customer.latest_invoice_date ? shortDate(customer.latest_invoice_date) : '—'}</Table.Td><Table.Td>{customerActions(customer)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" title={<div><Text fw={700} style={{ overflowWrap: 'anywhere' }}>{selected?.name || ''}</Text><Text size="sm" c="dimmed">MR: {ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}</Text></div>}>
@@ -225,6 +255,5 @@ export default function AdminCustomers({ openCustomer = null }) {
       setSelected((current) => (current && current.id === saved.id ? { ...current, ...saved } : current));
       setRefresh((value) => value + 1); reloadLedger();
     }} />
-    <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete customer" centered><Stack><Alert color="red">Delete {deleting?.name}? Customers with invoices cannot be deleted, so their ledger history stays protected.</Alert><Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" loading={busy} onClick={deleteCustomer}>Delete customer</Button></Group></Stack></Modal>
   </Stack>;
 }

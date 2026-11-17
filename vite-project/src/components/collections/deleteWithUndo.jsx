@@ -6,22 +6,29 @@ import UndoCountdown from './UndoCountdown';
 // Deletes waiting for their Undo bar to run out: id -> server path.
 const pending = new Map();
 
-// Closing, refreshing or updating the app sends waiting deletes right away,
-// so a delete is never lost just because the app went away.
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('pharma_token');
-    pending.forEach(({ path, method, body }) => {
-      try {
-        fetch(`${API_BASE}${path}`, {
-          method, keepalive: true,
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
-          body: body ? JSON.stringify(body) : undefined,
-        });
-      } catch { /* the page is going away; nothing more to do */ }
-    });
-    pending.clear();
+// Closing, refreshing, updating the app, or putting it in the background
+// (phone locked, home button, another app) sends waiting deletes right away:
+// a phone freezes a backgrounded app, so the 15-second countdown can't be
+// trusted to finish there.
+function sendWaitingNow() {
+  if (!pending.size) return;
+  const token = localStorage.getItem('token') || localStorage.getItem('pharma_token');
+  pending.forEach(({ path, method, body, undo }) => {
+    try {
+      fetch(`${API_BASE}${path}`, {
+        method, keepalive: true,
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch { /* the page is going away; nothing more to do */ }
+    undo?.();
   });
+  pending.clear();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', sendWaitingNow);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sendWaitingNow(); });
 }
 
 /**
@@ -38,7 +45,8 @@ if (typeof window !== 'undefined') {
 export function deleteWithUndo({ path, method = 'DELETE', body, message, onHide, onRestore, onDone }) {
   const id = `delete-${path}-${body ? JSON.stringify(body) : ''}`;
   onHide();
-  pending.set(id, { path, method, body });
+  // Sent early (app backgrounded): just close the bar; the delete is on its way.
+  pending.set(id, { path, method, body, undo: () => notifications.hide(id) });
 
   const undo = () => {
     if (!pending.delete(id)) return;
@@ -53,7 +61,8 @@ export function deleteWithUndo({ path, method = 'DELETE', body, message, onHide,
       onDone?.();
     } catch (err) {
       onRestore();
-      notifications.show({ color: 'red', position: 'bottom-center', message: errorText(err, "Couldn't delete. Check your connection.") });
+      // Stays until tapped, so a refused delete is never missed.
+      notifications.show({ color: 'red', position: 'bottom-center', autoClose: false, withCloseButton: true, title: "Couldn't delete", message: errorText(err, 'Check your connection and try again.') });
     }
   };
 

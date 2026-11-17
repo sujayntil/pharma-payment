@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from ..audit import write_audit
 from ..database import get_db
 from ..deps import get_current_user, oauth2_scheme
 from ..login_guard import client_address, ensure_not_locked, record_failure, record_success
-from ..security import create_access_token, decode_access_token, verify_password
+from ..security import REMEMBER_EXPIRE_MINUTES, create_access_token, decode_access_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,7 +45,10 @@ def logout(
 @router.post("/login", response_model=schemas.Token)
 def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db),
+    # "Keep me signed in": a 30-day session renewed while used. Off (and for
+    # older apps that don't send it): 12 hours, as before.
+    remember: bool = Form(False),
 ):
     # Refuse early (429) while this employee code or address is locked out
     # after repeated wrong passwords.
@@ -67,7 +70,7 @@ def login(
     write_audit(db, "signed_in", user, new={"address": address})
     db.commit()
 
-    token = create_access_token({"sub": str(user.id), "role": user.role})
+    token = _issue(user, remember)
     return schemas.Token(
         access_token=token,
         token_type="bearer",
@@ -76,3 +79,27 @@ def login(
         user_id=user.id,
         title=user.title or "KING",
     )
+
+
+def _issue(user: models.User, remember: bool) -> str:
+    claims = {"sub": str(user.id), "role": user.role, "rmb": bool(remember)}
+    if remember:
+        return create_access_token(claims, expires_minutes=REMEMBER_EXPIRE_MINUTES)
+    return create_access_token(claims)
+
+
+@router.post("/refresh")
+def refresh(
+    token: str = Depends(oauth2_scheme),
+    user: models.User = Depends(get_current_user),
+):
+    """Renews a "Keep me signed in" session for another 30 days (the app
+    calls this when opened). Sessions signed in without it are not renewed,
+    so they still end after 12 hours. Sessions from before this option
+    existed (no "rmb" in them) were kept on the device anyway, so they are
+    renewed too. A password reset or Log out still ends the session: the old
+    token is refused by get_current_user before this runs."""
+    payload = decode_access_token(token)
+    if payload.get("rmb") is False:
+        raise HTTPException(status_code=400, detail="This session isn't kept signed in")
+    return {"access_token": _issue(user, True), "token_type": "bearer"}

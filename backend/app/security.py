@@ -7,7 +7,9 @@ from passlib.context import CryptContext
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # 12 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # 12 hours ("Keep me signed in" off)
+# "Keep me signed in": 30 days, renewed while the app is used (POST /auth/refresh).
+REMEMBER_EXPIRE_MINUTES = 60 * 24 * 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

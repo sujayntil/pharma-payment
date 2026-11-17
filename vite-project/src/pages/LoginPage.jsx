@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Alert, Button, Center, Container, Paper, PasswordInput, Stack, Text, TextInput, ThemeIcon, Title } from '@mantine/core';
+import { Alert, Button, Center, Checkbox, Container, Paper, PasswordInput, Stack, Text, TextInput, ThemeIcon, Title } from '@mantine/core';
 import { IconAlertCircle, IconArrowRight, IconLock, IconUser } from '@tabler/icons-react';
 import { useAppDispatch, useAuth } from '../hooks/useAppStore';
 import { loginUser, clearError } from '../store/slices/authSlice';
+import { rememberedCode } from '../utils/authToken';
 
 export default function LoginPage() {
-  const [employeeCode, setEmployeeCode] = useState('');
+  // Filled in from the last "Keep me signed in" login on this device.
+  const [employeeCode, setEmployeeCode] = useState(rememberedCode);
+  // On by default (MRs use their own phones); untick on a shared device.
+  const [remember, setRemember] = useState(true);
   const [password, setPassword] = useState('');
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -23,7 +27,7 @@ export default function LoginPage() {
     event.preventDefault();
     if (!employeeCode.trim() || !password) return;
     dispatch(clearError());
-    const result = await dispatch(loginUser({ employeeCode: employeeCode.trim(), password }));
+    const result = await dispatch(loginUser({ employeeCode: employeeCode.trim(), password, remember }));
     if (loginUser.fulfilled.match(result)) {
       navigate(result.payload.user.role === 'ADMIN' ? '/admin' : '/mr', { replace: true });
     }
@@ -60,6 +64,11 @@ export default function LoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.currentTarget.value)}
                   required
+                />
+                <Checkbox
+                  label="Keep me signed in on this device"
+                  checked={remember}
+                  onChange={(event) => setRemember(event.currentTarget.checked)}
                 />
                 <Button type="submit" fullWidth mt="xs" loading={loading} rightSection={<IconArrowRight size={17} />}>
                   Sign in

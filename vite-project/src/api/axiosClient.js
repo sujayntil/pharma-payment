@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearToken, getToken } from '../utils/authToken';
 
 // Backend base URL from Vite environment variable or fallback to production URL
 export const API_BASE =
@@ -35,8 +36,7 @@ export const failureCount = () => activity.failures;
 axiosClient.interceptors.request.use(
   (config) => {
     activity.pending += 1;
-    const token =
-      localStorage.getItem('token') || localStorage.getItem('pharma_token');
+    const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -52,9 +52,8 @@ axiosClient.interceptors.response.use(
     settle();
     if (!axios.isCancel(error)) activity.failures += 1;
     if (error.response?.status === 401) {
-      // Clear token from localStorage
-      localStorage.removeItem('token');
-      localStorage.removeItem('pharma_token');
+      // Session ended (expired, logged out elsewhere, password reset).
+      clearToken();
 
       // Dispatch a custom event so Redux store and app can react immediately
       if (typeof window !== 'undefined') {

@@ -1,12 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authApi } from '../../api/authApi';
 import { decodeJwt, isTokenExpired } from '../../utils/formatters';
+import { clearToken, getToken, rememberCode, saveToken } from '../../utils/authToken';
 
-// Read initial token exclusively from localStorage
-const storedToken =
-  typeof window !== 'undefined'
-    ? localStorage.getItem('token') || localStorage.getItem('pharma_token')
-    : null;
+// The saved login: kept (localStorage) or this session only (sessionStorage).
+const storedToken = typeof window !== 'undefined' ? getToken() : null;
 
 let initialUser = null;
 let initialIsAuthenticated = false;
@@ -23,21 +21,17 @@ if (storedToken && !isTokenExpired(storedToken)) {
     employee_code: decoded?.employee_code || '',
   };
 } else if (storedToken) {
-  // Token is expired, purge from localStorage
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('token');
-    localStorage.removeItem('pharma_token');
-  }
+  // Token is expired: remove it.
+  if (typeof window !== 'undefined') clearToken();
 }
 
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
-  async ({ employeeCode, password }, { rejectWithValue }) => {
+  async ({ employeeCode, password, remember = true }, { rejectWithValue }) => {
     try {
-      const data = await authApi.login(employeeCode, password);
-      // STRICT REQUIREMENT: Only store token in localStorage
-      localStorage.setItem('token', data.access_token);
-      localStorage.removeItem('pharma_token'); // clean legacy key if any
+      const data = await authApi.login(employeeCode, password, remember);
+      saveToken(data.access_token, remember);
+      rememberCode(employeeCode, remember);
       return {
         token: data.access_token,
         user: {
@@ -71,11 +65,11 @@ const authSlice = createSlice({
       state.user = null;
       state.isAuthenticated = false;
       state.error = null;
-      // Only remove token from localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('pharma_token');
-      }
+      if (typeof window !== 'undefined') clearToken();
+    },
+    // A kept session was renewed for another 30 days.
+    tokenRenewed(state, action) {
+      state.token = action.payload;
     },
     clearError(state) {
       state.error = null;
@@ -105,6 +99,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, setUserData } = authSlice.actions;
+export const { logout, clearError, setUserData, tokenRenewed } = authSlice.actions;
 export default authSlice.reducer;
 

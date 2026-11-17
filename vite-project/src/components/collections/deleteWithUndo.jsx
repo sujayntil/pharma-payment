@@ -1,6 +1,7 @@
 import { notifications } from '@mantine/notifications';
 import axiosClient, { API_BASE } from '../../api/axiosClient';
 import { errorText } from '../../utils/formatters';
+import { getToken } from '../../utils/authToken';
 import UndoCountdown from './UndoCountdown';
 
 // Deletes waiting for their Undo bar to run out: id -> server path.
@@ -12,7 +13,7 @@ const pending = new Map();
 // trusted to finish there.
 function sendWaitingNow() {
   if (!pending.size) return;
-  const token = localStorage.getItem('token') || localStorage.getItem('pharma_token');
+  const token = getToken();
   pending.forEach(({ path, method, body, undo }) => {
     try {
       fetch(`${API_BASE}${path}`, {

@@ -22,6 +22,11 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
 import DailyWelcome from './DailyWelcome';
+import { getToken, isKeptSignedIn, saveToken } from '../../utils/authToken';
+import { decodeJwt } from '../../utils/formatters';
+import { tokenRenewed } from '../../store/slices/authSlice';
+
+let renewing = false;
 
 /* global __APP_NUMBER__ */
 // The release number people see, e.g. "2.0.1" (package.json "version").
@@ -73,6 +78,34 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
     return () => { active = false; };
   }, [dispatch, userId]);
 
+  // "Keep me signed in": renew the 30-day session when the app is opened or
+  // comes back, at most once a day, so an MR who uses the app never has to
+  // sign in again. Sessions without it (shared devices) are never renewed.
+  useEffect(() => {
+    if (!userId) return undefined;
+    const renew = () => {
+      if (document.visibilityState !== 'visible' || !isKeptSignedIn()) return;
+      const current = getToken();
+      const claims = decodeJwt(current);
+      if (!claims || claims.rmb === false) return;
+      if (claims.iat && Date.now() / 1000 - claims.iat < 24 * 60 * 60) return;
+      if (renewing) return;  // one renewal at a time
+      renewing = true;
+      authApi.refresh()
+        .then(({ access_token: fresh }) => {
+          // Only if still signed in with that same login (not logged out meanwhile).
+          if (!fresh || getToken() !== current) return;
+          saveToken(fresh, true);
+          dispatch(tokenRenewed(fresh));
+        })
+        .catch(() => { /* offline: try next time; an ended session signs out via the 401 handler */ })
+        .finally(() => { renewing = false; });
+    };
+    renew();
+    document.addEventListener('visibilitychange', renew);
+    return () => document.removeEventListener('visibilitychange', renew);
+  }, [dispatch, userId]);
+
   // Messages from the service worker: a tapped payment alert asks to open
   // its invoice (the app was already open), and an alert that arrives while
   // the app is open refreshes the bell.
@@ -104,7 +137,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
 
   const signOut = () => {
     // Tell the server to end this session; signing out locally never waits on it.
-    authApi.logout(token).catch(() => {});
+    authApi.logout(getToken() || token).catch(() => {});
     dispatch(logout());
     navigate('/login', { replace: true });
   };

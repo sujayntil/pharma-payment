@@ -11,9 +11,13 @@ const pending = new Map();
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
     const token = localStorage.getItem('token') || localStorage.getItem('pharma_token');
-    pending.forEach((path) => {
+    pending.forEach(({ path, method, body }) => {
       try {
-        fetch(`${API_BASE}${path}`, { method: 'DELETE', keepalive: true, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        fetch(`${API_BASE}${path}`, {
+          method, keepalive: true,
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+          body: body ? JSON.stringify(body) : undefined,
+        });
       } catch { /* the page is going away; nothing more to do */ }
     });
     pending.clear();
@@ -26,14 +30,15 @@ if (typeof window !== 'undefined') {
  * it back (onRestore) and nothing is sent. If the server refuses, the item
  * comes back with the reason.
  *
- * path: server path to DELETE, e.g. "/invoices/12"
+ * path: server path, e.g. "/invoices/12" (DELETE), or with method 'POST'
+ *       and body for several at once ("/invoices/bulk-delete", { ids })
  * message: bar text, e.g. "INV-1081 deleted"
  * onDone(): after the server delete (reload the list)
  */
-export function deleteWithUndo({ path, message, onHide, onRestore, onDone }) {
-  const id = `delete-${path}`;
+export function deleteWithUndo({ path, method = 'DELETE', body, message, onHide, onRestore, onDone }) {
+  const id = `delete-${path}-${body ? JSON.stringify(body) : ''}`;
   onHide();
-  pending.set(id, path);
+  pending.set(id, { path, method, body });
 
   const undo = () => {
     if (!pending.delete(id)) return;
@@ -44,7 +49,7 @@ export function deleteWithUndo({ path, message, onHide, onRestore, onDone }) {
     if (!pending.delete(id)) return; // undone, or already sent on close
     notifications.hide(id);
     try {
-      await axiosClient.delete(path);
+      await axiosClient.request({ url: path, method, data: body });
       onDone?.();
     } catch (err) {
       onRestore();

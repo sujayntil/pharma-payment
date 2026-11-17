@@ -56,6 +56,7 @@ class UnassignedFilterTests(unittest.TestCase):
         self.db.commit()
         self.assertEqual(self.names(list_customers(sort="assignment", limit=50, offset=0, db=self.db, user=self.admin)), ["Orphan", "Mine"])
         self.assertEqual(self.names(list_customers(sort="invoices", limit=50, offset=0, db=self.db, user=self.admin)), ["Mine", "Orphan"])
+        self.assertEqual(self.names(list_customers(sort="invoices_asc", limit=50, offset=0, db=self.db, user=self.admin)), ["Orphan", "Mine"])
 
     def test_invoices_unassigned(self):
         q, _ = _admin_invoice_query(self.db, 0, None, None, None, None, None, False, None)

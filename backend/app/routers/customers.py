@@ -26,8 +26,8 @@ def list_customers(
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
     search = clean_search(search)
-    if sort not in (None, "", "name", "pending", "invoices", "assignment"):
-        raise HTTPException(422, "sort must be name, pending, invoices or assignment")
+    if sort not in (None, "", "name", "pending", "invoices", "invoices_asc", "assignment"):
+        raise HTTPException(422, "sort must be name, pending, invoices, invoices_asc or assignment")
     pending = func.coalesce(func.sum(models.Invoice.pending_amount), 0)
     q = db.query(
         models.Customer,
@@ -63,6 +63,7 @@ def list_customers(
         .order_by(*(
             (pending.desc(), models.Customer.name) if sort == "pending"
             else (func.count(models.Invoice.id).desc(), models.Customer.name) if sort == "invoices"
+            else (func.count(models.Invoice.id).asc(), models.Customer.name) if sort == "invoices_asc"
             # "assignment": customers with no MR on top, then most invoices first.
             else (models.Customer.mr_id.isnot(None), func.count(models.Invoice.id).desc(), models.Customer.name) if sort == "assignment"
             else (models.Customer.name,)
@@ -206,6 +207,31 @@ def update_customer(
         mr_name=customer.mr.name if customer.mr else None,
         invoice_count=db.query(models.Invoice).filter(models.Invoice.customer_id == customer.id).count(),
     )
+
+
+@router.post("/bulk-delete", status_code=204)
+def delete_customers(
+    payload: schemas.BulkDelete,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Admin multi-delete (up to 20): all or nothing, and only customers
+    with no invoices (their ledger must stay)."""
+    ids = list(dict.fromkeys(payload.ids))
+    customers = db.query(models.Customer).filter(models.Customer.id.in_(ids)).all()
+    if len(customers) != len(ids):
+        raise HTTPException(404, "Some of these customers no longer exist. Refresh and try again.")
+    with_invoices = [
+        customer.name for customer in customers
+        if db.query(models.Invoice.id).filter(models.Invoice.customer_id == customer.id).first()
+    ]
+    if with_invoices:
+        raise HTTPException(400, f"Can't delete customers with invoices: {', '.join(with_invoices[:3])}{'…' if len(with_invoices) > 3 else ''}")
+    for customer in customers:
+        write_audit(db, "customer_deleted", user, old=customer_snapshot(customer))
+        db.delete(customer)
+    db.commit()
+    return None
 
 
 @router.delete("/{customer_id}", status_code=204)

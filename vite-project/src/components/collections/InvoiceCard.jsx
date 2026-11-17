@@ -1,5 +1,5 @@
-import { Text, UnstyledButton } from '@mantine/core';
-import { IconCheck } from '@tabler/icons-react';
+import { Text } from '@mantine/core';
+import SelectMark from '../common/SelectMark';
 import classes from './InvoiceCard.module.css';
 import RowCard from '../common/RowCard';
 import { money, shortDate } from '../../utils/formatters';
@@ -26,7 +26,7 @@ import { useLongPress } from '../../hooks/useLongPress';
  * onSelect / selected / selecting: press and hold a pending invoice to start
  *   selecting (customer screen); while selecting, taps tick instead of opening.
  */
-export default function InvoiceCard({ invoice, showCustomer = true, showMr = false, onOpen, actions, afterStatus, onSelect, selected = false, selecting = false }) {
+export default function InvoiceCard({ invoice, showCustomer = true, showMr = false, onOpen, actions, afterStatus, onSelect, selected = false, selecting = false, canTick }) {
   const label = useActorLabel();
   const pending = Number(invoice.pending_amount || 0);
   const customer = invoice.customer_name ?? invoice.customer;
@@ -34,7 +34,8 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
   const recorder = recorderOf(invoice);
   const bill = invoice.total_amount ?? invoice.amount;
   const settled = pending <= 0;
-  const canSelect = Boolean(onSelect) && !settled;
+  // Normally only pending invoices can be ticked; a list can allow more (Admin delete).
+  const canSelect = Boolean(onSelect) && (canTick ? canTick(invoice) : !settled);
   const tap = selecting ? (canSelect ? () => onSelect(invoice) : undefined) : onOpen;
   const press = useLongPress(() => onSelect?.(invoice), tap, { enabled: canSelect && !selecting });
   return (
@@ -73,22 +74,3 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
   );
 }
 
-/** Round ✓ on the card's edge: filled green when ticked, an empty ring otherwise. */
-function SelectMark({ selected, onToggle, label }) {
-  return (
-    <UnstyledButton
-      role="checkbox"
-      aria-checked={selected}
-      aria-label={`Select ${label}`}
-      onClick={(event) => { event.stopPropagation(); onToggle(); }}
-      style={{
-        width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
-        background: selected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-body)',
-        border: `2px solid ${selected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-4)'}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,.15)',
-      }}
-    >
-      {selected && <IconCheck size={14} stroke={3} color="white" />}
-    </UnstyledButton>
-  );
-}

@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { useBackClose } from './useBackClose';
 
 const EMPTY = new Map();
+// By default only pending invoices can be ticked (to collect them).
+const isPending = (item) => Number(item.pending_amount) > 0;
 // Lists name the invoice id differently (invoice_id on MR lists, id on Admin's).
 const keyOf = (invoice) => invoice.invoice_id ?? invoice.id;
 
@@ -20,8 +22,9 @@ export function groupByCustomer(invoices) {
  * Ticked pending invoices: the customer screen (key = customer id) or the
  * Invoices tab (a fixed key, so ticks stay while searching and filtering).
  * Ticks reset when the key changes; Back clears them first.
+ * selectable(item): which rows can be ticked (default: pending invoices).
  */
-export function useInvoiceTicks(customerId) {
+export function useInvoiceTicks(customerId, { selectable = isPending } = {}) {
   // Kept per customer: another customer starts with nothing ticked.
   const [state, setState] = useState(() => ({ customerId, map: new Map() }));
   const ticked = state.customerId === customerId ? state.map : EMPTY;
@@ -36,18 +39,19 @@ export function useInvoiceTicks(customerId) {
   // Adds every pending invoice in the list shown (earlier ticks stay);
   // with all of them already ticked it unticks just those.
   const selectAll = useCallback((invoices) => setState((current) => {
-    const pending = invoices.filter((invoice) => Number(invoice.pending_amount) > 0);
+    const pending = invoices.filter(selectable);
     const next = new Map(current.customerId === customerId ? current.map : EMPTY);
     const all = pending.length > 0 && pending.every((invoice) => next.has(keyOf(invoice)));
     pending.forEach((invoice) => (all ? next.delete(keyOf(invoice)) : next.set(keyOf(invoice), invoice)));
     return { customerId, map: next };
-  }), [customerId]);
+  }), [customerId, selectable]);
   const total = useMemo(() => [...ticked.values()].reduce((sum, invoice) => sum + Number(invoice.pending_amount || 0), 0), [ticked]);
   const customers = useMemo(() => new Set([...ticked.values()].map((invoice) => invoice.customer_id)).size, [ticked]);
   return {
     ticked, toggle, selectAll, total, count: ticked.size, customers,
     invoices: () => [...ticked.values()],
-    allTicked: (invoices) => { const pending = invoices.filter((invoice) => Number(invoice.pending_amount) > 0); return pending.length > 0 && pending.every((invoice) => ticked.has(keyOf(invoice))); },
+    canTick: selectable,
+    allTicked: (invoices) => { const pending = invoices.filter(selectable); return pending.length > 0 && pending.every((invoice) => ticked.has(keyOf(invoice))); },
     isTicked: (invoice) => ticked.has(keyOf(invoice)),
     ids: () => [...ticked.keys()],
     // After a save: wait for the Collect sheet's Back entry to go first.

@@ -48,6 +48,7 @@ const ONLY_OPTIONS = {
 const ONLY_PLACEHOLDER = { pending: 'All pending', paid: 'All paid', all: 'All invoices' };
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
 // sort '' = the tab's default: Pending oldest first, Paid / All newest first.
+const ANY = () => true;
 const BLANK = { mrId: '', only: '', range: EMPTY_RANGE, sort: '' };
 
 function tabParams(tab, only) {
@@ -149,13 +150,15 @@ export default function AdminInvoices() {
   const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
   const reload = useCallback(() => { setRefresh((value) => value + 1); setHistoryKey((value) => value + 1); }, []);
   // Ticks stay while searching / filtering, so several customers can be collected together.
-  const ticks = useInvoiceTicks('invoices');
+  // Admin can tick any invoice (to delete); Collect uses only the pending ones.
+  const ticks = useInvoiceTicks('invoices', { selectable: ANY });
   const [collectingOne, setCollectingOne] = useState(null);
   const [collectingMany, setCollectingMany] = useState(null);
   const clearTicksSoon = ticks.clearSoon;
   const onTickedSaved = useCallback(() => { reload(); clearTicksSoon(); }, [reload, clearTicksSoon]);
   const collectTicked = () => {
-    const list = groupByCustomer(ticks.invoices());
+    const list = groupByCustomer(ticks.invoices().filter((invoice) => Number(invoice.pending_amount) > 0));
+    if (!list.length) return;
     if (list.length === 1) setCollectingOne({ id: list[0].customerId, name: list[0].customer, invoiceIds: list[0].invoices.map((item) => item.invoice_id) });
     else setCollectingMany(list);
   };
@@ -212,6 +215,24 @@ export default function AdminInvoices() {
       onDone: reload,
     });
   };
+  // Several at once (up to 20): same confirm box, then the Undo bar.
+  const [bulkDeleting, setBulkDeleting] = useState(null);
+  const removeMany = () => {
+    const list = bulkDeleting;
+    setBulkDeleting(null);
+    const ids = list.map((invoice) => invoice.id);
+    if (ids.includes(historyId)) setHistoryId(null);
+    ticks.clearSoon();
+    deleteWithUndo({
+      path: '/invoices/bulk-delete',
+      method: 'POST',
+      body: { ids },
+      message: `${ids.length} invoices deleted`,
+      onHide: () => ids.forEach((id) => setHidden(id, true)),
+      onRestore: () => ids.forEach((id) => setHidden(id, false)),
+      onDone: reload,
+    });
+  };
   const panelActions = [
     { label: 'Edit invoice', icon: <IconEdit size={15} />, onClick: openEdit },
     { label: 'Delete invoice', icon: <IconTrash size={15} />, color: 'red', onClick: setDeleting },
@@ -260,6 +281,7 @@ export default function AdminInvoices() {
         onSelect={ticks.toggle}
         selected={ticks.isTicked(invoice)}
         selecting={ticks.count > 0}
+        canTick={ANY}
       />
     ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={invoices} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownInvoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
       <Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td>
@@ -271,7 +293,7 @@ export default function AdminInvoices() {
     </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
-    <TickedBar ticks={ticks} invoices={invoices} onCollect={collectTicked} />
+    <TickedBar ticks={ticks} invoices={invoices} onCollect={ticks.invoices().some((invoice) => Number(invoice.pending_amount) > 0) ? collectTicked : undefined} onDelete={() => setBulkDeleting(ticks.invoices())} deleteLabel="Delete invoices" />
     <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={reload} />
     <CustomerCollectModal customer={collectingOne} onClose={() => setCollectingOne(null)} onSaved={onTickedSaved} />
     <MultiCollectModal groups={collectingMany} onClose={() => setCollectingMany(null)} onSaved={onTickedSaved} />
@@ -279,6 +301,14 @@ export default function AdminInvoices() {
     <MarkUnpaidModal invoice={reversing} onClose={() => setReversing(null)} onSaved={reload} /> */}
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} onChanged={reload} onRecord={setRecording} refreshKey={historyKey} actions={panelActions} />
     <Modal opened={!!editing} onClose={() => setEditing(null)} title={`Edit invoice ${editing?.invoice_number || ''}`} centered zIndex={250}><form onSubmit={save}><Stack><TextInput required label="Invoice number" value={form?.invoice_number || ''} onChange={(event) => setForm({ ...form, invoice_number: event.currentTarget.value })} /><TextInput required type="date" label="Invoice date" value={form?.invoice_date || ''} onChange={(event) => setForm({ ...form, invoice_date: event.currentTarget.value })} /><TextInput required label="Customer" value={form?.customer_name || ''} onChange={(event) => setForm({ ...form, customer_name: event.currentTarget.value })} /><NumberInput required min={0.01} decimalScale={2} label="Bill amount (₹)" value={form?.total_amount || ''} onChange={(value) => setForm({ ...form, total_amount: value })} /><Select label="Payment mode" clearable data={PAYMENT_MODES} value={form?.payment_mode || null} onChange={(value) => setForm({ ...form, payment_mode: value || '' })} /><TextInput label="Remarks" value={form?.remarks || ''} onChange={(event) => setForm({ ...form, remarks: event.currentTarget.value })} /><Button type="submit" loading={busy}>Save changes</Button></Stack></form></Modal>
+    <Modal opened={!!bulkDeleting} onClose={() => setBulkDeleting(null)} title={`Delete ${bulkDeleting?.length || ''} invoices`} centered zIndex={250}>
+      <Stack>
+        <Alert color="red">
+          Delete {(bulkDeleting || []).slice(0, 3).map((invoice) => invoice.invoice_number).join(', ')}{(bulkDeleting?.length || 0) > 3 ? ` and ${bulkDeleting.length - 3} more` : ''}? Their collection history is removed too.
+        </Alert>
+        <Group justify="end"><Button variant="default" onClick={() => setBulkDeleting(null)}>Cancel</Button><Button color="red" onClick={removeMany}>Delete {bulkDeleting?.length || ''} invoices</Button></Group>
+      </Stack>
+    </Modal>
     <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete invoice" centered zIndex={250}><Stack><Alert color="red">Delete invoice {deleting?.invoice_number}? Its collection history will also be removed and balances will recalculate.</Alert><Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" loading={busy} onClick={remove}>Delete invoice</Button></Group></Stack></Modal>
   </Stack>;
 }

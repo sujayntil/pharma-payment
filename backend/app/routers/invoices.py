@@ -465,6 +465,25 @@ def update_invoice(
     return _to_out(invoice)
 
 
+@router.post("/bulk-delete", status_code=204)
+def delete_invoices(
+    payload: schemas.BulkDelete,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Admin multi-delete (up to 20): all or nothing. Each invoice and its
+    payment history is copied to the audit log first, as for one delete."""
+    ids = list(dict.fromkeys(payload.ids))
+    invoices = db.query(models.Invoice).filter(models.Invoice.id.in_(ids)).all()
+    if len(invoices) != len(ids):
+        raise HTTPException(404, "Some of these invoices no longer exist. Refresh and try again.")
+    for invoice in invoices:
+        write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True))
+        db.delete(invoice)
+    db.commit()
+    return None
+
+
 @router.delete("/{invoice_id}", status_code=204)
 def delete_invoice(
     invoice_id: int,

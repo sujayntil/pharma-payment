@@ -239,6 +239,11 @@ class PaymentBatchesCreate(BaseModel):
     groups: list[PaymentBatchCreate] = Field(min_length=1, max_length=50)
 
 
+class BulkDelete(BaseModel):
+    """Admin multi-delete: at most 20 at a time, as a safety net."""
+    ids: list[int] = Field(min_length=1, max_length=20)
+
+
 class PaymentReversalCreate(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
     amount: Optional[float] = Field(default=None, gt=0)  # defaults to everything still reversible

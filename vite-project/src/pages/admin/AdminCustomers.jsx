@@ -6,7 +6,8 @@ import { customersApi } from '../../api/customersApi';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
-import RowCard, { CardList } from '../../components/common/RowCard';
+import { CardList } from '../../components/common/RowCard';
+import SelectableRowCard from '../../components/common/SelectableRowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
@@ -34,6 +35,17 @@ import EmptyResults from '../../components/common/EmptyResults';
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
+// Sort choices (default: most pending first).
+const SORTS = [
+  { value: 'pending', label: 'Most pending first' },
+  { value: 'invoices', label: 'Most invoices first' },
+  { value: 'invoices_asc', label: 'Least invoices first' },
+  { value: 'name', label: 'Name A–Z' },
+];
+
+// Only customers with no invoices can be deleted, so only they can be ticked.
+const NO_INVOICES = (customer) => Number(customer.invoice_count) === 0;
+
 export default function AdminCustomers({ openCustomer = null }) {
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
@@ -46,6 +58,8 @@ export default function AdminCustomers({ openCustomer = null }) {
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null);
   const [editing, setEditing] = useState(null);
   const ticks = useInvoiceTicks(selected?.id);
+  // Ticked customers on the list (to delete several at once).
+  const customerTicks = useInvoiceTicks('customers', { selectable: NO_INVOICES });
   const collectAll = (customer) => (event) => { event.stopPropagation(); setCollectingCustomer({ id: customer.id, name: customer.name }); };
   const [loading, setLoading] = useState(true); const [ledgerLoading, setLedgerLoading] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
 
@@ -90,7 +104,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   const reset = () => { setFilters({ mrId: '', type: '', sort: '' }); setSearch(''); setPage(1); };
   const chips = [
     // Default order is most pending first; a chip shows only for Name A–Z.
-    filters.sort && { key: 'sort', label: 'Name A–Z', onRemove: () => update({ sort: '' }) },
+    filters.sort && { key: 'sort', label: SORTS.find((option) => option.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     filters.type && { key: 'type', label: `Type: ${filters.type}`, onRemove: () => update({ type: '' }) },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
@@ -168,6 +182,21 @@ export default function AdminCustomers({ openCustomer = null }) {
     onRestore: () => setHidden(customer.id, false),
     onDone: () => setRefresh((value) => value + 1),
   });
+  // Several at once (up to 20, only customers with no invoices): Undo bar, no confirm box.
+  const deleteManyCustomers = () => {
+    const list = customerTicks.invoices();
+    const ids = list.map((customer) => customer.id);
+    customerTicks.clear();
+    deleteWithUndo({
+      path: '/customers/bulk-delete',
+      method: 'POST',
+      body: { ids },
+      message: `${ids.length} customers deleted`,
+      onHide: () => ids.forEach((id) => setHidden(id, true)),
+      onRestore: () => ids.forEach((id) => setHidden(id, false)),
+      onDone: () => setRefresh((value) => value + 1),
+    });
+  };
 
   const shownCustomers = customers.filter((customer) => !hiddenIds.has(customer.id));
   return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group>
@@ -175,12 +204,17 @@ export default function AdminCustomers({ openCustomer = null }) {
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
-      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={[{ value: 'name', label: 'Name A–Z' }, { value: 'pending', label: 'Most pending first' }]} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'name' ? 'name' : '' })} />
+      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'pending' ? '' : next })} />
     </FilterBar>
     <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !shownCustomers.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="customers" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No customers yet.</Text>) : isMobile ? <CardList>{shownCustomers.map((customer) => (
-      <RowCard
+      <SelectableRowCard
         key={customer.id}
-        onClick={() => openLedger(customer)}
+        onOpen={() => openLedger(customer)}
+        canSelect={NO_INVOICES(customer)}
+        selecting={customerTicks.count > 0}
+        selected={customerTicks.isTicked(customer)}
+        onToggle={() => customerTicks.toggle(customer)}
+        label={customer.name}
         title={customer.name}
         subtitle={[customer.type, displayPhone(customer.phone), displayPhone(customer.alternate_phone)].filter(Boolean).join(' · ') || undefined}
         amount={money(customer.pending_amount)}
@@ -200,9 +234,10 @@ export default function AdminCustomers({ openCustomer = null }) {
           </Group>
         )}
       />
-    ))}</CardList> : <ScrollArea><Table miw={900} highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownCustomers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{displayPhone(customer.phone) || '—'}{customer.whatsapp_on === 'main' && <IconBrandWhatsapp size={14} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}{customer.alternate_phone && <Text size="xs" c="dimmed">Alt {displayPhone(customer.alternate_phone)}{customer.whatsapp_on === 'alternate' && <IconBrandWhatsapp size={13} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}</Text>}</Table.Td><Table.Td>{customer.mr_name || <Badge color="gray" variant="light">Unassigned</Badge>}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right" fw={700} c={Number(customer.pending_amount) > 0 ? 'red' : 'dimmed'} style={{ whiteSpace: 'nowrap' }}>{money(customer.pending_amount)}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{customer.latest_invoice_date ? shortDate(customer.latest_invoice_date) : '—'}</Table.Td><Table.Td>{customerActions(customer)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
+    ))}</CardList> : <ScrollArea><Table miw={900} highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={customerTicks} invoices={shownCustomers} /></Table.Th><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownCustomers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={customerTicks} invoice={customer} label={customer.name} /></Table.Td><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{displayPhone(customer.phone) || '—'}{customer.whatsapp_on === 'main' && <IconBrandWhatsapp size={14} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}{customer.alternate_phone && <Text size="xs" c="dimmed">Alt {displayPhone(customer.alternate_phone)}{customer.whatsapp_on === 'alternate' && <IconBrandWhatsapp size={13} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}</Text>}</Table.Td><Table.Td>{customer.mr_name || <Badge color="gray" variant="light">Unassigned</Badge>}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right" fw={700} c={Number(customer.pending_amount) > 0 ? 'red' : 'dimmed'} style={{ whiteSpace: 'nowrap' }}>{money(customer.pending_amount)}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{customer.latest_invoice_date ? shortDate(customer.latest_invoice_date) : '—'}</Table.Td><Table.Td>{customerActions(customer)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
+    <TickedBar ticks={customerTicks} invoices={shownCustomers} showTotal={false} onDelete={deleteManyCustomers} deleteLabel="Delete customers" />
     <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" title={<div><Text fw={700} style={{ overflowWrap: 'anywhere' }}>{selected?.name || ''}</Text><Text size="sm" c="dimmed">MR: {ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}</Text></div>}>
       <Stack gap="md">
         {/* Numbers with call / WhatsApp, Edit, or "+ Add phone" (same as the MR screen). */}

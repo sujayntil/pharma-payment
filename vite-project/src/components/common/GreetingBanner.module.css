@@ -1,4 +1,4 @@
-.banner { position: relative; overflow: hidden; border-radius: 16px; min-height: 112px; padding: 18px 18px 16px; display: flex; align-items: center; }
+.banner { position: relative; overflow: hidden; border-radius: 16px; min-height: 124px; padding: 18px 18px 16px; display: flex; align-items: center; }
 .text { position: relative; z-index: 2; max-width: calc(100% - 92px); }
 .name { white-space: nowrap; }
 /* Sky decorations stay on the right, away from the words. */

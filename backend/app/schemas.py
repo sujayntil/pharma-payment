@@ -158,6 +158,7 @@ class InvoiceOut(BaseModel):
     payment_mode: Optional[str] = None
     remarks: Optional[str] = None
     mr_name: Optional[str] = None
+    customer_id: Optional[int] = None  # additive: ticked invoices are grouped by customer
     customer_name: Optional[str] = None
     # For the call / WhatsApp icons on invoice cards.
     customer_phone: Optional[str] = None
@@ -222,6 +223,11 @@ class PaymentBatchCreate(BaseModel):
     first_invoice_id: Optional[int] = None
     mode: Optional[str] = None
     transaction_reference: Optional[str] = None
+
+
+class PaymentBatchesCreate(BaseModel):
+    """Several customers at once: one PaymentBatchCreate per customer."""
+    groups: list[PaymentBatchCreate] = Field(min_length=1, max_length=50)
 
 
 class PaymentReversalCreate(BaseModel):

@@ -41,7 +41,8 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
       press={canSelect && !selecting ? press : undefined}
       highlight={selecting && selected ? 'var(--mantine-color-green-0)' : undefined}
       leading={selecting && canSelect ? <Checkbox size="md" color="green" checked={selected} onChange={() => onSelect(invoice)} aria-label={`Select ${invoice.invoice_number}`} /> : null}
-      title={<>
+      // While selecting there is a tick on the left: the date drops to its own line.
+      title={selecting ? invoice.invoice_number : <>
         <span style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}</span>
         {date && (
           // The date never splits across lines: it stays whole beside the number.
@@ -50,7 +51,11 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
           </Text>
         )}
       </>}
-      subtitle={[showCustomer && (customer || '—'), showMr && (invoice.mr_name || 'Unassigned')].filter(Boolean).join(' · ') || null}
+      subtitle={(() => {
+        const who = [showCustomer && (customer || '—'), showMr && (invoice.mr_name || 'Unassigned')].filter(Boolean).join(' · ') || null;
+        if (!selecting || !date) return who;
+        return <><div style={{ whiteSpace: 'nowrap' }}>{shortDate(date)}<InvoiceAge date={date} pending={pending} /></div>{who && <div>{who}</div>}</>;
+      })()}
       amount={money(settled && bill != null ? bill : pending)}
       amountLabel={settled ? 'paid' : 'pending'}
       amountColor={settled ? 'dimmed' : 'red'}

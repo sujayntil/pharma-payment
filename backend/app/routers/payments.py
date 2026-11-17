@@ -14,7 +14,7 @@ from ..push import send_batch_notification, send_payment_notification
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 # How long the person who saved a collection can still undo it themselves:
-# only from the Undo bar shown right after saving (10 s, after the MR's 3 s
+# only from the Undo bar shown right after saving (15 s, after the MR's 3 s
 # celebration), plus a margin for a slow connection. Later corrections are
 # Admin reversals with a reason.
 UNDO_WINDOW = timedelta(seconds=30)
@@ -82,15 +82,8 @@ def add_payment(
     }
 
 
-@router.post("/batch")
-def add_batch_payment(
-    payload: schemas.PaymentBatchCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
-):
-    """Collect from customer: one amount over the ticked invoices, oldest
-    first. All-or-nothing: either every part is saved or none is."""
+def _apply_batch(db: Session, payload: schemas.PaymentBatchCreate, user: models.User):
+    """One customer's part: checks, then records oldest first. No commit."""
     customer = db.get(models.Customer, payload.customer_id)
     if not customer:
         raise HTTPException(404, "Customer not found")
@@ -113,7 +106,7 @@ def add_batch_payment(
         raise HTTPException(400, "One of the selected invoices is already fully paid. Refresh and try again.")
     selected_pending = round(sum(invoice.pending_amount for invoice in invoices), 2)
     if payload.amount > selected_pending + 0.01:
-        raise HTTPException(400, f"₹{payload.amount:,.0f} is more than the selected invoices (₹{selected_pending:,.0f}).")
+        raise HTTPException(400, f"₹{payload.amount:,.0f} is more than {customer.name}'s selected invoices (₹{selected_pending:,.0f}).")
 
     if payload.first_invoice_id is not None:
         invoices.sort(key=lambda invoice: invoice.id != payload.first_invoice_id)  # stable: rest stay oldest first
@@ -127,8 +120,10 @@ def add_batch_payment(
         payment = _record(db, invoice, take, payload.mode, payload.transaction_reference, user, batch_id)
         remaining = round(remaining - take, 2)
         parts.append((invoice, take, payment))
-    db.commit()
+    return batch_id, parts, invoices
 
+
+def _batch_result(db: Session, payload, batch_id, parts, invoices):
     items = []
     for invoice, take, payment in parts:
         db.refresh(invoice)
@@ -140,15 +135,58 @@ def add_batch_payment(
             "pending_amount": invoice.pending_amount,
             "status": invoice.status,
         })
-    if is_mr:
-        background_tasks.add_task(send_batch_notification, batch_id)
     return {
         "batch_id": batch_id,
+        "customer_id": payload.customer_id,
         "amount": round(payload.amount, 2),
         "items": items,
         "cleared": sum(1 for item in items if (item["pending_amount"] or 0) <= 0),
         "left": round(sum(invoice.pending_amount for invoice in invoices), 2),
     }
+
+
+@router.post("/batch")
+def add_batch_payment(
+    payload: schemas.PaymentBatchCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Collect from customer: one amount over the ticked invoices, oldest
+    first. All-or-nothing: either every part is saved or none is."""
+    batch_id, parts, invoices = _apply_batch(db, payload, user)
+    db.commit()
+    if user.role == models.RoleEnum.MR.value:
+        background_tasks.add_task(send_batch_notification, batch_id)
+    return _batch_result(db, payload, batch_id, parts, invoices)
+
+
+@router.post("/batches")
+def add_batch_payments(
+    payload: schemas.PaymentBatchesCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Several customers in one go (invoices ticked across the Invoices tab):
+    one part per customer, each with its own amount and mode. All-or-nothing
+    across every customer."""
+    customer_ids = [group.customer_id for group in payload.groups]
+    if len(set(customer_ids)) != len(customer_ids):
+        raise HTTPException(400, "Each customer can appear only once.")
+    done = []
+    try:
+        for group in payload.groups:
+            done.append((group, *_apply_batch(db, group, user)))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    if user.role == models.RoleEnum.MR.value:
+        for _, batch_id, _, _ in done:
+            background_tasks.add_task(send_batch_notification, batch_id)
+    results = [_batch_result(db, group, batch_id, parts, invoices) for group, batch_id, parts, invoices in done]
+    return {"results": results, "amount": round(sum(group.amount for group in payload.groups), 2)}
 
 
 @router.post("/{payment_id}/undo")

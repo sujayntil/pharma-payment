@@ -25,12 +25,15 @@ export default function RowCard({ title, subtitle, amount, amountLabel, amountCo
         onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(); } },
       })}
     >
+      {leading ? (
+        // A tick box in its own column; everything else lines up to its right.
+        <Group align="flex-start" wrap="nowrap" gap="sm">
+          <div style={{ flexShrink: 0, paddingTop: 1 }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{leading}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
       <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-        {/* Optional control before the title (a tick box); its taps don't open the card. */}
-        {leading && <div style={{ flexShrink: 0, paddingTop: 2 }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{leading}</div>}
-        <div style={{ minWidth: 0, flex: leading ? 1 : undefined }}>
+        <div style={{ minWidth: 0 }}>
           <Text fw={700} lineClamp={2} style={{ overflowWrap: 'anywhere' }}>{title}</Text>
-          {subtitle && <Text size="xs" c="dimmed">{subtitle}</Text>}
+          {subtitle && <Text size="xs" c="dimmed" component="div">{subtitle}</Text>}
         </div>
         {amount != null && (
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -54,6 +57,40 @@ export default function RowCard({ title, subtitle, amount, amountLabel, amountCo
         <Group className={classes.actions} gap="xs" mt="sm" justify="flex-end" wrap="wrap" onClick={(event) => event.stopPropagation()}>
           {actions}
         </Group>
+      )}
+          </div>
+        </Group>
+      ) : (
+        <>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
+        <div style={{ minWidth: 0 }}>
+          <Text fw={700} lineClamp={2} style={{ overflowWrap: 'anywhere' }}>{title}</Text>
+          {subtitle && <Text size="xs" c="dimmed" component="div">{subtitle}</Text>}
+        </div>
+        {amount != null && (
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <Text fw={700} c={amountColor} style={{ whiteSpace: 'nowrap' }}>{amount}</Text>
+            {amountLabel && <Text size="xs" c="dimmed">{amountLabel}</Text>}
+          </div>
+        )}
+      </Group>
+      {badges && <Group gap={6} mt={8} wrap="wrap">{badges}</Group>}
+      {shown.length > 0 && (
+        <SimpleGrid cols={2} spacing="xs" verticalSpacing={6} mt="xs">
+          {shown.map((detail) => (
+            <div key={detail.label} style={{ minWidth: 0, gridColumn: detail.full ? '1 / -1' : undefined }}>
+              <Text size="xs" c="dimmed">{detail.label}</Text>
+              <Text size="sm" style={{ overflowWrap: 'anywhere' }}>{detail.value}</Text>
+            </div>
+          ))}
+        </SimpleGrid>
+      )}
+      {actions && (
+        <Group className={classes.actions} gap="xs" mt="sm" justify="flex-end" wrap="wrap" onClick={(event) => event.stopPropagation()}>
+          {actions}
+        </Group>
+      )}
+        </>
       )}
     </Paper>
   );

@@ -16,22 +16,23 @@ export function TickAllCell({ ticks, invoices }) {
 }
 
 /** Bottom bar while something is ticked: ✕  ₹ total · N   Select all  Collect. */
-export function TickedBar({ ticks, invoices, onCollect }) {
+export function TickedBar({ ticks, invoices, onCollect, bottom = 8 }) {
   if (!ticks.count) return null;
   const all = ticks.allTicked(invoices || []);
   return (
     <Paper withBorder shadow="md" radius="md" p="xs" pl={4}
-      style={{ position: 'sticky', bottom: 8, zIndex: 3 }}>
+      style={{ position: 'sticky', bottom, zIndex: 3 }}>
       <Group justify="space-between" wrap="nowrap" gap={6}>
-        <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+        <Group gap={4} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
           <ActionIcon variant="subtle" color="gray" size="lg" onClick={ticks.clear} aria-label="Clear selection"><IconX size={18} /></ActionIcon>
           <div style={{ minWidth: 0 }}>
             <Text fw={700} lh={1.2} style={{ whiteSpace: 'nowrap' }}>{money(ticks.total)}</Text>
-            <Text size="xs" c="dimmed" lh={1.2} style={{ whiteSpace: 'nowrap' }}>{ticks.count} selected</Text>
+            <Text size="xs" c="dimmed" lh={1.2} truncate="end">{ticks.count} selected</Text>
           </div>
         </Group>
         <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
-          {invoices && <Button variant="subtle" color="gray" px={8} onClick={() => ticks.selectAll(invoices)}>{all ? 'Unselect all' : 'Select all'}</Button>}
+          {/* Hidden once everything shown is ticked; ✕ clears. */}
+          {invoices && !all && <Button variant="subtle" color="gray" px={8} onClick={() => ticks.selectAll(invoices)}>Select all</Button>}
           <Button leftSection={<IconCash size={16} />} onClick={onCollect}>Collect</Button>
         </Group>
       </Group>

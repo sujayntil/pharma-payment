@@ -14,6 +14,11 @@ export const paymentsApi = {
     const response = await axiosClient.post('/payments/batch', payload);
     return response.data;
   },
+  /** Several customers at once: groups = [{ customer_id, amount, invoice_ids, mode, transaction_reference }]. */
+  async createBatches(groups) {
+    const response = await axiosClient.post('/payments/batches', { groups });
+    return response.data;
+  },
   /** A customer's pending invoices, oldest first: { customerId } or { invoiceId }. */
   async pendingInvoices({ customerId, invoiceId }) {
     const params = invoiceId ? { invoice_id: invoiceId } : { customer_id: customerId };

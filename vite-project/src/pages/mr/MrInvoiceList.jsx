@@ -15,6 +15,10 @@ import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges'
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
+import CustomerCollectModal from '../../components/collections/CustomerCollectModal';
+import MultiCollectModal from '../../components/collections/MultiCollectModal';
+import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
+import { groupByCustomer, useInvoiceTicks } from '../../hooks/useInvoiceTicks';
 import ContactActions from '../../components/customers/ContactActions';
 import InvoiceAge from '../../components/collections/InvoiceAge';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
@@ -74,6 +78,10 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [openId, setOpenId] = useState(null); const [historyKey, setHistoryKey] = useState(0);
   const [recording, setRecording] = useState(null);
+  // Ticks stay while searching / filtering, so several customers can be collected together.
+  const ticks = useInvoiceTicks('invoices');
+  const [collectingOne, setCollectingOne] = useState(null);
+  const [collectingMany, setCollectingMany] = useState(null);
   const panelSpace = useSidePanelSpace(Boolean(openId));
   // Laptop: while the invoice panel is open the table drops Bill, Collected
   // and Recorded by (all shown in the panel) so nothing scrolls sideways.
@@ -118,6 +126,14 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setOnly(''); setCustomerType(''); setRange(EMPTY_RANGE); setSortChoice(null); setSearch(''); setPage(1); };
   const onSaved = useCallback(() => { setReload((v) => v + 1); setHistoryKey((v) => v + 1); }, []);
+  const clearTicksSoon = ticks.clearSoon;
+  const onTickedSaved = useCallback(() => { onSaved(); clearTicksSoon(); }, [onSaved, clearTicksSoon]);
+  // One customer: the usual Collect sheet. Several: one row per customer.
+  const collectTicked = () => {
+    const list = groupByCustomer(ticks.invoices());
+    if (list.length === 1) setCollectingOne({ id: list[0].customerId, name: list[0].customer, invoiceIds: list[0].invoices.map((item) => item.invoice_id) });
+    else setCollectingMany(list);
+  };
 
   const rangeLabel = describeRange(range);
   const onlyOptions = ONLY_OPTIONS[tab];
@@ -165,10 +181,14 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
               // Collect, so the icons sit beside the status badge instead.
               actions={canRecord(item) ? <>{contactFor(item)}<Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(item)}>Collect</Button></> : undefined}
               afterStatus={canRecord(item) ? undefined : contactFor(item)}
+              onSelect={ticks.toggle}
+              selected={ticks.isTicked(item)}
+              selecting={ticks.count > 0}
             />)}</CardList>
             : <Table.ScrollContainer minWidth={panelOpen ? 640 : 1000}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm">
-              <Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={items} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead>
               <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }} bg={openId === item.invoice_id ? 'green.0' : undefined} data-selected={openId === item.invoice_id || undefined}>
+                <Table.Td onClick={(e) => e.stopPropagation()}><TickCell ticks={ticks} invoice={item} /></Table.Td>
                 <Table.Td fw={600}>{item.invoice_number}</Table.Td>
                 <Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}<InvoiceAge date={item.invoice_date} pending={item.pending_amount} prefix="" size="xs" block /></Table.Td>
                 <Table.Td>{item.customer || '—'}</Table.Td>
@@ -186,7 +206,10 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
             </Table></Table.ScrollContainer>}
       <ListPagination total={data.total_count} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
+    <TickedBar ticks={ticks} invoices={items} onCollect={collectTicked} bottom={isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 8} />
     <InvoiceHistory invoiceId={openId} onClose={() => setOpenId(null)} onRecord={(invoice) => setRecording(invoice)} refreshKey={historyKey} />
     <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={onSaved} />
+    <CustomerCollectModal customer={collectingOne} onClose={() => setCollectingOne(null)} onSaved={onTickedSaved} />
+    <MultiCollectModal groups={collectingMany} onClose={() => setCollectingMany(null)} onSaved={onTickedSaved} />
   </Stack>;
 }

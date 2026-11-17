@@ -20,6 +20,10 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
+import CustomerCollectModal from '../../components/collections/CustomerCollectModal';
+import MultiCollectModal from '../../components/collections/MultiCollectModal';
+import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
+import { groupByCustomer, useInvoiceTicks } from '../../hooks/useInvoiceTicks';
 import ContactActions from '../../components/customers/ContactActions';
 import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
@@ -143,6 +147,17 @@ export default function AdminInvoices() {
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
   const reload = useCallback(() => { setRefresh((value) => value + 1); setHistoryKey((value) => value + 1); }, []);
+  // Ticks stay while searching / filtering, so several customers can be collected together.
+  const ticks = useInvoiceTicks('invoices');
+  const [collectingOne, setCollectingOne] = useState(null);
+  const [collectingMany, setCollectingMany] = useState(null);
+  const clearTicksSoon = ticks.clearSoon;
+  const onTickedSaved = useCallback(() => { reload(); clearTicksSoon(); }, [reload, clearTicksSoon]);
+  const collectTicked = () => {
+    const list = groupByCustomer(ticks.invoices());
+    if (list.length === 1) setCollectingOne({ id: list[0].customerId, name: list[0].customer, invoiceIds: list[0].invoices.map((item) => item.invoice_id) });
+    else setCollectingMany(list);
+  };
   const mrOptions = useMemo(() => mrs.map((mr) => ({ value: String(mr.id), label: mr.name })), [mrs]);
   const rangeLabel = describeRange(filters.range);
   const onlyOptions = ONLY_OPTIONS[tab];
@@ -209,8 +224,12 @@ export default function AdminInvoices() {
         // icons beside the status badge once paid.
         actions={Number(invoice.pending_amount) > 0 ? <>{contactFor(invoice)}<Button size="sm" leftSection={<IconCash size={15} />} onClick={() => setRecording(invoice)}>Collect</Button></> : undefined}
         afterStatus={Number(invoice.pending_amount) > 0 ? undefined : contactFor(invoice)}
+        onSelect={ticks.toggle}
+        selected={ticks.isTicked(invoice)}
+        selecting={ticks.count > 0}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
+    ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={invoices} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }} bg={historyId === invoice.id ? 'green.0' : undefined} data-selected={historyId === invoice.id || undefined}>
+      <Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td>
       <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td><Table.Td>{invoice.mr_name || <Text span c="dimmed" size="sm">Unassigned</Text>}</Table.Td>
       {!panelOpen && <><Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td></>}<Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
       <Table.Td><StatusCell row={invoice} /></Table.Td>
@@ -219,7 +238,10 @@ export default function AdminInvoices() {
     </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
+    <TickedBar ticks={ticks} invoices={invoices} onCollect={collectTicked} />
     <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={reload} />
+    <CustomerCollectModal customer={collectingOne} onClose={() => setCollectingOne(null)} onSaved={onTickedSaved} />
+    <MultiCollectModal groups={collectingMany} onClose={() => setCollectingMany(null)} onSaved={onTickedSaved} />
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
     <MarkUnpaidModal invoice={reversing} onClose={() => setReversing(null)} onSaved={reload} /> */}
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} onChanged={reload} onRecord={setRecording} refreshKey={historyKey} actions={panelActions} />

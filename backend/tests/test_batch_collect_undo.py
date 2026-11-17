@@ -13,7 +13,7 @@ from app.database import Base
 from app.push import batch_payload
 from app.routers.mr import customers as mr_customers
 from app.routers.notifications import recent_collections
-from app.routers.payments import add_batch_payment, add_payment, pending_invoices, undo_payment
+from app.routers.payments import add_batch_payment, add_batch_payments, add_payment, pending_invoices, undo_payment
 
 
 class BatchCollectUndoTests(unittest.TestCase):
@@ -73,6 +73,44 @@ class BatchCollectUndoTests(unittest.TestCase):
         body = schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=4000, invoice_ids=[self.a.id, self.c.id], first_invoice_id=self.c.id)
         result = add_batch_payment(body, BackgroundTasks(), self.db, self.mr)
         self.assertEqual([(item["invoice_number"], item["amount"]) for item in result["items"]], [("INV-C", 3000), ("INV-A", 1000)])
+
+    def second_customer(self):
+        city = models.Customer(name="City Care", mr_id=self.mr.id)
+        self.db.add(city)
+        self.db.flush()
+        x = self.invoice("INV-X", date(2026, 10, 1), 4200, city)
+        self.db.commit()
+        return city, x
+
+    def test_several_customers_each_get_their_own_amount_and_mode(self):
+        city, x = self.second_customer()
+        body = schemas.PaymentBatchesCreate(groups=[
+            schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=6000, invoice_ids=[self.a.id, self.c.id], mode="Cash"),
+            schemas.PaymentBatchCreate(customer_id=city.id, amount=4200, invoice_ids=[x.id], mode="UPI", transaction_reference="UTR1"),
+        ])
+        result = add_batch_payments(body, BackgroundTasks(), self.db, self.mr)
+        self.assertEqual(result["amount"], 10200)
+        self.assertEqual((self.pending(self.a), self.pending(self.c), self.pending(x)), (0, 2400, 0))
+        modes = {p.invoice_id: p.mode for p in self.db.query(models.Payment).all()}
+        self.assertEqual((modes[self.a.id], modes[x.id]), ("Cash", "UPI"))
+        self.assertEqual(len({r["batch_id"] for r in result["results"]}), 2)
+
+    def test_several_customers_all_or_nothing(self):
+        city, x = self.second_customer()
+        body = schemas.PaymentBatchesCreate(groups=[
+            schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=5400, invoice_ids=[self.a.id]),
+            schemas.PaymentBatchCreate(customer_id=city.id, amount=9999, invoice_ids=[x.id]),  # too much
+        ])
+        with self.assertRaises(HTTPException):
+            add_batch_payments(body, BackgroundTasks(), self.db, self.mr)
+        self.assertEqual((self.pending(self.a), self.pending(x)), (5400, 4200))
+        self.assertEqual(self.db.query(models.Payment).count(), 0)
+
+    def test_several_customers_rejects_invoice_of_another_customer(self):
+        city, x = self.second_customer()
+        body = schemas.PaymentBatchesCreate(groups=[schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=100, invoice_ids=[x.id])])
+        with self.assertRaises(HTTPException):
+            add_batch_payments(body, BackgroundTasks(), self.db, self.mr)
 
     def test_unticked_invoice_is_skipped(self):
         result = self.batch(8400, [self.a.id, self.c.id])

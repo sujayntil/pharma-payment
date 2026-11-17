@@ -275,6 +275,7 @@ def outstanding(
                 "invoice_number": i.invoice_number,
                 "invoice_date": i.invoice_date,
                 "customer": i.customer.name if i.customer else None,
+                "customer_id": i.customer_id,  # additive: ticked invoices are grouped by customer
                 # For the call / WhatsApp icons on invoice cards.
                 "customer_phone": i.customer.phone if i.customer else None,
                 "customer_alternate_phone": i.customer.alternate_phone if i.customer else None,

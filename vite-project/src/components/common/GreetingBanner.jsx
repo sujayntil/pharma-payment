@@ -1,8 +1,22 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAppStore';
 import { useGreeting } from '../../hooks/useGreeting';
 import { crownFor } from '../../utils/crown';
 import { dailyLine } from '../../utils/dailyLine';
 import classes from './GreetingBanner.module.css';
+
+// "Tuesday, 17 November 2026" in India time.
+const fullDate = (at) => at.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+/** Today's date, re-checked every minute so it turns over at midnight. */
+function useToday() {
+  const [today, setToday] = useState(() => fullDate(new Date()));
+  useEffect(() => {
+    const timer = setInterval(() => setToday(fullDate(new Date())), 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return today;
+}
 
 const STARS = [[14, 38], [30, 62], [70, 30], [22, 48], [58, 74], [40, 86], [10, 70], [66, 56]];
 const CLOUDS = [{ top: 16, width: 46, duration: 38, delay: -6 }, { top: 42, width: 32, duration: 52, delay: -30 }];
@@ -16,6 +30,7 @@ const CLOUDS = [{ top: 16, width: 46, duration: 38, delay: -6 }, { top: 42, widt
 export default function GreetingBanner({ name }) {
   const { user } = useAuth();
   const greeting = useGreeting();
+  const today = useToday();
   const scene = greeting === 'Good morning' ? 'morning' : greeting === 'Good afternoon' ? 'afternoon' : 'evening';
   const shownName = name || user?.name;
   return (
@@ -37,6 +52,7 @@ export default function GreetingBanner({ name }) {
       </div>
 
       <div className={classes.text}>
+        <p className={classes.date}>{today}</p>
         <h1 className={classes.hello}>
           {greeting}{shownName ? ', ' : ''}
           {/* Name and crown stay together on one line. */}

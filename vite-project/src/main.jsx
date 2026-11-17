@@ -9,6 +9,7 @@ import '@mantine/notifications/styles.css';
 import store from './store';
 import './index.css';
 import App from './App.jsx';
+import UpdateRequired from './components/common/UpdateRequired';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.error));
@@ -22,6 +23,8 @@ createRoot(document.getElementById('root')).render(
         <HashRouter>
           <App />
         </HashRouter>
+        {/* A newer version is live: everyone updates before going on. */}
+        <UpdateRequired />
       </MantineProvider>
     </Provider>
   </StrictMode>

@@ -3,6 +3,7 @@ import { Alert, Button, Drawer, Group, Loader, Modal, NumberInput, Stack, Text }
 import { paymentsApi } from '../../api/paymentsApi';
 import { useAuth } from '../../hooks/useAppStore';
 import { useBackClose } from '../../hooks/useBackClose';
+import { holdUpdate } from '../../utils/updateGate';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import { autoFocusOnLaptop } from '../../utils/focus';
@@ -27,6 +28,8 @@ export default function CustomerCollectModal({ customer = null, invoice = null, 
   const opened = Boolean(customer || invoice);
   useBackClose(opened, onClose);
   useSwipeDownToClose(opened && isMobile, onClose);
+  // No "Update available" screen while a collection is being entered.
+  useEffect(() => (opened ? holdUpdate() : undefined), [opened]);
   const [celebration, setCelebration] = useState(null);
   const endCelebration = useCallback(() => {
     if (celebration?.undo) showUndoBar(celebration.undo);

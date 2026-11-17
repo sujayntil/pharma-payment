@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Drawer, Group, Modal, NumberInput, Paper, Stack, Text } from '@mantine/core';
 import { paymentsApi } from '../../api/paymentsApi';
 import { useAuth } from '../../hooks/useAppStore';
 import { useBackClose } from '../../hooks/useBackClose';
+import { holdUpdate } from '../../utils/updateGate';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import { errorText, money } from '../../utils/formatters';
@@ -25,6 +26,8 @@ export default function MultiCollectModal({ groups, onClose, onSaved }) {
   const opened = Boolean(groups?.length);
   useBackClose(opened, onClose);
   useSwipeDownToClose(opened && isMobile, onClose);
+  // No "Update available" screen while a collection is being entered.
+  useEffect(() => (opened ? holdUpdate() : undefined), [opened]);
   const [celebration, setCelebration] = useState(null);
   const endCelebration = useCallback(() => {
     if (celebration?.undo) showUndoBar(celebration.undo);

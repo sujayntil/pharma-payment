@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Alert, Button, Center, Container, Paper, PasswordInput, Stack, Text, TextInput, ThemeIcon, Title } from '@mantine/core';
-import { IconAlertCircle, IconArrowRight, IconPill, IconUser } from '@tabler/icons-react';
+import { IconAlertCircle, IconArrowRight, IconLock, IconUser } from '@tabler/icons-react';
 import { useAppDispatch, useAuth } from '../hooks/useAppStore';
 import { loginUser, clearError } from '../store/slices/authSlice';
 
@@ -35,8 +35,8 @@ export default function LoginPage() {
         <Paper withBorder shadow="sm" radius="lg" p={{ base: 'lg', sm: 32 }}>
           <Stack gap="lg">
             <Stack align="center" gap="xs">
-              <ThemeIcon size={48} radius="md" color="green" variant="filled"><IconPill size={26} /></ThemeIcon>
-              <Title order={2} ta="center">Pharma Sales &amp; Collection</Title>
+              <ThemeIcon size={48} radius="md" color="green" variant="filled"><IconLock size={26} /></ThemeIcon>
+              <Title order={2} ta="center">Portal</Title>
               <Text size="sm" c="dimmed" ta="center">Sign in with your employee code to continue.</Text>
             </Stack>
 
@@ -46,7 +46,7 @@ export default function LoginPage() {
               <Stack>
                 <TextInput
                   label="Employee code"
-                  placeholder="MR001"
+                  placeholder="EMP001"
                   leftSection={<IconUser size={17} />}
                   autoComplete="username"
                   value={employeeCode}

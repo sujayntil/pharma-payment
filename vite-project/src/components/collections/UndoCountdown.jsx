@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Group, Text } from '@mantine/core';
+import { holdUpdate } from '../../utils/updateGate';
 
 export const UNDO_SECONDS = 15;
 
@@ -7,6 +8,8 @@ export const UNDO_SECONDS = 15;
 export default function UndoCountdown({ message, onUndo, onEnd }) {
   const [left, setLeft] = useState(UNDO_SECONDS);
   const [started, setStarted] = useState(false);
+  // The Undo bar finishes before any "Update available" screen.
+  useEffect(() => holdUpdate(), []);
   useEffect(() => {
     const frame = requestAnimationFrame(() => setStarted(true));
     const tick = setInterval(() => setLeft((value) => Math.max(value - 1, 0)), 1000);

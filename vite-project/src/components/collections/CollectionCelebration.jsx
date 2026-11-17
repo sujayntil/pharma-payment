@@ -4,6 +4,7 @@ import { IconCheck } from '@tabler/icons-react';
 import '@fontsource/permanent-marker/400.css';
 import confetti from 'canvas-confetti';
 import { money } from '../../utils/formatters';
+import { holdUpdate } from '../../utils/updateGate';
 import SalesKingMascot from './SalesKingMascot';
 import { HEADLINES } from './celebrationText';
 
@@ -25,6 +26,8 @@ const prefersReducedMotion = () => {
  * celebration: { amount, left, cleared, customer } or null.
  */
 export default function CollectionCelebration({ celebration, onDone }) {
+  // The celebration (and the Undo bar after it) plays out before any update screen.
+  useEffect(() => (celebration ? holdUpdate() : undefined), [celebration]);
   useEffect(() => {
     if (!celebration) return undefined;
     const reduced = prefersReducedMotion();

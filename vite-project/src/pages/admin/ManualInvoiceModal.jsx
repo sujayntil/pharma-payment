@@ -150,7 +150,7 @@ function ManualInvoiceForm({ onClose, onSaved, mrOptions }) {
             <Divider label="New customer" labelPosition="left" mt={4} />
             <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
               <Select label="Type" placeholder="Choose type" clearable data={CUSTOMER_TYPES} value={details.type || null} onChange={(value) => setDetails({ ...details, type: value || '' })} comboboxProps={{ zIndex: 300 }} />
-              <Select label="Assigned MR" placeholder="Not assigned" clearable searchable data={mrOptions} value={details.mr_id || null} onChange={(value) => setDetails({ ...details, mr_id: value || '' })} comboboxProps={{ zIndex: 300 }} />
+              <Select label="Assigned MR" placeholder="Not assigned" clearable data={mrOptions} value={details.mr_id || null} onChange={(value) => setDetails({ ...details, mr_id: value || '' })} comboboxProps={{ zIndex: 300 }} />
             </SimpleGrid>
           </>
         )}

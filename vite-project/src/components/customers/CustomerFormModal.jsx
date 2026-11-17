@@ -90,7 +90,7 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved, onPickExisting })
           : <TextInput label="Name" required placeholder="Sri Balaji Medicals" value={form.name} onChange={(event) => set({ name: event.currentTarget.value })} />}
         <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
           <Select label="Type" placeholder="Choose type" clearable data={typeOptions(form.type)} value={form.type || null} onChange={(value) => set({ type: value || '' })} comboboxProps={{ zIndex: 300 }} />
-          <Select label="Assigned MR" placeholder="Not assigned" clearable searchable data={mrOptions} value={form.mr_id || null} onChange={(value) => set({ mr_id: value || '' })} comboboxProps={{ zIndex: 300 }} />
+          <Select label="Assigned MR" placeholder="Not assigned" clearable data={mrOptions} value={form.mr_id || null} onChange={(value) => set({ mr_id: value || '' })} comboboxProps={{ zIndex: 300 }} />
         </SimpleGrid>
 
         <Divider label="Phone numbers" labelPosition="left" mt={6} />

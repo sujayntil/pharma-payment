@@ -175,7 +175,7 @@ class BatchCollectUndoTests(unittest.TestCase):
         self.assertEqual(len(result["items"]), 1)
         item = result["items"][0]
         self.assertEqual((item["amount"], item["invoice_count"], item["invoice_number"], item["invoice_id"]), (8400, 2, "INV-A +1", self.a.id))
-        self.assertEqual(result["unread"], 1)
+        self.assertEqual(result["unread"], 1 + sum(month["is_new"] for month in result["months"]))  # + "month cleared" lines
         rows = (
             self.db.query(models.Payment, models.User, models.Invoice, models.Customer)
             .join(models.User, models.User.id == models.Payment.collected_by)

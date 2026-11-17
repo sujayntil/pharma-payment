@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from ..database import get_db
 from ..overdue import overdue_customer_summaries
 from ..deps import get_current_user, require_mr
 from ..month_clear import claim_unseen
+from ..push import send_month_cleared_notification
 from ..utils import INVOICE_STATUSES, clean_search, clean_status, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone
 
 router = APIRouter(prefix="/mr", tags=["mr"])
@@ -302,8 +303,11 @@ def overdue_alerts(
 
 
 @router.post("/months-cleared/claim")
-def claim_months_cleared(db: Session = Depends(get_db), user: models.User = Depends(require_mr)):
+def claim_months_cleared(db: Session = Depends(get_db), user: models.User = Depends(require_mr), background_tasks: BackgroundTasks = None):
     """Cleared months this MR hasn't celebrated yet (an Admin collected the
     last invoice, or the month was cleared while still running). Each is
     returned once; the app shows the "All invoices cleared" pill for them."""
-    return {"months": claim_unseen(db, user)}
+    shown, noticed = claim_unseen(db, user)
+    if noticed and background_tasks is not None:
+        background_tasks.add_task(send_month_cleared_notification, user.id, noticed, 0)
+    return {"months": shown}

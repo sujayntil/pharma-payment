@@ -47,6 +47,7 @@ class User(Base):
     tokens_valid_after = Column(DateTime, nullable=True)
     # Admin bell: newest payment id this user has seen (NULL = never opened).
     notifications_seen_payment_id = Column(Integer, nullable=True)
+    notifications_seen_month_id = Column(Integer, nullable=True)  # bell: newest "month cleared" seen
     # "KING" (👑) or "QUEEN" (👸) on Home, the morning welcome and the MR
     # celebration. NULL means King.
     title = Column(String(8), nullable=True)
@@ -241,6 +242,10 @@ class MonthClearance(Base):
     # When the MR saw the celebration; empty = show it the next time they open
     # the app (an Admin collected the last invoice, or the month just ended).
     shown_at = Column(DateTime, nullable=True)
+    # Who paid the last invoice (empty = noticed when the month ended), and
+    # when the Admins were alerted ("Rahul cleared OCT"; only when the MR did it).
+    cleared_by = Column(Integer, nullable=True)
+    notified_at = Column(DateTime, nullable=True)
 
 
 class RevokedToken(Base):

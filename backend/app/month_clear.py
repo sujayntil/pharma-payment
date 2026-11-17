@@ -85,7 +85,7 @@ def _on_time(db: Session, rows) -> bool:
     return all(inv.id not in paid or (paid[inv.id] - inv.invoice_date).days <= ON_TIME_DAYS for inv in rows)
 
 
-def _mark_cleared(db: Session, mr_id: int, year: int, month: int, rows, show_now: bool) -> bool:
+def _mark_cleared(db: Session, mr_id: int, year: int, month: int, rows, show_now: bool, actor_id=None) -> bool:
     """Save the month as cleared for this MR. True when it should be
     celebrated right now (show_now and not already celebrated)."""
     now = _now_utc()
@@ -93,16 +93,18 @@ def _mark_cleared(db: Session, mr_id: int, year: int, month: int, rows, show_now
     record = db.query(models.MonthClearance).filter_by(user_id=mr_id, month=_key(year, month)).first()
     if record is None:
         db.add(models.MonthClearance(user_id=mr_id, month=_key(year, month), on_time=on_time, invoice_count=len(rows),
-                                     cleared_at=now, shown_at=now if show_now else None))
+                                     cleared_at=now, shown_at=now if show_now else None, cleared_by=actor_id))
         return show_now
     if record.undone_at is None:
         return False  # already cleared (and celebrated, or waiting to be)
     redo = now - record.undone_at <= REDO_QUIET  # an undo-and-redo stays quiet
     record.undone_at = None
     record.on_time, record.invoice_count, record.cleared_at = on_time, len(rows), now
+    record.cleared_by = actor_id
     if redo:
         return False
     record.shown_at = now if show_now else None
+    record.notified_at = None  # cleared again much later: the Admins may hear about it again
     return show_now
 
 
@@ -127,22 +129,35 @@ def months_cleared(db: Session, user: models.User, invoices) -> list[dict]:
         if not _all_paid(rows):
             continue
         show_now = is_mr and mr_id == user.id
-        if _mark_cleared(db, mr_id, year, month, rows, show_now):
+        if _mark_cleared(db, mr_id, year, month, rows, show_now, actor_id=user.id):
             result.append({"month": _key(year, month), "label": _label(year, month, today), "invoices": len(rows), "on_time": _on_time(db, rows)})
     return result
 
 
-def claim_unseen(db: Session, mr: models.User) -> list[dict]:
+def finished_month_keys(invoices) -> list[str]:
+    """Finished months these invoices belong to (for the Admin alert check)."""
+    today = _today()
+    return sorted({
+        _key(inv.invoice_date.year, inv.invoice_date.month)
+        for inv in invoices
+        if inv.invoice_date is not None and (inv.invoice_date.year, inv.invoice_date.month) < (today.year, today.month)
+    })
+
+
+def claim_unseen(db: Session, mr: models.User) -> tuple[list[dict], list[str]]:
     """Months waiting to be shown to this MR (an Admin cleared them, or the
     month was cleared while still running and has now ended). Each is
-    returned once."""
+    returned once. Also returns the month just noticed as ended-and-cleared
+    (the Admins get told about that one)."""
     today = _today()
     last = (today.replace(day=1) - timedelta(days=1))
+    noticed = []
     if db.query(models.MonthClearance.id).filter_by(user_id=mr.id, month=_key(last.year, last.month)).first() is None:
         rows = _month_invoices(db, mr.id, last.year, last.month)
         if _all_paid(rows):
             _mark_cleared(db, mr.id, last.year, last.month, rows, show_now=False)
             db.flush()
+            noticed.append(_key(last.year, last.month))
     waiting = (
         db.query(models.MonthClearance)
         .filter(models.MonthClearance.user_id == mr.id, models.MonthClearance.shown_at.is_(None), models.MonthClearance.undone_at.is_(None))
@@ -161,7 +176,7 @@ def claim_unseen(db: Session, mr: models.User) -> list[dict]:
         if taken:
             shown.append(_item(record, today))
     db.commit()
-    return shown
+    return shown, noticed
 
 
 def reopen_months(db: Session, invoices) -> None:
@@ -181,3 +196,23 @@ def reopen_months(db: Session, invoices) -> None:
             continue
         if not _all_paid(_month_invoices(db, mr_id, year, month)):
             record.undone_at = _now_utc()
+
+
+SHORT = ["JAN", "FEB", "MAR", "APR", "MAY", "JUNE", "JULY", "AUG", "SEPT", "OCT", "NOV", "DEC"]
+
+
+def short_label(key: str) -> str:
+    """"2026-09" -> "SEPT" ("SEPT 2025" for another year)."""
+    year, month = map(int, key.split("-"))
+    return SHORT[month - 1] + ("" if year == _today().year else f" {year}")
+
+
+def due_for_alert(record: models.MonthClearance) -> bool:
+    """Admins hear "Rahul cleared OCT" once, when the MR did it (their own
+    collection, or noticed when the month ended), and it is still cleared."""
+    return (
+        record is not None
+        and record.undone_at is None
+        and record.notified_at is None
+        and (record.cleared_by is None or record.cleared_by == record.user_id)
+    )

@@ -16,6 +16,8 @@ log = logging.getLogger(__name__)
 _ADDITIVE_COLUMNS = {
     "month_clearances": {
         "shown_at": "TIMESTAMP",
+        "cleared_by": "INTEGER",
+        "notified_at": "TIMESTAMP",
     },
     "payments": {
         "recorded_by": "INTEGER",
@@ -26,6 +28,7 @@ _ADDITIVE_COLUMNS = {
     "users": {
         "tokens_valid_after": "TIMESTAMP",
         "notifications_seen_payment_id": "INTEGER",
+        "notifications_seen_month_id": "INTEGER",
         "title": "VARCHAR(8)",
     },
     "customers": {

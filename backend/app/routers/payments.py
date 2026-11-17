@@ -8,9 +8,9 @@ from .. import models, schemas
 from ..audit import write_audit
 from ..collection_info import apply_ledger_delta, as_utc, credited_mr_id, log_event
 from ..database import get_db
-from ..month_clear import months_cleared, reopen_months
+from ..month_clear import finished_month_keys, months_cleared, reopen_months
 from ..deps import get_current_user
-from ..push import send_batch_notification, send_payment_notification
+from ..push import send_batch_notification, send_month_cleared_notification, send_payment_notification
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -74,6 +74,7 @@ def add_payment(
     db.refresh(invoice)
     if user.role == models.RoleEnum.MR.value:
         background_tasks.add_task(send_payment_notification, payment.id)
+        _alert_months(background_tasks, user, [invoice])
 
     return {
         "invoice_id": invoice.id,
@@ -83,6 +84,13 @@ def add_payment(
         "status": invoice.status,
         "months_cleared": cleared_months,
     }
+
+
+def _alert_months(background_tasks: BackgroundTasks, user: models.User, invoices) -> None:
+    """Queue the Admin alert check for the finished months these MR collections touched."""
+    keys = finished_month_keys([invoice for invoice in invoices if invoice.mr_id == user.id and (invoice.pending_amount or 0) <= 0.004])
+    if keys:
+        background_tasks.add_task(send_month_cleared_notification, user.id, keys)
 
 
 def _apply_batch(db: Session, payload: schemas.PaymentBatchCreate, user: models.User):
@@ -162,6 +170,7 @@ def add_batch_payment(
     db.commit()
     if user.role == models.RoleEnum.MR.value:
         background_tasks.add_task(send_batch_notification, batch_id)
+        _alert_months(background_tasks, user, invoices)
     return {**_batch_result(db, payload, batch_id, parts, invoices), "months_cleared": cleared_months}
 
 
@@ -190,6 +199,7 @@ def add_batch_payments(
     if user.role == models.RoleEnum.MR.value:
         for _, batch_id, _, _ in done:
             background_tasks.add_task(send_batch_notification, batch_id)
+        _alert_months(background_tasks, user, [invoice for *_, invoices in done for invoice in invoices])
     results = [_batch_result(db, group, batch_id, parts, invoices) for group, batch_id, parts, invoices in done]
     return {"results": results, "amount": round(sum(group.amount for group in payload.groups), 2), "months_cleared": cleared_months}
 

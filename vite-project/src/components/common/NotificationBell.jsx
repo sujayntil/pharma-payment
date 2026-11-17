@@ -84,7 +84,7 @@ export default function NotificationBell({ size = 38 }) {
 
   const count = data.unread;
   const bell = (
-    <Tooltip label={count ? `${count} new collection${count === 1 ? '' : 's'}` : 'Recent collections'} withArrow openDelay={250} disabled={opened}>
+    <Tooltip label={count ? `${count} new` : 'Recent collections'} withArrow openDelay={250} disabled={opened}>
       <Indicator label={count > 9 ? '9+' : count} size={17} color="red" offset={5} disabled={!count} inline withBorder>
         <ActionIcon variant="default" radius="xl" size={size} onClick={toggle} aria-label={count ? `Recent collections, ${count} new` : 'Recent collections'} aria-expanded={opened}>
           <IconBell size={size > 34 ? 18 : 16} />
@@ -93,19 +93,27 @@ export default function NotificationBell({ size = 38 }) {
     </Tooltip>
   );
 
+  // "🎉 Rahul cleared OCT" (an MR paid off every invoice of a finished month).
+  const months = data.months || [];
+  const monthLines = months.map((month) => <MonthItem key={month.id} month={month} onOpen={() => go('/admin/performance')} />);
+  // Turning phone alerts on/off sits at the top of the list.
+  const alertsRow = (
+    <Box px="md" py={10} style={{ borderBottom: '1px solid var(--mantine-color-gray-2)', background: 'var(--mantine-color-gray-0)' }}>
+      <PaymentAlerts compact />
+    </Box>
+  );
   const list = (
     <Stack gap={0}>
+      {monthLines}
       {loading && !data.items.length ? <Group justify="center" p="lg"><Loader size="sm" /></Group>
         : failed && !data.items.length ? <Text size="sm" c="dimmed" ta="center" p="lg">Couldn't load collections. Check your connection.</Text>
-          : !data.items.length ? <Text size="sm" c="dimmed" ta="center" p="lg">No collections yet.</Text>
+          : !data.items.length ? (months.length ? null : <Text size="sm" c="dimmed" ta="center" p="lg">No collections yet.</Text>)
             : data.items.map((item) => <BellItem key={item.payment_id} item={item} onOpen={() => go(`/admin/invoices?invoice=${item.invoice_id}`)} />)}
     </Stack>
   );
   const footer = (
     <Box px="md" py={10} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
       <Anchor component="button" type="button" size="sm" c="green.7" fw={600} onClick={() => go('/admin/collections')}>See all collections</Anchor>
-      {/* Turning push alerts on/off lives here (moved off the dashboard). */}
-      <Box mt={10} pt={10} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}><PaymentAlerts compact /></Box>
     </Box>
   );
 
@@ -123,6 +131,7 @@ export default function NotificationBell({ size = 38 }) {
           classNames={{ content: SWIPE_SHEET_CLASS }}
           styles={{ content: { maxHeight: '80dvh' }, body: { padding: 0 } }}
         >
+          {alertsRow}
           {list}
           {footer}
         </Drawer>
@@ -137,10 +146,40 @@ export default function NotificationBell({ size = 38 }) {
           <Text fw={700} size="sm">Recent collections</Text>
           {loading && <Loader size={14} />}
         </Group>
+        {alertsRow}
         <ScrollArea.Autosize mah={420} type="auto">{list}</ScrollArea.Autosize>
         {footer}
       </Popover.Dropdown>
     </Popover>
+  );
+}
+
+/**
+ *   🎉 Rahul cleared OCT                         2:01 pm
+ *      All invoices collected
+ */
+function MonthItem({ month, onOpen }) {
+  return (
+    <UnstyledButton
+      onClick={onOpen}
+      px="md"
+      py={10}
+      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--mantine-color-gray-1)', background: month.is_new ? '#fff9db' : undefined }}
+      aria-label={`${month.mr_name} cleared ${month.label}`}
+    >
+      <Group gap={10} wrap="nowrap" align="flex-start">
+        <Box w={8} mt={7} style={{ flexShrink: 0 }}>
+          {month.is_new && <Box w={8} h={8} bg="yellow.6" style={{ borderRadius: '50%' }} aria-label="New" />}
+        </Box>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          <Group justify="space-between" gap="xs" wrap="nowrap">
+            <Text size="sm" fw={600} truncate>🎉 {month.mr_name} cleared {month.label}</Text>
+            <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{when(month.cleared_at)}</Text>
+          </Group>
+          <Text size="xs" c="dimmed" mt={2}>All invoices of {month.label} collected</Text>
+        </Box>
+      </Group>
+    </UnstyledButton>
   );
 }
 

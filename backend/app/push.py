@@ -128,3 +128,41 @@ def payment_payload(payment, collector, invoice, customer) -> dict:
         "url": f"/#/admin/invoices?invoice={invoice.id}",
         "tag": f"payment-{payment.id}",
     }
+
+
+def month_alert_payloads(db, mr_id: int, months: list[str]) -> list[dict]:
+    """Alerts due for these months (marks them sent; caller commits)."""
+    from datetime import datetime, timezone
+
+    from .month_clear import due_for_alert, short_label
+
+    mr = db.get(models.User, mr_id)
+    if mr is None:
+        return []
+    payloads = []
+    for key in months:
+        record = db.query(models.MonthClearance).filter_by(user_id=mr_id, month=key).first()
+        if not due_for_alert(record):
+            continue
+        record.notified_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        payloads.append({
+            "title": f"🎉 {mr.name} cleared {short_label(key)}",
+            "body": f"All invoices of {short_label(key)} are collected",
+            "url": "/#/admin/performance",
+            "tag": f"month-{mr_id}-{key}",
+        })
+    return payloads
+
+
+def send_month_cleared_notification(mr_id: int, months: list[str], delay: float = ALERT_DELAY_SECONDS):
+    """"🎉 Rahul cleared OCT" to the Admins, once per MR and month, only when
+    the MR cleared it (an undo within the delay cancels it)."""
+    if not os.getenv("VAPID_PRIVATE_KEY") or not os.getenv("VAPID_SUBJECT"):
+        return  # phone alerts not set up: nothing to send (and no waiting)
+    if delay:
+        time.sleep(delay)
+    with SessionLocal() as db:
+        payloads = month_alert_payloads(db, mr_id, months)
+        db.commit()
+    for payload in payloads:
+        send_admin_notification(payload, ttl=3600)

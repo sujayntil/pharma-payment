@@ -9,6 +9,7 @@ from .. import models, schemas
 from ..collection_info import as_utc
 from ..database import get_db
 from ..deps import require_admin
+from ..month_clear import short_label
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -150,14 +151,57 @@ def recent_collections(
             "payment_date": as_utc(first_payment.payment_date),  # stored as UTC; send with its zone
             "is_new": new,
         })
-    return {"items": items, "unread": unread}
+    months = _recent_months(db, user)
+    unread += sum(1 for month in months if month["is_new"])
+    return {"items": items, "months": months, "unread": unread}
+
+
+MONTHS_IN_BELL = 3
+MONTHS_BELL_DAYS = 14
+
+
+def _recent_months(db: Session, user: models.User) -> list[dict]:
+    """"🎉 Rahul cleared OCT" lines for the bell: months an MR cleared
+    themselves in the last two weeks (newest first, at most three)."""
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=MONTHS_BELL_DAYS)
+    rows = (
+        db.query(models.MonthClearance, models.User.name)
+        .join(models.User, models.User.id == models.MonthClearance.user_id)
+        .filter(
+            models.MonthClearance.undone_at.is_(None),
+            models.MonthClearance.cleared_at >= since,
+            or_(models.MonthClearance.cleared_by.is_(None), models.MonthClearance.cleared_by == models.MonthClearance.user_id),
+        )
+        .order_by(models.MonthClearance.cleared_at.desc(), models.MonthClearance.id.desc())
+        .limit(MONTHS_IN_BELL)
+        .all()
+    )
+    seen = user.notifications_seen_month_id
+    cutoff = _last_day_cutoff()
+    return [{
+        "id": record.id,
+        "mr_id": record.user_id,
+        "mr_name": name,
+        "month": record.month,
+        "label": short_label(record.month),
+        "invoices": record.invoice_count,
+        "cleared_at": as_utc(record.cleared_at),
+        "is_new": (record.id > seen) if seen is not None else record.cleared_at >= cutoff,
+    } for record, name in rows]
 
 
 @router.post("/seen", status_code=204)
 def mark_seen(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
     """Opening the bell: everything up to the newest payment is now seen."""
     newest = db.query(func.max(models.Payment.id)).scalar()
+    changed = False
     if newest is not None and (user.notifications_seen_payment_id or 0) < newest:
         user.notifications_seen_payment_id = newest
+        changed = True
+    newest_month = db.query(func.max(models.MonthClearance.id)).scalar()
+    if newest_month is not None and (user.notifications_seen_month_id or 0) < newest_month:
+        user.notifications_seen_month_id = newest_month
+        changed = True
+    if changed:
         db.commit()
     return Response(status_code=204)

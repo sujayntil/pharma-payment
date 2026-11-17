@@ -14,6 +14,8 @@ from app.database import Base
 from app.month_clear import IST
 from app.routers.admin import delete_user, override_collection_status, reverse_payment
 from app.routers.mr import claim_months_cleared
+from app.routers.notifications import mark_seen, recent_collections
+from app.push import month_alert_payloads
 from app.routers.payments import add_batch_payment, add_batch_payments, add_payment, undo_payment
 
 TODAY = datetime.now(IST).date()
@@ -51,9 +53,12 @@ class MonthClearTests(unittest.TestCase):
         self.db.commit()
         return inv
 
-    def pay(self, inv, amount=None, user=None):
+    def pay(self, inv, amount=None, user=None, tasks=None):
         body = schemas.PaymentCreate(invoice_id=inv.id, amount=amount or inv.pending_amount, mode="UPI")
-        return add_payment(body, BackgroundTasks(), self.db, user or self.mr)
+        return add_payment(body, tasks if tasks is not None else BackgroundTasks(), self.db, user or self.mr)
+
+    def month_tasks(self, tasks):
+        return [task.args for task in tasks.tasks if getattr(task.func, "__name__", "") == "send_month_cleared_notification"]
 
     def test_last_open_invoice_of_last_month_celebrates_on_time(self):
         a = self.invoice("A", LAST_MONTH_END)
@@ -166,6 +171,55 @@ class MonthClearTests(unittest.TestCase):
         self.assertEqual(add_batch_payments(body, BackgroundTasks(), self.db, self.admin)["months_cleared"], [])
         self.assertEqual(len(self.claim()), 1)
         self.assertEqual(len(self.claim(neha)), 1)
+
+    def test_admins_are_alerted_once_when_the_mr_clears_it(self):
+        a = self.invoice("A", LAST_MONTH_END)
+        tasks = BackgroundTasks()
+        self.pay(a, tasks=tasks)
+        key = LAST_MONTH_END.strftime("%Y-%m")
+        self.assertEqual(self.month_tasks(tasks), [(self.mr.id, [key])])
+        first = month_alert_payloads(self.db, self.mr.id, [key]); self.db.commit()
+        self.assertEqual(len(first), 1)
+        self.assertIn("Rahul cleared", first[0]["title"])
+        self.assertEqual(month_alert_payloads(self.db, self.mr.id, [key]), [])   # only once
+
+    def test_no_admin_alert_when_an_admin_cleared_it_or_it_was_undone(self):
+        a = self.invoice("A", LAST_MONTH_END)
+        tasks = BackgroundTasks()
+        self.pay(a, user=self.admin, tasks=tasks)
+        self.assertEqual(self.month_tasks(tasks), [])
+        key = LAST_MONTH_END.strftime("%Y-%m")
+        self.assertEqual(month_alert_payloads(self.db, self.mr.id, [key]), [])
+        b = self.invoice("B", OLD)
+        undo_payment(self.pay(b)["payment_id"], self.db, self.mr)
+        self.assertEqual(month_alert_payloads(self.db, self.mr.id, [OLD.strftime("%Y-%m")]), [])
+
+    def test_undo_and_redo_still_alerts_once(self):
+        a = self.invoice("A", LAST_MONTH_END)
+        undo_payment(self.pay(a)["payment_id"], self.db, self.mr)
+        key = LAST_MONTH_END.strftime("%Y-%m")
+        self.assertEqual(month_alert_payloads(self.db, self.mr.id, [key]), [])   # the first alert finds it undone
+        self.pay(a)                                                               # redo (quiet for the MR)
+        self.assertEqual(len(month_alert_payloads(self.db, self.mr.id, [key])), 1)
+
+    def test_month_noticed_at_month_end_alerts_admins(self):
+        a = self.invoice("A", LAST_MONTH_END)
+        a.paid_amount, a.pending_amount, a.status = a.total_amount, 0, "PAID"
+        self.db.commit()
+        tasks = BackgroundTasks()
+        claim_months_cleared(self.db, self.mr, tasks)
+        self.assertEqual(self.month_tasks(tasks), [(self.mr.id, [LAST_MONTH_END.strftime("%Y-%m")], 0)])
+
+    def test_bell_shows_month_cleared_and_marks_it_seen(self):
+        self.pay(self.invoice("A", LAST_MONTH_END))
+        self.pay(self.invoice("B", OLD), user=self.admin)                         # Admin's own: not in the bell
+        bell = recent_collections(20, self.db, self.admin)
+        self.assertEqual([(m["mr_name"], m["is_new"]) for m in bell["months"]], [("Rahul", True)])
+        unread = bell["unread"]
+        mark_seen(self.db, self.admin)
+        bell = recent_collections(20, self.db, self.admin)
+        self.assertFalse(bell["months"][0]["is_new"])
+        self.assertLess(bell["unread"], unread)
 
     def test_deleting_an_mr_removes_their_cleared_months(self):
         neha = models.User(name="Neha", employee_code="M2", role="MR", password_hash="x")

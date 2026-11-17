@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Button, Group, Loader, Menu, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDots, IconDownload, IconEdit, IconEye, IconTrash, IconUser } from '@tabler/icons-react';
+import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDots, IconDownload, IconEdit, IconEye, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { invoicesApi } from '../../api/invoicesApi';
 import { adminApi } from '../../api/adminApi';
@@ -31,6 +31,8 @@ import { RecordedBy, StatusCell } from '../../components/collections/CollectionB
 import { downloadErrorText, errorText, money, saveDownload, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
+import { notifications } from '@mantine/notifications';
+import ManualInvoiceModal from './ManualInvoiceModal';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -149,6 +151,8 @@ export default function AdminInvoices() {
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
   const reload = useCallback(() => { setRefresh((value) => value + 1); setHistoryKey((value) => value + 1); }, []);
+  // "Add invoice": the same form as on Import & mapping.
+  const [manualOpen, setManualOpen] = useState(false);
   // Ticks stay while searching / filtering, so several customers can be collected together.
   // Admin can tick any invoice (to delete); Collect uses only the pending ones.
   const ticks = useInvoiceTicks('invoices', { selectable: ANY });
@@ -257,7 +261,7 @@ export default function AdminInvoices() {
   );
 
   const shownInvoices = invoices.filter((invoice) => !hiddenIds.has(invoice.id));
-  return <Stack gap="md" style={panelSpace}><Title order={1}>Invoices</Title>
+  return <Stack gap="md" style={panelSpace}><Group justify="space-between" wrap="nowrap"><Title order={1}>Invoices</Title><Button leftSection={<IconPlus size={16} />} onClick={() => setManualOpen(true)}>Add invoice</Button></Group>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     <SegmentedControl fullWidth={isMobile} style={isMobile ? undefined : { alignSelf: 'flex-start' }} data={tabData} value={tab} onChange={changeTab} aria-label="Invoice status" />
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}>
@@ -295,6 +299,7 @@ export default function AdminInvoices() {
     </Paper>
     <TickedBar ticks={ticks} invoices={invoices} onCollect={ticks.invoices().some((invoice) => Number(invoice.pending_amount) > 0) ? collectTicked : undefined} onDelete={() => setBulkDeleting(ticks.invoices())} deleteLabel="Delete invoices" />
     <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={reload} />
+    <ManualInvoiceModal opened={manualOpen} onClose={() => setManualOpen(false)} mrOptions={mrOptions} onSaved={(text) => { notifications.show({ color: 'green', message: text || 'Invoice added.' }); reload(); }} />
     <CustomerCollectModal customer={collectingOne} onClose={() => setCollectingOne(null)} onSaved={onTickedSaved} />
     <MultiCollectModal groups={collectingMany} onClose={() => setCollectingMany(null)} onSaved={onTickedSaved} />
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:

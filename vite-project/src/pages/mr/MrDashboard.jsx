@@ -40,7 +40,7 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
   const onSaved = () => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); setHistoryKey((v) => v + 1); };
   const recent = dashboard?.recent || [];
 
-  return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>{greeting}{dashboard?.name ? `, ${dashboard.name}` : ''} <span aria-hidden style={{ fontSize: '1.25em', lineHeight: 1, verticalAlign: '-0.08em' }}>👑</span></Title>{user?.id && <Text size="sm" c="dimmed" mt={2}>{dailyLine(user.id)}</Text>}</div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
+  return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>{greeting}{dashboard?.name ? `, ${dashboard.name}` : ''} <span aria-hidden style={{ fontSize: '1.17em', lineHeight: 1, verticalAlign: '-0.08em', display: 'inline-block', transform: 'translateY(-0.12em)' }}>👑</span></Title>{user?.id && <Text size="sm" c="dimmed" mt={2}>{dailyLine(user.id)}</Text>}</div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
     {/* Phones: the money figure gets its own full row (so it never wraps) and
         comes first; the three counts share one row. Desktop: four in a row. */}
     <Grid gutter="sm" align="stretch">

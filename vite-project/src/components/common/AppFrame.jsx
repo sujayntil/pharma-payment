@@ -54,11 +54,12 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
   const navigate = useNavigate();
   const { user, role, token } = useAuth();
   const userId = user?.id;
-  const userName = user?.name;
   const initials = user?.name?.trim().slice(0, 1).toUpperCase() || '';
 
+  // Profile refreshed once per app open, so a change made in Admin → Users
+  // (name, King / Queen) shows without signing in again.
   useEffect(() => {
-    if (!userId || userName) return undefined;
+    if (!userId) return undefined;
     let active = true;
     authApi.getCurrentUser()
       .then((profile) => {
@@ -66,7 +67,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
       })
       .catch(() => { /* Keep the session on transient profile-load errors. */ });
     return () => { active = false; };
-  }, [dispatch, userId, userName]);
+  }, [dispatch, userId]);
 
   // Messages from the service worker: a tapped payment alert asks to open
   // its invoice (the app was already open), and an alert that arrives while

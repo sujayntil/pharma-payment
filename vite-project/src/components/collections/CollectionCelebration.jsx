@@ -5,6 +5,8 @@ import '@fontsource/permanent-marker/400.css';
 import confetti from 'canvas-confetti';
 import { money } from '../../utils/formatters';
 import { holdUpdate } from '../../utils/updateGate';
+import { useAuth } from '../../hooks/useAppStore';
+import { royalWords } from '../../utils/crown';
 import SalesKingMascot from './SalesKingMascot';
 import { HEADLINES } from './celebrationText';
 
@@ -29,6 +31,7 @@ const prefersReducedMotion = () => {
  * no graffiti words, a little shorter.
  */
 export default function CollectionCelebration({ celebration, onDone }) {
+  const { user } = useAuth();
   // The celebration (and the Undo bar after it) plays out before any update screen.
   useEffect(() => (celebration ? holdUpdate() : undefined), [celebration]);
   useEffect(() => {
@@ -75,7 +78,7 @@ export default function CollectionCelebration({ celebration, onDone }) {
       </Portal>
     );
   }
-  const [lead, king] = splitHeadline(headline || (cleared ? HEADLINES.cleared[0] : HEADLINES.part[0]));
+  const [lead, king] = splitHeadline(royalWords(headline || (cleared ? HEADLINES.cleared[0] : HEADLINES.part[0]), user));
   return (
     <Portal>
       <div

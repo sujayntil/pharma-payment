@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 
 
 # ---- Auth ----
@@ -13,6 +13,7 @@ class Token(BaseModel):
     role: str
     name: str
     user_id: int
+    title: str = "KING"
 
 
 # ---- Users ----
@@ -24,6 +25,7 @@ class UserCreate(BaseModel):
     role: str  # "MR" or "ADMIN"
     phone: Optional[str] = None
     password: str
+    title: Optional[str] = None  # "KING" (default) or "QUEEN"
 
 
 class UserOut(BaseModel):
@@ -34,6 +36,12 @@ class UserOut(BaseModel):
     employee_code: str
     role: str
     phone: Optional[str] = None
+    title: str = "KING"
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _default_title(cls, value):
+        return value or "KING"
 
 
 class UserUpdate(BaseModel):
@@ -41,6 +49,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     role: Optional[str] = None  # "MR" or "ADMIN"
     password: Optional[str] = None  # leave unset to keep the current password
+    title: Optional[str] = None  # "KING" or "QUEEN"
 
 
 # ---- Customers ----

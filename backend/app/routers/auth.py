@@ -74,4 +74,5 @@ def login(
         role=user.role,
         name=user.name,
         user_id=user.id,
+        title=user.title or "KING",
     )

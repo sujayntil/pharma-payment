@@ -89,4 +89,5 @@ def user_snapshot(user: models.User) -> dict:
         "employee_code": user.employee_code,
         "role": user.role,
         "phone": user.phone,
+        "title": user.title or "KING",
     }

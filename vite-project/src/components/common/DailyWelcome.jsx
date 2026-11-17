@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAppStore';
 import { useGreeting } from '../../hooks/useGreeting';
+import { crownFor } from '../../utils/crown';
 import { dailyLine, todayKey } from '../../utils/dailyLine';
 import classes from './DailyWelcome.module.css';
 
@@ -46,7 +47,7 @@ export default function DailyWelcome() {
       onClick={leave}
       onAnimationEnd={(event) => { if (state === 'leaving' && event.target === event.currentTarget) setState('hidden'); }}
     >
-      <div className={classes.crown} aria-hidden>👑</div>
+      <div className={classes.crown} aria-hidden>{crownFor(user)}</div>
       <div className={classes.hello}>{greeting}, {firstName}</div>
       <div className={classes.line}>{dailyLine(userId)}</div>
     </div>

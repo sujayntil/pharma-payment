@@ -678,6 +678,7 @@ def create_user(
         employee_code=payload.employee_code,
         role=payload.role,
         phone=payload.phone,
+        title=_clean_title(payload.title),
         password_hash=hash_password(payload.password),
     )
     db.add(new_user)
@@ -726,6 +727,8 @@ def update_user(
         target.name = data["name"]
     if "phone" in data:
         target.phone = data["phone"]
+    if data.get("title"):
+        target.title = _clean_title(data["title"])
     if "password" in data and data["password"]:
         _check_password(data["password"])
         target.password_hash = hash_password(data["password"])
@@ -739,6 +742,11 @@ def update_user(
     db.commit()
     db.refresh(target)
     return target
+
+
+def _clean_title(title) -> str:
+    """King or Queen for the crown on Home; anything else means King."""
+    return "QUEEN" if str(title or "").upper() == "QUEEN" else "KING"
 
 
 @router.delete("/users/{user_id}", status_code=204)

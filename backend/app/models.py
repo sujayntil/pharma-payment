@@ -46,6 +46,9 @@ class User(Base):
     tokens_valid_after = Column(DateTime, nullable=True)
     # Admin bell: newest payment id this user has seen (NULL = never opened).
     notifications_seen_payment_id = Column(Integer, nullable=True)
+    # "KING" (👑) or "QUEEN" (👸) on Home, the morning welcome and the MR
+    # celebration. NULL means King.
+    title = Column(String(8), nullable=True)
 
     invoices = relationship("Invoice", back_populates="mr")
 

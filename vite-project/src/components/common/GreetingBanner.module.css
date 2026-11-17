@@ -1,0 +1,63 @@
+.banner { position: relative; overflow: hidden; border-radius: 16px; min-height: 112px; padding: 18px 18px 16px; display: flex; align-items: center; }
+.text { position: relative; z-index: 2; max-width: calc(100% - 92px); }
+.name { white-space: nowrap; }
+/* Sky decorations stay on the right, away from the words. */
+.sky { position: absolute; top: 0; right: 0; bottom: 0; width: 46%; overflow: hidden; pointer-events: none; }
+@media (max-width: 767px) { .sky { width: 52%; } }
+.hello { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 800; letter-spacing: -0.2px; }
+.line { margin: 4px 0 0; font-size: 14px; opacity: 0.92; }
+.crown { display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; margin-left: 6px; border-radius: 50%; background: #fff; font-size: 0.8em; vertical-align: 0.05em; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+@media (min-width: 768px) { .banner { min-height: 128px; padding: 22px 26px; } .hello { font-size: 28px; } .line { font-size: 15px; } .text { max-width: calc(100% - 120px); } }
+
+.morning { background: linear-gradient(160deg, #ff9a52 0%, #ffc574 55%, #ffe1a3 100%); color: #4a2300; }
+.afternoon { background: linear-gradient(180deg, #2b78c9 0%, #5aa7ec 100%); color: #fff; }
+.evening { background: linear-gradient(180deg, #1a2457 0%, #3a2c77 100%); color: #fff; }
+.afternoon .hello, .evening .hello { text-shadow: 0 1px 2px rgba(0,0,0,.18); }
+
+.sun { position: absolute; right: 60px; bottom: -40px; width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle, #fff7c9 0%, #ffd65c 60%, #ffb347 100%); box-shadow: 0 0 30px 10px rgba(255, 214, 102, .55); animation: rise 9s ease-in-out infinite alternate; will-change: transform; }
+/* The glow "breathes" by fading a soft halo (opacity only, so it stays smooth on any phone). */
+.sun::after { content: ""; position: absolute; inset: -18px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 224, 130, .55) 0%, rgba(255, 224, 130, 0) 70%); animation: glow 4s ease-in-out infinite alternate; will-change: opacity; }
+@keyframes rise { from { transform: translateY(10px); } to { transform: translateY(-4px); } }
+@keyframes glow { from { opacity: .35; } to { opacity: 1; } }
+
+.cloud { position: absolute; left: 0; height: 14px; border-radius: 20px; background: rgba(255,255,255,.45); animation: drift linear infinite; }
+.cloud::before, .cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+.cloud::before { width: 20px; height: 20px; top: -9px; left: 8px; }
+.cloud::after { width: 15px; height: 15px; top: -6px; left: 23px; }
+@keyframes drift { from { transform: translateX(-70px); } to { transform: translateX(460px); } }
+
+.moon { position: absolute; right: 22px; top: 12px; width: 28px; height: 28px; border-radius: 50%; box-shadow: -8px 5px 0 0 #ffe9a8; }
+.star { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: twinkle 3s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.2); } }
+
+.mascot { position: absolute; right: 12px; bottom: -4px; z-index: 1; width: 64px; }
+@media (min-width: 768px) { .mascot { width: 84px; right: 22px; } }
+.arm { transform-origin: 140px 112px; animation: wave 5s ease-in-out infinite; }
+@keyframes wave { 0%, 60%, 100% { transform: rotate(0); } 66% { transform: rotate(-22deg); } 72% { transform: rotate(8deg); } 78% { transform: rotate(-22deg); } 84% { transform: rotate(8deg); } 90% { transform: rotate(0); } }
+.hi { position: absolute; right: 62px; bottom: 44px; z-index: 2; padding: 2px 8px; border-radius: 10px 10px 2px 10px; background: #fff; color: #2b8a3e; font-size: 12px; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.15); animation: hi 4.5s ease-out 0.6s both; }
+@media (min-width: 768px) { .hi { right: 90px; bottom: 60px; } .moon { right: 34px; top: 14px; } }
+@keyframes hi { 0% { opacity: 0; transform: scale(.6); } 10%, 75% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.9); } }
+
+/* Slowly turning sun rays (morning around the rising sun, afternoon in the corner). */
+.rays { position: absolute; animation: spin 40s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.morning .rays { right: 30px; bottom: -70px; width: 152px; height: 152px; opacity: .55; }
+.noonSun { position: absolute; right: 26px; top: -20px; width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle, #fffbe0 0%, #ffe066 70%, #ffd43b 100%); box-shadow: 0 0 22px 8px rgba(255, 236, 153, .55); }
+.afternoon .rays { right: 1px; top: -45px; width: 104px; height: 104px; opacity: .6; }
+
+/* Two small birds glide across now and then (wings flap). */
+.birds { position: absolute; left: 0; top: 22px; width: 34px; animation: fly 18s linear 1.5s infinite; opacity: 0; }
+.birds path { animation: flap .5s ease-in-out infinite alternate; transform-origin: center; transform-box: fill-box; }
+@keyframes fly { 0% { transform: translate(-40px, 10px); opacity: 0; } 4% { opacity: .85; } 40% { transform: translate(360px, -8px); opacity: .85; } 44%, 100% { transform: translate(400px, -10px); opacity: 0; } }
+@keyframes flap { from { transform: scaleY(1); } to { transform: scaleY(.45); } }
+
+/* Night: a shooting star every ~9 s. */
+.shooting { position: absolute; top: 14px; left: 40%; width: 70px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(255,255,255,0), #fff); opacity: 0; transform: rotate(-24deg); animation: shoot 9s ease-out 2s infinite; }
+@keyframes shoot { 0% { opacity: 0; transform: translate(0, 0) rotate(-24deg); } 2% { opacity: 1; } 9% { opacity: 0; transform: translate(-110px, 50px) rotate(-24deg); } 100% { opacity: 0; transform: translate(-110px, 50px) rotate(-24deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .rays, .birds, .birds path, .shooting { animation: none !important; }
+  .birds, .shooting { opacity: 0; }
+  .sun, .sun::after, .cloud, .star, .arm, .hi { animation: none !important; }
+  .hi { opacity: 0; }
+}

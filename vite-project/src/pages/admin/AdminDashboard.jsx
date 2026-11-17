@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title } from '@mantine/core';
 import { IconCategory } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
-import { useAppDispatch, useAppSelector, useAuth } from '../../hooks/useAppStore';
-import { useGreeting } from '../../hooks/useGreeting';
-import { dailyLine } from '../../utils/dailyLine';
+import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
+import GreetingBanner from '../../components/common/GreetingBanner';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
 import PaymentAlerts from '../../components/common/PaymentAlerts';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -44,8 +43,6 @@ const CUSTOMER_TYPES = [
 /** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
 export default function AdminDashboard({ onOpenCustomer }) {
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
-  const greeting = useGreeting();
-  const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { dashboard, alerts, alertCount, alertsLoading, dashFilters, error: statsError } = useAppSelector((state) => state.admin);
   // Placeholders until the first real figures arrive (the store starts with
@@ -84,13 +81,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="end">
-        <div>
-          <Title order={1}>{greeting}{user?.name ? `, ${user.name}` : ''} <span aria-hidden style={{ fontSize: '1.17em', lineHeight: 1, verticalAlign: '-0.08em', display: 'inline-block', transform: 'translateY(-0.12em)' }}>👑</span></Title>
-          {user?.id && <Text size="sm" c="dimmed" mt={2}>{dailyLine(user.id)}</Text>}
-        </div>
-        <Badge variant="light" size="lg">Admin view</Badge>
-      </Group>
+      <GreetingBanner />
 
       <FilterBar chips={chips} onReset={reset} summary={rangeLabel ? null : 'Showing all time'}>
         <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" />

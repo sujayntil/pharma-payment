@@ -44,6 +44,7 @@ export const loginUser = createAsyncThunk(
           id: data.user_id,
           role: data.role,
           name: data.name,
+          title: data.title,
           employee_code: employeeCode,
         },
       };

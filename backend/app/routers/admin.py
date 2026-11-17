@@ -21,7 +21,9 @@ from ..collection_info import (
 )
 from ..audit import customer_snapshot, invoice_snapshot, user_snapshot, write_audit
 from ..database import get_db
-from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
+from ..excel_export import _XLSX, EXPORT_MAX_ROWS, to_ist, workbook_response
+from ..type_export import build_workbook, collect_rows, range_label
+from fastapi.responses import Response
 from ..deps import require_admin
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password
@@ -52,6 +54,52 @@ def _payment_date_range_filter(date_from: Optional[date], date_to: Optional[date
         end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=_IST).astimezone(timezone.utc).replace(tzinfo=None)
         conditions.append(models.Payment.payment_date < end)
     return conditions
+
+
+def _customer_type_filter(customer_type: str):
+    """Same customer-type filter as the Dashboard (distributor / chemist / doctor / other)."""
+    customer_type = (customer_type or "").strip().lower()
+    if customer_type not in {"", "distributor", "chemist", "doctor", "other"}:
+        raise HTTPException(422, "customer_type must be distributor, chemist, doctor, or other")
+
+    def apply(query):
+        if customer_type == "other":
+            normalized_type = func.lower(func.trim(func.coalesce(models.Customer.type, "")))
+            return query.filter(
+                or_(models.Customer.id.is_(None), ~normalized_type.in_(("distributor", "chemist", "doctor")))
+            )
+        if customer_type:
+            return query.filter(func.lower(func.trim(models.Customer.type)) == customer_type)
+        return query
+    return apply
+
+
+@router.get("/dashboard/export-by-type")
+def export_by_customer_type(
+    request: Request,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    customer_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Excel for the Dashboard: a Summary sheet by customer type, then one
+    sheet per type with each customer's totals. Follows the Dashboard's
+    date (invoice date) and customer-type filters."""
+    type_filter = _customer_type_filter(customer_type)
+    conditions = _date_range_filter(date_from, date_to)
+    count_q = type_filter(db.query(models.Invoice).outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id))
+    for condition in conditions:
+        count_q = count_q.filter(condition)
+    if count_q.count() > EXPORT_MAX_ROWS:
+        raise HTTPException(413, f"Too many invoices in these dates. Narrow the dates to export.")
+    grouped = collect_rows(db, conditions, type_filter)
+    content = build_workbook(grouped, range_label(date_from, date_to))
+    write_audit(db, "customers_exported", user, new={"customers": sum(len(rows) for rows in grouped.values()), "filters": dict(request.query_params)})
+    db.commit()
+    stamp = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%d %b %Y")
+    return Response(content=content, media_type=_XLSX,
+                    headers={"Content-Disposition": f'attachment; filename="Customers by type - {stamp}.xlsx"'})
 
 
 @router.get("/dashboard")

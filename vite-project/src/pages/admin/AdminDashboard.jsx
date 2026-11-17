@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title } from '@mantine/core';
-import { IconCategory } from '@tabler/icons-react';
+import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Title } from '@mantine/core';
+import { IconCategory, IconDownload } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import GreetingBanner from '../../components/common/GreetingBanner';
@@ -15,7 +15,7 @@ import OverdueCustomersPanel from '../../components/collections/OverdueCustomers
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { dateTime, money } from '../../utils/formatters';
+import { dateTime, downloadErrorText, money, saveDownload } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 // loading: grey placeholder bar until the figure arrives (never a misleading "₹0").
@@ -78,6 +78,19 @@ export default function AdminDashboard({ onOpenCustomer }) {
     appliedCustomerType && { key: 'type', label: `Customer type: ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}`, onRemove: () => setAppliedCustomerType('') },
   ];
   const reset = () => { setRange(EMPTY_RANGE); setAppliedCustomerType(''); };
+  // Excel: Summary by customer type + one sheet per type, for the dates and type picked above.
+  const [exporting, setExporting] = useState(false);
+  const exportByType = async () => {
+    setExporting(true); setError('');
+    try {
+      saveDownload(await adminApi.exportByCustomerType({
+        ...(dashFilters.dateFrom && { date_from: dashFilters.dateFrom }),
+        ...(dashFilters.dateTo && { date_to: dashFilters.dateTo }),
+        ...(appliedCustomerType && { customer_type: appliedCustomerType }),
+      }), 'customers-by-type.xlsx');
+    } catch (err) { setError(await downloadErrorText(err)); }
+    finally { setExporting(false); }
+  };
 
   return (
     <Stack gap="md">
@@ -87,6 +100,9 @@ export default function AdminDashboard({ onOpenCustomer }) {
         <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" />
         <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={appliedCustomerType} onChange={setAppliedCustomerType} />
       </FilterBar>
+      <Group justify="flex-end" mt={-6}>
+        <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} onClick={exportByType}>Export by customer type</Button>
+      </Group>
 
       {error && <Alert color="red">{error}</Alert>}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>

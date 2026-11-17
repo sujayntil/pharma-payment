@@ -44,6 +44,10 @@ export const adminApi = {
    * Excel file of every ledger entry matching the same filters as the list.
    * Returns the raw response (Blob) for saveDownload().
    */
+  /** Dashboard: Summary + one sheet per customer type (follows date and type filters). */
+  async exportByCustomerType(params = {}) {
+    return axiosClient.get('/admin/dashboard/export-by-type', { params, responseType: 'blob' });
+  },
   async exportCollections(params = {}) {
     return axiosClient.get('/admin/collections/export', { params, responseType: 'blob' });
   },

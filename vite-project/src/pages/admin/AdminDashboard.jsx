@@ -4,6 +4,7 @@ import { IconCategory } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector, useAuth } from '../../hooks/useAppStore';
 import { useGreeting } from '../../hooks/useGreeting';
+import { dailyLine } from '../../utils/dailyLine';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
 import PaymentAlerts from '../../components/common/PaymentAlerts';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -84,7 +85,10 @@ export default function AdminDashboard({ onOpenCustomer }) {
   return (
     <Stack gap="md">
       <Group justify="space-between" align="end">
-        <Title order={1}>{greeting}{user?.name ? `, ${user.name}` : ''}</Title>
+        <div>
+          <Title order={1}>{greeting}{user?.name ? `, ${user.name}` : ''} 👑</Title>
+          {user?.id && <Text size="sm" c="dimmed" mt={2}>{dailyLine(user.id)}</Text>}
+        </div>
         <Badge variant="light" size="lg">Admin view</Badge>
       </Group>
 

@@ -3,7 +3,7 @@ import { Button, Grid, Group, Loader, Paper, Stack, Table, Text, Title } from '@
 // Disabled: Add Invoice button. Re-enable if needed.
 // import { IconUpload } from '@tabler/icons-react';
 import { IconArrowRight } from '@tabler/icons-react';
-import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
+import { useAppDispatch, useAppSelector, useAuth } from '../../hooks/useAppStore';
 import { fetchMrDashboard, fetchMrOutstanding } from '../../store/slices/mrSlice';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
@@ -12,6 +12,7 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import { CardList } from '../../components/common/RowCard';
 import { useGreeting } from '../../hooks/useGreeting';
+import { dailyLine } from '../../utils/dailyLine';
 import { mrApi } from '../../api/mrApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { money, shortDate } from '../../utils/formatters';
@@ -31,6 +32,7 @@ const Metric = ({ label, value, color }) => <Paper p="sm" h="100%" bg="gray.1" r
 export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disabled: onNavigateToUpload */) {
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const greeting = useGreeting();
+  const { user } = useAuth();
   const dispatch = useAppDispatch(); const { dashboard, totalOutstanding, loading } = useAppSelector((state) => state.mr);
   const isMobile = useIsMobile();
   const [openId, setOpenId] = useState(null); const [historyKey, setHistoryKey] = useState(0); const [recording, setRecording] = useState(null);
@@ -38,7 +40,7 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
   const onSaved = () => { dispatch(fetchMrDashboard()); dispatch(fetchMrOutstanding({ limit: 1, offset: 0 })); setHistoryKey((v) => v + 1); };
   const recent = dashboard?.recent || [];
 
-  return <Stack gap="md"><Group justify="space-between"><Title order={1}>{greeting}{dashboard?.name ? `, ${dashboard.name}` : ''}</Title>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
+  return <Stack gap="md"><Group justify="space-between"><div><Title order={1}>{greeting}{dashboard?.name ? `, ${dashboard.name}` : ''} 👑</Title>{user?.id && <Text size="sm" c="dimmed" mt={2}>{dailyLine(user.id)}</Text>}</div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
     {/* Phones: the money figure gets its own full row (so it never wraps) and
         comes first; the three counts share one row. Desktop: four in a row. */}
     <Grid gutter="sm" align="stretch">

@@ -21,6 +21,7 @@ import { IconChevronDown, IconChevronLeft, IconChevronRight, IconLogout, IconPil
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
+import DailyWelcome from './DailyWelcome';
 import { logout, setUserData } from '../../store/slices/authSlice';
 import { authApi } from '../../api/authApi';
 import AppRefreshProvider from './AppRefreshProvider';
@@ -132,7 +133,11 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
             <Menu.Target>
               <UnstyledButton aria-label="Open user menu">
                 <Group gap="xs">
-                  <Avatar color="green" radius="xl" size={isMobile ? 32 : 38}>{initials}</Avatar>
+                  {/* Everyone wears the crown. */}
+                  <Box pos="relative" style={{ lineHeight: 0 }}>
+                    <Avatar color="green" radius="xl" size={isMobile ? 32 : 38}>{initials}</Avatar>
+                    <span aria-hidden style={{ position: 'absolute', top: isMobile ? -6 : -9, right: isMobile ? -5 : -7, fontSize: isMobile ? 13 : 16, lineHeight: 1, transform: 'rotate(18deg)', filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.2))' }}>👑</span>
+                  </Box>
                   <Box visibleFrom="sm">
                     <Text size="sm" fw={600}>{user?.name || 'User'}</Text>
                     <Text size="xs" c="dimmed">{role === 'ADMIN' ? 'Administrator' : 'Medical representative'}</Text>
@@ -264,6 +269,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>{children}</div>
       </AppShell.Main>
     </AppShell>
+    {/* First open of the day: a short welcome, then the app. */}
+    <DailyWelcome />
     </AppRefreshProvider>
   );
 }

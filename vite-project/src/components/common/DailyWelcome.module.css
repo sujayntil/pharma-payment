@@ -1,0 +1,27 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  background: linear-gradient(160deg, var(--mantine-color-green-6), var(--mantine-color-green-8));
+  cursor: pointer;
+  animation: fadeIn 250ms ease-out both;
+}
+.leaving { animation: fadeOut 350ms ease-in both; }
+.crown { font-size: 64px; line-height: 1; animation: drop 650ms cubic-bezier(.3, 1.6, .5, 1) both; }
+.hello { font-size: 26px; font-weight: 800; animation: rise 400ms 250ms ease-out both; }
+.line { font-size: 16px; opacity: .9; max-width: 320px; animation: rise 400ms 450ms ease-out both; }
+@keyframes drop { from { transform: translateY(-90px) rotate(-18deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .crown, .hello, .line { animation: fadeIn 300ms both; }
+}

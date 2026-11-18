@@ -156,7 +156,10 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
   if (c.growth_3m !== null) lines.push(c.growth_3m >= 0 ? <>{buying} <b>{c.growth_3m}% more</b> than the 3 months before</> : <>{buying} <b>{Math.abs(c.growth_3m)}% less</b> than the 3 months before</>);
   if (c.avg_days_to_pay !== null) lines.push(lines.length ? <>pays in about <b>{c.avg_days_to_pay} days</b></> : <>Pays in about <b>{c.avg_days_to_pay} days</b></>);
   if (c.reversals) lines.push(<b style={{ color: '#e03131' }}>{c.reversals} reversed payment{c.reversals > 1 ? 's' : ''}</b>);
-  if (c.gone_quiet) lines.push(<b style={{ color: '#e03131' }}>no order for {c.days_since_last_order} days (usually every {c.order_every})</b>);
+  const habit = c.gap_low === null ? null : c.gap_low === c.gap_high ? `every ${c.gap_low} days` : `every ${c.gap_low}–${c.gap_high} days`;
+  if (c.not_ordering) lines.push(<b style={{ color: '#e03131' }}>no order for {c.days_since_last_order} days{habit ? ` (usually ${habit})` : ''}</b>);
+  if (c.buying_less) lines.push(<b style={{ color: '#d9480f' }}>buying {money(c.recent_month)} a month lately, usually {money(c.usual_month)}</b>);
+  if (c.buying_more) lines.push(<b style={{ color: '#2b8a3e' }}>buying {money(c.recent_month)} a month lately, more than the usual {money(c.usual_month)}</b>);
   const stat = (label, value, tone) => <div className={css.st}><div className={css.l}>{label}</div><div className={css.v} style={tone ? { color: tone } : undefined}>{value}</div></div>;
 
   return (
@@ -176,7 +179,9 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
         {stat('Overdue', money(c.overdue), c.overdue > 0 ? '#e03131' : null)}
         {paidBefore && stat('Avg days to pay', `${c.avg_days_to_pay} d`)}
         {paidBefore && stat(`Paid on time (${c.credit_days} d)`, `${c.paid_on_time}%`)}
-        {stat('Orders every', c.order_every === null ? '—' : `${c.order_every} d`)}
+        {habit ? stat('Usually orders', habit) : stat('Usually orders', 'Not enough history yet')}
+        {c.next_expected && !c.not_ordering && stat('Next order expected', `~${new Date(`${c.next_expected}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`)}
+        {c.usual_month ? stat('Usual month', lakh(c.usual_month)) : null}
         {c.usual_mode && stat('Usually pays by', c.usual_mode === 'Upi' ? 'UPI' : c.usual_mode)}
         {stat('Reversed payments', c.reversals, c.reversals ? '#e03131' : null)}
         {stat('Customer since', c.customer_since ? new Date(c.customer_since).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—')}

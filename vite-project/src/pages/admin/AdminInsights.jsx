@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { Alert, Badge, Button, Group, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { IconChevronRight, IconMapPin, IconTarget, IconX } from '@tabler/icons-react';
 import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -11,11 +11,13 @@ import { AGE_COLORS, AGE_LABELS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } fro
 import InsightsPanel from '../../components/insights/InsightsPanel';
 import ShowMore from '../../components/insights/ShowMore';
 import css from './AdminInsights.module.css';
+import { shortDate } from '../../utils/formatters';
 
 const TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital', 'Other'];
 const NOT_SET = '__none__';
 
 const initials = (name = '') => name.replace(/^Dr\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+const FOLLOW_LABEL = { quiet: 'Not ordering', less: 'Buying less', late: 'Paying late' };
 const pctLabel = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v)}%`);
 
 export default function AdminInsights({ onOpenCustomer }) {
@@ -28,6 +30,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   const [trend, setTrend] = useState('monthly');
   const [result, setResult] = useState({ key: null, data: null, error: '' });
   const [panel, setPanel] = useState([]); // drill stack
+  const [followKind, setFollowKind] = useState('all'); // Customers to follow up: which reason
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Worked out each render, so a page left open moves on with the date.
@@ -80,13 +83,6 @@ export default function AdminInsights({ onOpenCustomer }) {
       isCustom={isCustomRange(range)} />
   );
   const k = data?.kpis;
-  // Movers: rupees gained or lost, with the % small underneath.
-  const moverRow = (c) => custRow(c, (
-    <span className={css.move}>
-      <b className={c.change >= 0 ? css.green : css.red}>{c.change >= 0 ? '+' : '−'}{lakh(Math.abs(c.change))}</b>
-      <small>{c.change >= 0 ? '↑' : '↓'} {Math.abs(c.growth)}%</small>
-    </span>
-  ));
   const custRow = (c, right, sub) => (
     <button type="button" key={`${c.customer_id}-${sub || ''}`} className={css.row} onClick={() => open({ kind: 'customer', id: c.customer_id, name: c.name })}>
       <span className={css.ini} style={{ background: `${TYPE_COLORS[c.type] || '#868e96'}22`, color: TYPE_COLORS[c.type] || '#868e96' }}>{initials(c.name)}</span>
@@ -148,7 +144,6 @@ export default function AdminInsights({ onOpenCustomer }) {
         {kpi('collected', 'Collected', lakh(k?.collected.value), { color: '#1c7ed6', kind: 'collected' })}
         {kpi('outstanding', 'Owed to you today', lakh(k?.outstanding.value), { color: '#e03131', kind: 'outstanding',
           foot: k && <span><b className={css.down}>{lakh(k.outstanding.overdue)}</b> of it overdue</span> })}
-        {kpi('days_to_collect', 'Avg days to collect', k?.days_to_collect.value === null || k?.days_to_collect.value === undefined ? '—' : `${k.days_to_collect.value} days`, { good: 'down', color: '#f08c00', suffix: ' d' })}
         {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', kind: 'active' })}
       </div>
 
@@ -236,53 +231,42 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Movers</div><div className={css.cs}>Change in purchases vs {prevShort} · biggest first</div></div></div>
-            <div className={`${css.cb} ${css.two}`}>
-              <div><div className={css.mini}>Growing</div><ShowMore key={listKey} items={data.movers.growing} render={moverRow} />{!data.movers.growing.length && empty('—')}</div>
-              <div><div className={css.mini}>Declining</div><ShowMore key={listKey} items={data.movers.declining} render={moverRow} />{!data.movers.declining.length && empty('—')}</div>
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>New and stopped customers</div><div className={css.cs}>{periodLabel} vs {prevShort}</div></div></div>
+          <Paper className={`${css.card} ${css.s12}`}>
+            <div className={css.ch}><div><div className={css.ct}>Customers to follow up</div><div className={css.cs}>As of today · each compared with their own usual buying · biggest money first</div></div></div>
             <div className={css.cb}>
-              <div className={css.counts}>
-                <div style={{ background: '#ebfbee' }}><div className={css.sub}>New</div><div className={css.big} style={{ color: '#2b8a3e' }}>{data.new_and_stopped.new_count ? `+${data.new_and_stopped.new_count}` : 0}</div></div>
-                <div style={{ background: '#fff0f0' }}><div className={css.sub}>Stopped ordering</div><div className={css.big} style={{ color: '#e03131' }}>{data.new_and_stopped.stopped_count ? `−${data.new_and_stopped.stopped_count}` : 0}</div></div>
+              <div className={css.fchips}>
+                {[['all', 'All', data.follow_up.rows.length], ['quiet', 'Not ordering', data.follow_up.counts.quiet], ['less', 'Buying less', data.follow_up.counts.less], ['late', 'Paying late', data.follow_up.counts.late]].map(([kind, text, count]) => (
+                  <UnstyledButton key={kind} className={css.fchip} data-on={followKind === kind || undefined} onClick={() => setFollowKind(kind)}>{text} <b>{count}</b></UnstyledButton>
+                ))}
               </div>
-              <div className={css.two}>
-                <div><div className={css.mini}>New</div><ShowMore key={listKey} items={data.new_and_stopped.new} initial={4} render={(c) => custRow(c, null, `${[c.type, c.mr].filter(Boolean).join(' · ')} · first order`)} />{!data.new_and_stopped.new_count && empty('None')}</div>
-                <div><div className={css.mini}>Stopped</div><ShowMore key={listKey} items={data.new_and_stopped.stopped} initial={4} render={(c) => custRow(c, null, `${[c.type, c.mr].filter(Boolean).join(' · ')} · bought before`)} />{!data.new_and_stopped.stopped_count && empty('None')}</div>
-              </div>
+              <ShowMore key={`${listKey}-${followKind}`} items={data.follow_up.rows.filter((r) => followKind === 'all' || r.reasons.some((x) => x.kind === followKind))} initial={6} render={(c) => {
+                const shown = followKind === 'all' ? c.reasons : c.reasons.filter((x) => x.kind === followKind);
+                const top = shown.reduce((m, x) => (x.amount > m.amount ? x : m), shown[0]);
+                return custRow(c, (
+                  <span className={css.stake}><b>{lakh(top.amount)}</b><small>{top.unit}</small></span>
+                ), (
+                  <>{[c.type, c.mr].filter(Boolean).join(' · ')}
+                    {shown.map((x) => <div key={x.kind} className={css.why}><span className={css.tag} data-kind={x.kind}>{FOLLOW_LABEL[x.kind]}</span>{x.text}</div>)}
+                  </>
+                ));
+              }} />
+              {!data.follow_up.rows.length && empty('Nobody needs a follow-up right now 🎉')}
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Payment speed</div><div className={css.cs}>Average days from invoice to paid · last 6 months</div></div></div>
-            <div className={`${css.cb} ${css.two}`}>
-              <div><div className={css.mini}>Fastest</div><ShowMore key={listKey} items={data.payment_speed.fastest} render={(c) => custRow(c, <Badge color="green" variant="light">{c.days} d</Badge>)} />{!data.payment_speed.fastest.length && empty('Not enough payments yet.')}</div>
-              <div><div className={css.mini}>Slowest</div><ShowMore key={listKey} items={data.payment_speed.slowest} render={(c) => custRow(c, <Badge color={c.days > 40 ? 'red' : 'orange'} variant="light">{c.days} d</Badge>)} />{!data.payment_speed.slowest.length && empty('Not enough payments yet.')}</div>
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Risky credit</div><div className={css.cs}>Owe you money and pay later than their credit days, or had cheques bounce</div></div></div>
+          <Paper className={`${css.card} ${css.s4}`}>
+            <div className={css.ch}><div><div className={css.ct}>Buying more than usual</div><div className={css.cs}>Lately vs their usual month</div></div></div>
             <div className={css.cb}>
-              <ShowMore key={listKey} items={data.risky_credit} initial={6} render={(c) => custRow(c, (
-                <span style={{ textAlign: 'right' }}><b className={css.num}>{lakh(c.outstanding)}</b>
-                  <Group gap={4} justify="flex-end" mt={3} wrap="nowrap">{c.days > 40 && <Badge size="sm" color="orange" variant="light">{c.days} d</Badge>}{c.reversals > 0 && <Badge size="sm" color="red" variant="light">{c.reversals} reversed</Badge>}</Group>
-                </span>
-              ))} />
-              {!data.risky_credit.length && empty('Nobody risky right now 🎉')}
+              <ShowMore key={listKey} items={data.growing} initial={5} render={(c) => custRow(c, <span className={css.stake}><b className={css.green}>+{lakh(c.change)}</b><small>a month</small></span>)} />
+              {!data.growing.length && empty('No one is buying much more than usual right now.')}
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s8}`}>
-            <div className={css.ch}><div><div className={css.ct}>At risk</div><div className={css.cs}>Regular buyers who have gone quiet</div></div></div>
+          <Paper className={`${css.card} ${css.s4}`}>
+            <div className={css.ch}><div><div className={css.ct}>New customers</div><div className={css.cs}>First order in {periodLabel}</div></div></div>
             <div className={css.cb}>
-              <ShowMore key={listKey} items={data.at_risk} initial={6} render={(c) => custRow(c, <Badge color="orange" variant="light">No order for {c.days_since} d</Badge>, `${[c.type, c.mr].filter(Boolean).join(' · ')} · usually every ${c.usual_gap} days`)} />
-              {!data.at_risk.length && empty('Nobody at risk 🎉')}
+              <ShowMore key={listKey} items={data.new_customers} initial={5} render={(c) => custRow(c, <span className={css.stake}><b>{lakh(c.sales)}</b><small>{shortDate(c.first_order)}</small></span>)} />
+              {!data.new_customers.length && empty('No new customers in this period.')}
             </div>
           </Paper>
 

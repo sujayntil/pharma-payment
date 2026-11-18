@@ -109,13 +109,6 @@ class InsightsTests(unittest.TestCase):
         d = dashboard(M0, TODAY, "chemist", self.db, self.admin)
         self.assertEqual((k["sales"]["value"], k["collected"]["value"]), (d["total_sales"], d["collected"]))
 
-    def test_days_to_collect_uses_the_clearing_payment(self):
-        self.books()
-        k = self.S()["kpis"]["days_to_collect"]["value"]
-        # cleared this month: chem M0 (+2 days, or 0 if today is the 1st) and chem M1 invoice (M0 - M1 days)
-        expected = round((min(2, (TODAY - M0).days) + (M0 - M1).days) / 2)
-        self.assertEqual(k, expected)
-
     def test_compares_like_for_like(self):
         from app.insights import previous_range
         self.assertEqual(previous_range(date(2026, 11, 1), date(2026, 11, 18)), (date(2026, 10, 1), date(2026, 10, 18)))
@@ -158,71 +151,6 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(top["top10_share"], 100)
         self.assertEqual(top["dependence"]["name"], "Big Distributor")
 
-    def test_movers_new_and_stopped(self):
-        self.books()
-        self.inv(self.hosp, M1, 900)                       # bought last month, nothing this month
-        s = self.S()
-        growing = {r["name"]: r["growth"] for r in s["movers"]["growing"]}
-        self.assertEqual(growing["City Chemist"], 150)     # 400 -> 1000
-        self.assertEqual(growing["Big Distributor"], 50)   # 2000 -> 3000
-        self.assertEqual(s["new_and_stopped"]["new_count"], 1)        # Dr. Mehta: first order this month
-        self.assertEqual([c["name"] for c in s["new_and_stopped"]["stopped"]], ["Care Hospital"])
-
-    def test_at_risk_regular_who_went_quiet(self):
-        for k in range(3):
-            self.inv(self.doc, TODAY - timedelta(days=100 + k * 10), 100)   # every 10 days, last 100 days ago
-        rows = self.S()["at_risk"]
-        self.assertEqual(rows[0]["name"], "Dr. Mehta")
-        self.assertEqual((rows[0]["usual_gap"], rows[0]["days_since"]), (10, 100))
-
-    def test_risky_credit_and_payment_speed(self):
-        old = TODAY - timedelta(days=150)
-        for k in range(2):
-            self.inv(self.doc, old + timedelta(days=k), 100, [(100, old + timedelta(days=k + 70), "UPI")])
-        self.inv(self.doc, TODAY - timedelta(days=5), 800)                      # owes money, pays slowly
-        bounced = self.inv(self.chem, TODAY - timedelta(days=5), 300, [(300, TODAY, "Cheque")])
-        first = self.db.query(models.Payment).filter_by(invoice_id=bounced.id).first()
-        for _ in range(2):
-            self.db.add(models.Payment(invoice_id=bounced.id, amount=-300, mode="Cheque", payment_date=pay_at(TODAY), reversal_of_id=first.id))
-        bounced.pending_amount = 300       # bounced: owed again
-        paid_off = self.inv(self.dist, TODAY - timedelta(days=5), 100, [(100, TODAY, "Cheque")])
-        f2 = self.db.query(models.Payment).filter_by(invoice_id=paid_off.id).first()
-        for _ in range(2):
-            self.db.add(models.Payment(invoice_id=paid_off.id, amount=-100, mode="Cheque", payment_date=pay_at(TODAY), reversal_of_id=f2.id))
-        self.db.commit()
-        s = summary(self.db, TODAY - timedelta(days=200), TODAY, Filters())
-        risky = {r["name"]: r for r in s["risky_credit"]}
-        self.assertEqual(risky["Dr. Mehta"]["days"], 70)
-        self.assertEqual(risky["City Chemist"]["reversals"], 2)
-        self.assertNotIn("Big Distributor", risky)      # bounced but owes nothing now
-        self.assertEqual(s["payment_speed"]["slowest"][0]["name"], "Dr. Mehta")
-
-    def test_lists_are_complete_and_speed_halves_do_not_overlap(self):
-        custs = [models.Customer(name=f"Cust {n}", type="Chemist") for n in range(9)]
-        self.db.add_all(custs); self.db.commit()
-        for n, c in enumerate(custs):
-            for k in range(2):
-                d = TODAY - timedelta(days=60 + k)
-                self.inv(c, d, 100, [(100, d + timedelta(days=n + 1), "UPI")])
-            self.inv(c, TODAY - timedelta(days=3), 100 + n)
-        s = summary(self.db, TODAY - timedelta(days=10), TODAY, Filters())
-        self.assertEqual(len(s["top_customers"]["rows"]), 9)
-        fast = {r["name"] for r in s["payment_speed"]["fastest"]}
-        slow = {r["name"] for r in s["payment_speed"]["slowest"]}
-        self.assertFalse(fast & slow)
-        self.assertEqual(len(fast) + len(slow), 9)
-        self.assertEqual(s["payment_speed"]["slowest"][0]["name"], "Cust 8")
-
-    def test_movers_ranked_by_rupees_not_percent(self):
-        small = models.Customer(name="Small Chemist", type="Chemist"); big = models.Customer(name="Big Distributor", type="Distributor")
-        self.db.add_all([small, big]); self.db.commit()
-        self.inv(small, TODAY - timedelta(days=40), 800); self.inv(small, TODAY - timedelta(days=5), 5700)      # +4,900 (+613%)
-        self.inv(big, TODAY - timedelta(days=40), 100000); self.inv(big, TODAY - timedelta(days=5), 115000)    # +15,000 (+15%)
-        s = summary(self.db, TODAY - timedelta(days=29), TODAY, Filters())
-        top = s["movers"]["growing"][0]
-        self.assertEqual(top["name"], "Big Distributor")
-        self.assertEqual((top["change"], top["previous"], top["sales"], top["growth"]), (15000, 100000, 115000, 15))
-
     def test_overdue_follows_credit_days(self):
         from app.overdue import overdue_customer_summaries
         self.inv(self.dist, TODAY - timedelta(days=50), 1000)   # distributor, 50 d: not due
@@ -238,6 +166,96 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual((d["owed"], d["owed_overdue"], d["owed_not_due"]), (2250, 650, 1600))
         c = customer_insights(self.db, self.chem.id)
         self.assertEqual((c["overdue"], c["credit_days"], c["oldest_overdue_late"]), (400, 40, 5))
+
+    # ---------- customer health (each against their own history) ----------
+    def health(self):
+        s = self.S()
+        return {r["name"]: r for r in s["follow_up"]["rows"]}, s
+
+    def every(self, cust, last_days_ago, gap, count, amount):
+        """`count` orders, `gap` days apart, the last one `last_days_ago` days ago."""
+        for k in range(count):
+            d = TODAY - timedelta(days=last_days_ago + k * gap)
+            self.inv(cust, d, amount, [(amount, d + timedelta(days=5), "UPI")])     # paid: only buying habit counts
+
+    def test_regular_customer_not_flagged_before_their_usual_gap(self):
+        # Orders every 20 days; last order 25 days ago (e.g. late October): not late yet.
+        self.every(self.doc, 25, 20, 6, 5000)
+        rows, _s = self.health()
+        self.assertNotIn("Dr. Mehta", rows)
+
+    def test_not_ordering_past_their_usual_gap(self):
+        self.every(self.doc, 45, 20, 6, 5000)             # usually every 20 days, quiet for 45
+        rows, s = self.health()
+        why = rows["Dr. Mehta"]["reasons"][0]
+        self.assertEqual(why["kind"], "quiet")
+        self.assertIn("No order for 45 days · usually every 20 days", why["text"])
+        self.assertEqual(s["follow_up"]["counts"]["quiet"], 1)
+
+    def test_two_orders_only_flag_after_60_days(self):
+        self.every(self.chem, 50, 30, 2, 3000)
+        self.assertNotIn("City Chemist", self.health()[0])
+        self.db.query(models.Invoice).delete(); self.db.commit()
+        self.every(self.chem, 70, 30, 2, 3000)
+        self.assertEqual(self.health()[0]["City Chemist"]["reasons"][0]["kind"], "quiet")
+
+    def test_buying_less_and_more_against_own_usual_month(self):
+        def paid(cust, days_ago, amount):
+            d = TODAY - timedelta(days=days_ago)
+            self.inv(cust, d, amount, [(amount, d, "UPI")])
+        # Doctor: 15,000 every ~10 days before, 2,000 every ~10 days lately -> buying less.
+        for k in range(6, 18):
+            paid(self.doc, k * 10 + 1, 5000)
+        for k in range(6):
+            paid(self.doc, k * 10 + 1, 700)
+        # Distributor: 2,000 a month before, 12,000 a month lately -> buying more.
+        for k in range(6, 18):
+            paid(self.dist, k * 10 + 2, 700)
+        for k in range(6):
+            paid(self.dist, k * 10 + 2, 4000)
+        # Tiny customer: under 2,000 a month, never flagged.
+        for k in range(18):
+            paid(self.hosp, k * 10 + 3, 100 if k < 6 else 500)
+        rows, s = self.health()
+        less = rows["Dr. Mehta"]["reasons"][0]
+        self.assertEqual(less["kind"], "less")
+        self.assertGreater(less["amount"], 12000)            # about 15,000 -> 2,100 a month
+        self.assertEqual([g["name"] for g in s["growing"]], ["Big Distributor"])
+        self.assertNotIn(self.hosp.name, rows)
+
+    def test_paying_late_uses_credit_days_and_bounces(self):
+        self.inv(self.chem, TODAY - timedelta(days=45), 400)     # chemist 45 d: overdue
+        self.inv(self.dist, TODAY - timedelta(days=50), 900)     # distributor 50 d: within 60
+        bounced = self.inv(self.doc, TODAY - timedelta(days=5), 300, [(300, TODAY, "Cheque")])
+        first = self.db.query(models.Payment).filter_by(invoice_id=bounced.id).first()
+        for _ in range(2):
+            self.db.add(models.Payment(invoice_id=bounced.id, amount=-300, mode="Cheque", payment_date=pay_at(TODAY), reversal_of_id=first.id))
+        bounced.pending_amount = 300
+        self.db.commit()
+        rows, s = self.health()
+        self.assertEqual((rows["City Chemist"]["reasons"][0]["amount"], rows["City Chemist"]["reasons"][0]["unit"]), (400, "overdue"))
+        self.assertNotIn("Big Distributor", rows)
+        self.assertIn("2 payments bounced", rows["Dr. Mehta"]["reasons"][0]["text"])
+        self.assertEqual([r["name"] for r in s["follow_up"]["rows"]], ["City Chemist", "Dr. Mehta"])   # biggest stake first
+
+    def test_buying_problems_listed_before_paying_late(self):
+        self.inv(self.chem, TODAY - timedelta(days=200), 90000)          # big overdue bill
+        self.every(self.doc, 45, 20, 6, 5000)                            # small doctor gone quiet
+        names = [r["name"] for r in self.S()["follow_up"]["rows"]]
+        self.assertEqual(names, ["Dr. Mehta", "City Chemist"])
+
+    def test_new_customers_and_full_top_list(self):
+        self.inv(self.doc, TODAY - timedelta(days=200), 100)
+        self.inv(self.chem, TODAY - timedelta(days=3), 800)       # first ever order in the period
+        self.inv(self.doc, TODAY - timedelta(days=2), 500)
+        s = summary(self.db, TODAY - timedelta(days=10), TODAY, Filters())
+        self.assertEqual([c["name"] for c in s["new_customers"]], ["City Chemist"])
+        self.assertEqual(len(s["top_customers"]["rows"]), 2)
+
+    def test_customer_habit_in_customer_panel(self):
+        self.every(self.doc, 45, 20, 6, 5000)
+        c = customer_insights(self.db, self.doc.id)
+        self.assertEqual((c["gap_low"], c["gap_high"], c["not_ordering"]), (20, 20, True))
 
     # ---------- ageing / modes / trend ----------
     def test_ageing_buckets_as_of_today(self):

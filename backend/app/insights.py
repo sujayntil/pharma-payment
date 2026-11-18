@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 from .credit import credit_days, days_past_credit, is_overdue
+from .customer_health import follow_ups, profile
 
 IST = timezone(timedelta(hours=5, minutes=30))
 OPEN = 0.004
@@ -197,7 +198,6 @@ def _totals(book: Book, invs: list[Inv], start: date, end: date) -> dict:
     sales = sum(i.total for i in invs if within(i.date, start, end))
     pending = sum(i.pending for i in invs if within(i.date, start, end))
     collected = sum(amount for i in invs for d, amount, _m, _r in i.payments if within(d, start, end))
-    days = [(i.cleared_on - i.date).days for i in invs if i.date and within(i.cleared_on, start, end)]
     active = {i.customer_id for i in invs if within(i.date, start, end) and i.customer_id}
     current = sum(amount for i in invs if within(i.date, start, end)
                   for d, amount, _m, _r in i.payments if within(d, start, end))
@@ -211,7 +211,6 @@ def _totals(book: Book, invs: list[Inv], start: date, end: date) -> dict:
         # sales recovery: paid so far on the bills dated in these dates
         "recovered": round(recovered, 2),
         "outstanding": round(pending, 2),
-        "days_to_collect": round(sum(max(d, 0) for d in days) / len(days)) if days else None,
         "active_customers": len(active),
     }
 
@@ -254,7 +253,7 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
         for p in sparks:
             p.pop(key, None)
     kpis = {key: {"value": current[key], "previous": previous[key],
-                  "change": (current[key] - previous[key]) if key == "days_to_collect" and current[key] is not None and previous[key] is not None else _pct(current[key] or 0, previous[key] or 0),
+                  "change": _pct(current[key] or 0, previous[key] or 0),
                   "spark": [p[key] or 0 for p in sparks]}
             for key in current}
     # "Owed to you" is always today's position (not tied to the dates):
@@ -324,22 +323,15 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
     days_left = (month_end(today) - today).days if current_target_month else 0
 
     # Per customer.
-    per = defaultdict(lambda: {"cur": 0.0, "prev": 0.0, "dates": [], "pay_days": [], "pending": 0.0, "reversals": 0})
-    six_months_ago = today - timedelta(days=183)
+    per = defaultdict(lambda: {"cur": 0.0, "dates": []})
     for i in invs:
         if not i.customer_id:
             continue
         row = per[i.customer_id]
         if within(i.date, start, end):
             row["cur"] += i.total
-        if within(i.date, prev_start, prev_end):
-            row["prev"] += i.total
         if i.date:
             row["dates"].append(i.date)
-        row["pending"] += i.pending
-        row["reversals"] += sum(1 for _d, _a, _m, rev in i.payments if rev)
-        if i.cleared_on and i.date and i.cleared_on >= six_months_ago:
-            row["pay_days"].append(max((i.cleared_on - i.date).days, 0))
 
     def cust(cid, **extra):
         c = book.customers.get(cid)
@@ -353,47 +345,14 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
     top10_share = round(sum(r["cur"] for _cid, r in ranked[:10]) / total_sales * 100) if total_sales else 0
     dependence = top[0] if top and top[0]["share"] >= DEPENDENCE_SHARE else None
 
-    # Ranked by rupees gained or lost, not by %: a ₹796 → ₹5,720 customer is +619%
-    # but matters less than a big customer who added ₹20,000 (+15%).
-    movers = [(cid, r, _pct(r["cur"], r["prev"]), r["cur"] - r["prev"]) for cid, r in per.items() if r["cur"] > 0 and r["prev"] > 0]
-    def mover(cid, r, g, change):
-        return cust(cid, growth=g, change=round(change, 2), sales=round(r["cur"], 2), previous=round(r["prev"], 2))
-    growing = [mover(*m) for m in sorted(movers, key=lambda x: -x[3]) if m[3] > 0]
-    declining = [mover(*m) for m in sorted(movers, key=lambda x: x[3]) if m[3] < 0]
-
+    # New customers: first ever order inside the period.
     first_order = {cid: min(r["dates"]) for cid, r in per.items() if r["dates"]}
-    new_customers = sorted((cid for cid, d in first_order.items() if within(d, start, end)), key=lambda cid: first_order[cid])
-    stopped = [cid for cid, r in per.items() if r["prev"] > 0 and r["cur"] == 0]
+    new_customers = [cust(cid, first_order=first_order[cid].isoformat(), sales=round(per[cid]["cur"], 2))
+                     for cid in sorted((cid for cid, d in first_order.items() if within(d, start, end)),
+                                       key=lambda cid: -per[cid]["cur"])]
 
-    speed = [(cid, round(sum(r["pay_days"]) / len(r["pay_days"]))) for cid, r in per.items() if len(r["pay_days"]) >= 2]
-    # Full lists, split in two halves so "Show more" never lists a customer on both sides.
-    by_speed = sorted(speed, key=lambda x: x[1])
-    half = len(by_speed) // 2
-    fastest = [cust(cid, days=d) for cid, d in by_speed[:half]]
-    slowest = [cust(cid, days=d) for cid, d in reversed(by_speed[half:]) if d > 0]
-
-    risky = []
-    for cid, r in per.items():
-        avg = round(sum(r["pay_days"]) / len(r["pay_days"])) if r["pay_days"] else None
-        if r["pending"] <= OPEN:
-            continue          # owes nothing now: not a credit risk today
-        group = book.customers[cid].group if cid in book.customers else None
-        slow = avg is not None and avg > credit_days(group)
-        if slow or r["reversals"] >= 2:
-            risky.append(cust(cid, outstanding=round(r["pending"], 2), days=avg, reversals=r["reversals"]))
-    risky.sort(key=lambda x: -((x["reversals"] or 0) * 20 + (x["days"] or 0)))
-
-    at_risk = []
-    for cid, r in per.items():
-        dates = sorted(set(r["dates"]))
-        if len(dates) < 3:
-            continue
-        gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
-        usual = sum(gaps) / len(gaps)
-        since = (today - dates[-1]).days
-        if usual > 0 and since > 2 * usual and since >= 14:
-            at_risk.append(cust(cid, usual_gap=round(usual), days_since=since, last_order=dates[-1].isoformat()))
-    at_risk.sort(key=lambda x: -(x["days_since"] / max(x["usual_gap"], 1)))
+    # Customers to follow up / buying more: each against their own history, as of today.
+    health = follow_ups(book, invs, today)
 
     ageing = []
     for label, lo, hi in DUE_BUCKETS:
@@ -426,12 +385,9 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
         "by_mr": {"rows": mr_rows, "days_left": days_left, "month": m_start.strftime("%Y-%m"),
                   "month_label": m_start.strftime("%B %Y"), "current_month": current_target_month},
         "top_customers": {"rows": top, "top10_share": top10_share, "dependence": dependence},
-        "movers": {"growing": growing, "declining": declining},
-        "new_and_stopped": {"new": [cust(cid) for cid in new_customers], "new_count": len(new_customers),
-                            "stopped": [cust(cid) for cid in stopped], "stopped_count": len(stopped)},
-        "payment_speed": {"fastest": fastest, "slowest": slowest},
-        "risky_credit": risky,
-        "at_risk": at_risk,
+        "follow_up": {"rows": health["rows"], "counts": health["counts"]},
+        "growing": health["growing"],
+        "new_customers": new_customers,
         "ageing": ageing,
         "payment_modes": mode_rows,
         "area": {"coverage": coverage, "show": coverage >= AREA_MIN_COVERAGE, "rows": area_rows,
@@ -513,6 +469,7 @@ def customer_insights(db: Session, customer_id: int) -> dict | None:
                 modes[(mode or "Other").strip().title()] += 1
     usual = round(sum(gaps) / len(gaps)) if gaps else None
     since = (today - dates[-1]).days if dates else None
+    habit = profile(invs, c.group, today)
     credit = credit_days(c.group)
     overdue = [i for i in invs if i.pending > OPEN and is_overdue(i.date, c.group, today)]
     return {
@@ -529,8 +486,11 @@ def customer_insights(db: Session, customer_id: int) -> dict | None:
         "avg_days_to_pay": round(sum(pay_days) / len(pay_days)) if pay_days else None,
         "paid_on_time": round(sum(1 for d in pay_days if d <= credit) / len(pay_days) * 100) if pay_days else None,
         "order_every": usual,
+        "gap_low": habit["gap_low"], "gap_high": habit["gap_high"],
+        "next_expected": habit["next_expected"].isoformat() if habit["next_expected"] else None,
+        "usual_month": habit["usual_month"], "recent_month": habit["recent_month"],
+        "not_ordering": habit["quiet"], "buying_less": habit["less"], "buying_more": habit["more"],
         "days_since_last_order": since,
-        "gone_quiet": bool(usual and len(dates) >= 3 and since is not None and since > 2 * usual and since >= 14),
         "usual_mode": max(modes, key=modes.get) if modes else None,
         "reversals": reversals,
         "customer_since": dates[0].isoformat() if dates else None,

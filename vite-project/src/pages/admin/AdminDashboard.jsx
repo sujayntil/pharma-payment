@@ -8,12 +8,11 @@ import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
-import { describeRange, periodThing } from '../../components/filters/dateRanges';
+import { datePresets, describeRange } from '../../components/filters/dateRanges';
 import { recorderOf, useActorLabel } from '../../components/collections/collectionUtils';
 import { useCountUp } from '../../hooks/useCountUp';
 import css from './AdminDashboard.module.css';
-import { CollectionBar, ZoneHeading } from '../../components/common/DashboardParts';
-import { datePresets } from '../../components/filters/dateRanges';
+import { ZoneHeading } from '../../components/common/DashboardParts';
 import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
@@ -45,13 +44,33 @@ const Stat = ({ label, value, dot, color, sales = false, loading = false, note }
   </Paper>
 );
 
-/** Collected, split into money from this period's bills and from older bills (needs a start date). */
-const collectedSplit = (d, label) => (d && d.collected_current !== null && d.collected_current !== undefined ? (
+/** What customers owe today: not yet due vs overdue (past 40 days' credit; 60 for distributors). */
+const owedSplit = (d) => (d && d.owed !== undefined ? (
   <div className={css.split}>
-    <div><span>From {periodThing(label, 'bills')}</span><b>{money(d.collected_current)}</b></div>
-    <div><span>From older bills</span><b>{money(d.collected_older)}</b></div>
+    <div><span>Not yet due</span><b>{money(d.owed_not_due)}</b></div>
+    <div><span>Overdue</span><b className={css.overdue}>{money(d.owed_overdue)}</b></div>
   </div>
 ) : null);
+
+/** One bar for what's owed today: green = not yet due, red = overdue. */
+function OwedBar({ d, loading }) {
+  const owed = Number(d?.owed || 0);
+  const late = Number(d?.owed_overdue || 0);
+  const pct = owed > 0 ? Math.round((late / owed) * 100) : 0;
+  return (
+    <Paper p="md" className={css.card}>
+      <Text size="sm" c="dimmed" mb={8}>
+        {loading ? '—' : owed > 0
+          ? <><Text span fw={700} fz="md" c={late > 0 ? 'red.7' : 'green.8'} className={css.num}>{pct}%</Text> of what customers owe you is overdue</>
+          : 'Nobody owes you anything right now'}
+      </Text>
+      <div className={css.owedBar} aria-label={`${pct}% of outstanding is overdue`}>
+        {owed > 0 && <><i style={{ width: `${100 - pct}%`, background: 'var(--mantine-color-green-6)' }} /><i style={{ width: `${pct}%`, background: 'var(--mantine-color-red-6)' }} /></>}
+      </div>
+      <Text fz={12} c="dimmed" mt={8}>Overdue = unpaid after 40 days of credit (60 for distributors)</Text>
+    </Paper>
+  );
+}
 
 /** Who recorded a collection, with an initials circle (faces/colours are read faster than names). */
 function Recorder({ row }) {
@@ -115,7 +134,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
   const setRange = (next) => (next.from === thisMonth.from && next.to === thisMonth.to
     ? backToThisMonth()
     : dispatch(setDashFilters({ dateFrom: next.from || null, dateTo: next.to || null, thisMonth: false })));
-  const rangeLabel = describeRange(range);
+  const rangeLabel = describeRange(range, { business: true });
   // Opens on "This month" (1st of the month till today); the chip and Reset
   // only show once something else is picked, and take it back to this month.
   const onDefault = range.from === thisMonth.from && range.to === thisMonth.to;
@@ -154,13 +173,13 @@ export default function AdminDashboard({ onOpenCustomer }) {
 
       {/* Flat filter row; Reset appears only once a filter is on. */}
       <FilterBar compact chips={chips} onReset={filtersOn ? reset : undefined}>
-        <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" />
+        <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" months firstDate={dashboard?.first_invoice_date} />
         <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={appliedCustomerType} onChange={setAppliedCustomerType} />
       </FilterBar>
 
       {error && <Alert color="red">{error}</Alert>}
 
-      {/* Overview: Tally sales first (top-left, where the eye lands first), then Collected and Pending. */}
+      {/* Overview: Tally sales first (top-left, where the eye lands first), then Collected and what's owed today. */}
       <Stack gap={12}>
         <ZoneHeading icon={IconChartBar} tone="green" title="Overview" meta={zoneTitle}>
           {isMobile
@@ -171,10 +190,10 @@ export default function AdminDashboard({ onOpenCustomer }) {
           <div style={{ gridColumn: isMobile ? 'span 2' : undefined }}>
             <Stat sales loading={statsPending} label="Tally sales" color="#0B4D35" value={dashboard?.total_sales} />
           </div>
-          <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} note={collectedSplit(dashboard, rangeLabel)} />
-          <Stat loading={statsPending} label="Pending" dot="var(--mantine-color-red-6)" color="red.7" value={dashboard?.outstanding} />
+          <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} />
+          <Stat loading={statsPending} label="Outstanding today" dot="var(--mantine-color-red-6)" color="red.7" value={dashboard?.owed} note={owedSplit(dashboard)} />
         </SimpleGrid>
-        <CollectionBar loading={statsPending} billed={dashboard?.total_sales} pending={dashboard?.outstanding} paid={dashboard?.paid ?? 0} partial={dashboard?.partial ?? 0} unpaid={dashboard?.unpaid ?? 0} label={`of ${periodThing(rangeLabel, 'sales')} recovered`} />
+        <OwedBar loading={statsPending} d={dashboard} />
       </Stack>
 
       {/* Needs attention: red only here, where action is needed. */}

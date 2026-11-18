@@ -16,6 +16,7 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { money, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
 const STATUSES = [{ value: 'UNPAID', label: 'Pending' }, { value: 'PARTIAL', label: 'Partially paid' }, { value: 'PAID', label: 'Paid' }, { value: 'REVERSED', label: 'Reversed' }];
@@ -44,6 +45,7 @@ export default function MrCollections() {
 }
 
 function ToCollect() {
+  const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this in place
   const dispatch = useAppDispatch();
   const { outstanding, outstandingCount, filteredOutstanding, loading, searchQuery } = useAppSelector((state) => state.mr);
@@ -78,7 +80,7 @@ function ToCollect() {
     <Paper withBorder p="md" bg="green.0"><Text size="sm" c="dimmed">{filtered ? 'Pending in these results' : 'Pending across your invoices'}</Text><Title order={2}>{money(filteredOutstanding)}</Title></Paper>
     <FilterBar search={searchQuery} onSearch={onSearch} searchPlaceholder="Search invoice or customer" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All statuses" icon={<IconCircleCheck size={16} />} data={STATUSES} value={status} onChange={(next) => { setStatus(next); setPage(1); }} />
-      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} />
+      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => { setSort(next || 'newest'); setPage(1); }} />
     </FilterBar>
     <Paper {...listPaperProps(isMobile)}>

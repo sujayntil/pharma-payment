@@ -175,6 +175,7 @@ class InvoiceOut(BaseModel):
     customer_phone: Optional[str] = None
     customer_alternate_phone: Optional[str] = None
     customer_whatsapp_on: Optional[str] = None
+    customer_type: Optional[str] = None  # for the overdue colour (40 days; 60 for distributors)
     # Latest entry in the payments ledger -- lets an MR see when an Admin
     # recorded or reversed a collection on their invoice.
     last_collection_by: Optional[str] = None

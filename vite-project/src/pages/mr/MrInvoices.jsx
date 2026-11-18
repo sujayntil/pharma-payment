@@ -17,10 +17,12 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { errorText, money, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 
 // Disabled (MR edit invoice): const blank ={ invoice_number: '', invoice_date: '', customer_name: '', total_amount: '', payment_mode: '', remarks: '' };
 
 export default function MrInvoices() {
+  const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [invoices, setInvoices] = useState([]); const [total, setTotal] = useState(0);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -89,7 +91,7 @@ export default function MrInvoices() {
   return <Stack gap="md"><div><Title order={1}>My invoices</Title><Text c="dimmed">Invoices assigned to you, with payment status and balance.</Text></div>
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search by invoice number or customer" chips={chips} onReset={reset}>
       <StatusTabs value={status} onChange={(value) => { setStatus(value); setPage(1); }} />
-      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} />
+      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} months firstDate={firstDate} quick={['today', 'yesterday']} />
     </FilterBar>
     {error && <Alert color="red" onClose={() => setError('')} withCloseButton>{error}</Alert>}
     <Paper {...listPaperProps(isMobile)}>{loading ? <Group justify="center" p="xl"><Loader /></Group> : !invoices.length ? <Text c="dimmed" ta="center" py="xl">No invoices match these filters.</Text> : isMobile ? <CardList>{invoices.map((invoice) => (

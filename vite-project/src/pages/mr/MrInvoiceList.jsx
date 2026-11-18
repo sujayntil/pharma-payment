@@ -24,6 +24,7 @@ import InvoiceAge from '../../components/collections/InvoiceAge';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { errorText, money, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 
 /*
  * MR "Invoices": one screen for what used to be "My Invoices" and "My
@@ -58,6 +59,7 @@ const contactFor = (item, size) => <ContactActions size={size} fixedWidth={size 
 const canRecord = (item) => Number(item.pending_amount) > 0 && (item.status === 'UNPAID' || item.status === 'PARTIAL');
 
 export default function MrInvoiceList({ initialTab = 'pending' }) {
+  const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(initialTab);
@@ -162,7 +164,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
         <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={only} onChange={(next) => { setOnly(next); setPage(1); }} />
       )}
       <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={customerType} onChange={(next) => { setCustomerType(next || ''); setPage(1); }} />
-      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} />
+      <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => { setSort(next || defaultSort); setPage(1); }} />
     </FilterBar>
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}
@@ -190,7 +192,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
               <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }} bg={openId === item.invoice_id ? 'green.0' : undefined} data-selected={openId === item.invoice_id || undefined}>
                 <Table.Td onClick={(e) => e.stopPropagation()}><TickCell ticks={ticks} invoice={item} /></Table.Td>
                 <Table.Td fw={600}>{item.invoice_number}</Table.Td>
-                <Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}<InvoiceAge date={item.invoice_date} pending={item.pending_amount} prefix="" size="xs" block /></Table.Td>
+                <Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}<InvoiceAge date={item.invoice_date} pending={item.pending_amount} customerType={item.customer_type} prefix="" size="xs" block /></Table.Td>
                 <Table.Td>{item.customer || '—'}</Table.Td>
                 {!panelOpen && <><Table.Td ta="right">{money(item.total_amount)}</Table.Td>
                 <Table.Td ta="right">{money(item.paid_amount)}</Table.Td></>}

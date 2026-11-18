@@ -85,3 +85,12 @@
   .recovery > div { flex-direction: row; justify-content: space-between; align-items: baseline; gap: 10px; }
   .recovery b { font-size: 15px; white-space: nowrap; }
 }
+
+.move { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; line-height: 1.25; }
+.move b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.move small { font-size: 11.5px; color: var(--mantine-color-gray-6); white-space: nowrap; }
+.move .green { color: var(--mantine-color-green-8); }
+.move .red { color: var(--mantine-color-red-7); }
+.vs { font-size: 11.5px; color: var(--mantine-color-gray-6); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kf > span { white-space: nowrap; flex-shrink: 0; }
+.kf svg { min-width: 0; flex-shrink: 1; }

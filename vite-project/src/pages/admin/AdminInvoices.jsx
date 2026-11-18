@@ -33,6 +33,7 @@ import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
 import { notifications } from '@mantine/notifications';
 import ManualInvoiceModal from './ManualInvoiceModal';
+import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -60,6 +61,7 @@ function tabParams(tab, only) {
 }
 
 export default function AdminInvoices() {
+  const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [invoices, setInvoices] = useState([]); const [total, setTotal] = useState(0); const [pendingTotal, setPendingTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [tab, setTab] = useState('pending'); const [counts, setCounts] = useState({});
@@ -268,7 +270,7 @@ export default function AdminInvoices() {
       {/* Replaced by the tabs above + "Show only": <StatusTabs value={filters.status} onChange={(status) => update({ status })} /> */}
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
-      <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} />
+      <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>
     <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text>{isMobile ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} disabled={!total} onClick={exportExcel}><IconDownload size={16} /></ActionIcon></Tooltip> : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>}</Group></Group>

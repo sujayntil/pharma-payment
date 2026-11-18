@@ -12,7 +12,9 @@ import { StatusBadge } from '../collections/CollectionBadges';
 import { lakh, TYPE_COLORS } from './insightsFormat';
 import css from '../../pages/admin/AdminInsights.module.css';
 
-const RECORD_TITLES = { sales: 'Sales', collected: 'Collected', outstanding: 'Outstanding', active: 'Invoices of active customers' };
+const RECORD_TITLES = { sales: 'Sales', collected: 'Collected', outstanding: 'Owed to you today', active: 'Invoices of active customers' };
+// "12 days overdue" / "due in 8 days": days past the customer's credit period.
+const dueText = (late) => (late === null || late === undefined ? '' : late > 0 ? `${late} days overdue` : late === 0 ? 'overdue from today' : `due in ${-late} days`);
 
 /**
  * The drill-down side panel (bottom sheet on phones). A stack, so Back goes
@@ -70,7 +72,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const params = { ...filters, kind: item.records, ...(item.bucket && { bucket: item.bucket }) };
   const { loading, data, error } = useLoad(() => insightsApi.records(params), JSON.stringify(params));
   const collected = item.records === 'collected';
-  const age = item.records === 'age';
+  const age = item.records === 'age' || item.records === 'outstanding';
   const title = item.title || RECORD_TITLES[item.records];
   const items = data?.items || [];
 
@@ -89,7 +91,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
     <Stack gap="sm">
       <div>
         <Text fw={700} fz={18}>{title}</Text>
-        <Text size="sm" c="dimmed">{age ? 'As of today' : periodLabel}{data ? ` · ${data.count} ${collected ? 'payments' : 'invoices'} · ${money(data.total)}` : ''}</Text>
+        <Text size="sm" c="dimmed">{age ? 'As of today, oldest first' : periodLabel}{data ? ` · ${data.count} ${collected ? 'payments' : 'invoices'} · ${money(data.total)}` : ''}</Text>
       </div>
       {error && <Alert color="red">{error}</Alert>}
       {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : data && (
@@ -103,6 +105,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
                   <div style={{ minWidth: 0 }}>
                     <Text size="sm" fw={600} truncate onClick={(e) => { e.stopPropagation(); onCustomer({ id: r.customer_id, name: r.customer }); }} c="green.8">{r.customer}</Text>
                     <Text size="xs" c="dimmed">{r.invoice_number} · {shortDate(collected ? r.payment_date : r.invoice_date)}{collected ? ` · ${r.mode}` : ''}</Text>
+                    {age && <Text size="xs" fw={600} c={r.days_late >= 0 ? 'red.7' : 'dimmed'}>{dueText(r.days_late)}</Text>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <Text fw={700} className={css.num} c={collected && r.amount < 0 ? 'orange.8' : undefined}>{money(collected ? r.amount : (item.records === 'outstanding' || age ? r.pending : r.total))}</Text>
@@ -121,7 +124,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
                 {items.map((r, index) => (
                   <Table.Tr key={`${r.invoice_id}-${index}`} style={{ cursor: 'pointer' }} onClick={() => onInvoice(r.invoice_id)}>
                     <Table.Td fw={600}>{collected ? shortDate(r.payment_date) : r.invoice_number}</Table.Td>
-                    <Table.Td c="dimmed">{collected ? r.invoice_number : shortDate(r.invoice_date)}</Table.Td>
+                    <Table.Td c="dimmed">{collected ? r.invoice_number : shortDate(r.invoice_date)}{age && <Text size="xs" fw={600} c={r.days_late >= 0 ? 'red.7' : 'dimmed'}>{dueText(r.days_late)}</Text>}</Table.Td>
                     <Table.Td><Text size="sm" c="green.8" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onCustomer({ id: r.customer_id, name: r.customer }); }}>{r.customer}</Text></Table.Td>
                     <Table.Td ta="right" fw={700} className={css.num} c={collected && r.amount < 0 ? 'orange.8' : undefined}>{money(collected ? r.amount : (item.records === 'outstanding' || age ? r.pending : r.total))}</Table.Td>
                     <Table.Td>{collected ? r.mode : <StatusBadge status={r.status} />}</Table.Td>
@@ -146,7 +149,11 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
   const max = Math.max(...c.months.map((m) => m.sales), 1);
   const ini = c.name.replace(/^Dr\.?\s+/i, '').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const lines = [];
-  if (c.growth_3m !== null) lines.push(c.growth_3m >= 0 ? <>Buying <b>{c.growth_3m}% more</b> than the 3 months before</> : <>Buying <b>{Math.abs(c.growth_3m)}% less</b> than the 3 months before</>);
+  const paidBefore = c.avg_days_to_pay !== null;
+  if (c.overdue > 0) lines.push(<b style={{ color: '#e03131' }}>{money(c.overdue)} overdue, oldest bill {c.oldest_overdue_late > 0 ? `${c.oldest_overdue_late} days` : 'just'} past its {c.credit_days}-day credit</b>);
+  if (!paidBefore && c.invoice_count) lines.push(lines.length ? <>no payments recorded yet</> : <>No payments recorded yet</>);
+  const buying = lines.length ? 'buying' : 'Buying';
+  if (c.growth_3m !== null) lines.push(c.growth_3m >= 0 ? <>{buying} <b>{c.growth_3m}% more</b> than the 3 months before</> : <>{buying} <b>{Math.abs(c.growth_3m)}% less</b> than the 3 months before</>);
   if (c.avg_days_to_pay !== null) lines.push(lines.length ? <>pays in about <b>{c.avg_days_to_pay} days</b></> : <>Pays in about <b>{c.avg_days_to_pay} days</b></>);
   if (c.reversals) lines.push(<b style={{ color: '#e03131' }}>{c.reversals} reversed payment{c.reversals > 1 ? 's' : ''}</b>);
   if (c.gone_quiet) lines.push(<b style={{ color: '#e03131' }}>no order for {c.days_since_last_order} days (usually every {c.order_every})</b>);
@@ -166,10 +173,11 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
         {stat('Last 12 months', lakh(c.last_12_months))}
         {stat('Growth (3 months)', c.growth_3m === null ? '—' : `${c.growth_3m >= 0 ? '↑' : '↓'} ${Math.abs(c.growth_3m)}%`, c.growth_3m === null ? null : c.growth_3m >= 0 ? '#2b8a3e' : '#e03131')}
         {stat('Outstanding', money(c.outstanding), c.outstanding > 0 ? '#e03131' : null)}
-        {stat('Avg days to pay', c.avg_days_to_pay === null ? '—' : `${c.avg_days_to_pay} d`)}
-        {stat('Paid within 40 days', c.paid_within_40 === null ? '—' : `${c.paid_within_40}%`)}
+        {stat('Overdue', money(c.overdue), c.overdue > 0 ? '#e03131' : null)}
+        {paidBefore && stat('Avg days to pay', `${c.avg_days_to_pay} d`)}
+        {paidBefore && stat(`Paid on time (${c.credit_days} d)`, `${c.paid_on_time}%`)}
         {stat('Orders every', c.order_every === null ? '—' : `${c.order_every} d`)}
-        {stat('Usually pays by', c.usual_mode ? (c.usual_mode === 'Upi' ? 'UPI' : c.usual_mode) : '—')}
+        {c.usual_mode && stat('Usually pays by', c.usual_mode === 'Upi' ? 'UPI' : c.usual_mode)}
         {stat('Reversed payments', c.reversals, c.reversals ? '#e03131' : null)}
         {stat('Customer since', c.customer_since ? new Date(c.customer_since).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—')}
       </div>

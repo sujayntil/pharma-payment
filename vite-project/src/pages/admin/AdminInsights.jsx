@@ -5,10 +5,9 @@ import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import PeriodPicker from '../../components/insights/PeriodPicker';
-import { describeRange, periodThing } from '../../components/filters/dateRanges';
-import { formatDateLocal } from '../../utils/formatters';
+import { businessPeriods, describeRange, isCustomRange, shortRange } from '../../components/filters/dateRanges';
 import { Donut, Spark, TrendChart } from '../../components/insights/charts';
-import { AGE_COLORS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } from '../../components/insights/insightsFormat';
+import { AGE_COLORS, AGE_LABELS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } from '../../components/insights/insightsFormat';
 import InsightsPanel from '../../components/insights/InsightsPanel';
 import ShowMore from '../../components/insights/ShowMore';
 import css from './AdminInsights.module.css';
@@ -16,31 +15,13 @@ import css from './AdminInsights.module.css';
 const TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital', 'Other'];
 const NOT_SET = '__none__';
 
-/** Period buttons (weekly / monthly first; financial year last). */
-function periods(today = new Date()) {
-  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dow = (t.getDay() + 6) % 7; // Monday = 0
-  const day = (d) => formatDateLocal(d);
-  const add = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-  const fy = t.getMonth() >= 3 ? t.getFullYear() : t.getFullYear() - 1;
-  return [
-    { id: 'week', label: 'This week', from: day(add(t, -dow)), to: day(t) },
-    { id: 'lastWeek', label: 'Last week', from: day(add(t, -dow - 7)), to: day(add(t, -dow - 1)) },
-    { id: 'month', label: 'This month', from: day(new Date(t.getFullYear(), t.getMonth(), 1)), to: day(t) },
-    { id: 'lastMonth', label: 'Last month', from: day(new Date(t.getFullYear(), t.getMonth() - 1, 1)), to: day(new Date(t.getFullYear(), t.getMonth(), 0)) },
-    { id: 'quarter', label: 'Last 3 months', from: day(new Date(t.getFullYear(), t.getMonth() - 2, 1)), to: day(t) },
-    { id: 'fy', label: 'This FY', from: day(new Date(fy, 3, 1)), to: day(t) },
-  ];
-}
-
 const initials = (name = '') => name.replace(/^Dr\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const pctLabel = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v)}%`);
 
 export default function AdminInsights({ onOpenCustomer }) {
   const isMobile = useIsMobile();
   const appRefresh = useAppRefresh();
-  const [periodId, setPeriodId] = useState('month');
-  const [custom, setCustom] = useState({ from: '', to: '' });
+  const [picked, setPicked] = useState(null); // null = the current month so far (moves on with the date)
   const [type, setType] = useState(null);
   const [mrId, setMrId] = useState(null);
   const [area, setArea] = useState(null);
@@ -50,9 +31,10 @@ export default function AdminInsights({ onOpenCustomer }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Worked out each render, so a page left open moves on with the date.
-  const presets = periods();
-  const range = periodId === 'custom' ? custom : presets.find((p) => p.id === periodId);
-  const periodLabel = periodId === 'custom' ? describeRange(custom) : range.label;
+  const currentMonth = businessPeriods(null)[0];
+  const range = picked || currentMonth;
+  const periodLabel = describeRange(range, { business: true });
+  const pickRange = (r) => setPicked(r.from === currentMonth.from && r.to === currentMonth.to ? null : { from: r.from, to: r.to });
   const filters = {
     date_from: range.from, date_to: range.to,
     ...(type && { customer_type: type }), ...(mrId !== null && { mr_id: mrId }), ...(area && { area }),
@@ -82,7 +64,9 @@ export default function AdminInsights({ onOpenCustomer }) {
     area && { key: 'area', label: `Area: ${area === NOT_SET ? 'Not set' : area}`, clear: () => setArea(null) },
   ].filter(Boolean);
   const clearAll = () => { setType(null); setMrId(null); setArea(null); };
-  const pickTrend = (point) => { setCustom({ from: point.from, to: point.to }); setPeriodId('custom'); };
+  const pickTrend = (point) => pickRange(point);
+  // What every "vs …" compares against, named (e.g. "1–18 Oct", "Sep 2026").
+  const prevShort = result.data ? shortRange({ from: result.data.range.previous_from, to: result.data.range.previous_to }) : 'before';
   const toggle = (setter, current, value) => setter(current === value ? null : value);
 
   const swatch = (bg, extra) => <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: bg, margin: '0 5px -1px 0', ...extra }} />;
@@ -92,10 +76,17 @@ export default function AdminInsights({ onOpenCustomer }) {
     </Text>
   );
   const periodPicker = (
-    <PeriodPicker presets={presets} periodId={periodId} custom={custom} label={periodLabel} fullWidth={isMobile}
-      onPreset={setPeriodId} onCustom={(next) => { setCustom(next); setPeriodId('custom'); }} />
+    <PeriodPicker value={range} firstDate={result.data?.first_invoice_date} label={periodLabel} fullWidth={isMobile} onPick={pickRange}
+      isCustom={isCustomRange(range)} />
   );
   const k = data?.kpis;
+  // Movers: rupees gained or lost, with the % small underneath.
+  const moverRow = (c) => custRow(c, (
+    <span className={css.move}>
+      <b className={c.change >= 0 ? css.green : css.red}>{c.change >= 0 ? '+' : '−'}{lakh(Math.abs(c.change))}</b>
+      <small>{c.change >= 0 ? '↑' : '↓'} {Math.abs(c.growth)}%</small>
+    </span>
+  ));
   const custRow = (c, right, sub) => (
     <button type="button" key={`${c.customer_id}-${sub || ''}`} className={css.row} onClick={() => open({ kind: 'customer', id: c.customer_id, name: c.name })}>
       <span className={css.ini} style={{ background: `${TYPE_COLORS[c.type] || '#868e96'}22`, color: TYPE_COLORS[c.type] || '#868e96' }}>{initials(c.name)}</span>
@@ -105,7 +96,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   );
   const empty = (text) => <Text size="sm" c="dimmed" py={6}>{text}</Text>;
 
-  const kpi = (key, label, value, { good = 'up', color, kind, suffix = '%', note } = {}) => {
+  const kpi = (key, label, value, { good = 'up', color, kind, suffix = '%', note, foot } = {}) => {
     const item = k?.[key];
     const change = item?.change;
     const better = change === null || change === undefined ? null : (good === 'up' ? change >= 0 : change <= 0);
@@ -114,10 +105,11 @@ export default function AdminInsights({ onOpenCustomer }) {
         <div className={css.kl}>{label}{kind && <IconChevronRight size={14} color="#adb5bd" />}</div>
         {loading && !data ? <Skeleton height={28} width={120} mt={6} /> : <div className={css.kv}>{value}</div>}
         {note && data && <div className={css.note}>{note}</div>}
-        <div className={css.kf}>
-          <span>{change === null || change === undefined ? 'no earlier data' : <><span className={better ? css.up : css.down}>{change >= 0 ? '↑' : '↓'} {suffix === '%' ? pctLabel(change) : `${Math.abs(change)}${suffix}`}</span> vs before</>}</span>
+        {foot ? <div className={css.kf}>{data && foot}</div> : <div className={css.kf}>
+          <span>{change === null || change === undefined ? 'no earlier data' : <><span className={better ? css.up : css.down}>{change >= 0 ? '↑' : '↓'} {suffix === '%' ? pctLabel(change) : `${Math.abs(change)}${suffix}`}</span></>}</span>
           <Spark values={item?.spark || []} color={color} />
-        </div>
+        </div>}
+        {!foot && data && change !== null && change !== undefined && <div className={css.vs}>vs {prevShort}</div>}
       </button>
     );
   };
@@ -154,7 +146,8 @@ export default function AdminInsights({ onOpenCustomer }) {
       <div className={css.kpis}>
         {kpi('sales', 'Sales', lakh(k?.sales.value), { color: '#2f9e44', kind: 'sales' })}
         {kpi('collected', 'Collected', lakh(k?.collected.value), { color: '#1c7ed6', kind: 'collected' })}
-        {kpi('outstanding', 'Outstanding', lakh(k?.outstanding.value), { good: 'down', color: '#e03131', kind: 'outstanding' })}
+        {kpi('outstanding', 'Owed to you today', lakh(k?.outstanding.value), { color: '#e03131', kind: 'outstanding',
+          foot: k && <span><b className={css.down}>{lakh(k.outstanding.overdue)}</b> of it overdue</span> })}
         {kpi('days_to_collect', 'Avg days to collect', k?.days_to_collect.value === null || k?.days_to_collect.value === undefined ? '—' : `${k.days_to_collect.value} days`, { good: 'down', color: '#f08c00', suffix: ' d' })}
         {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', kind: 'active' })}
       </div>
@@ -172,14 +165,6 @@ export default function AdminInsights({ onOpenCustomer }) {
             <div className={css.cb}>
               {isMobile && <div style={{ marginBottom: 6 }}>{legend}</div>}
               <TrendChart points={data.trend.points} selected={range} onPick={pickTrend} />
-              {/* What came in against this period's sales, and what came from older bills. */}
-              {k && (
-                <div className={css.recovery}>
-                  <div><span>Recovered · {periodThing(periodLabel, 'sales')}</span><b className={css.green}>{lakh(k.sales.recovered)}{k.sales.value > 0 && <small> · {Math.round((k.sales.recovered / k.sales.value) * 100)}%</small>}</b></div>
-                  <div><span>Pending · {periodThing(periodLabel, 'sales')}</span><b className={css.red}>{lakh(Math.max(k.sales.value - k.sales.recovered, 0))}</b></div>
-                  {k.collected.older !== null && k.collected.older !== undefined && <div><span>Collected · older bills</span><b>{lakh(k.collected.older)}</b></div>}
-                </div>
-              )}
             </div>
           </Paper>
 
@@ -201,13 +186,13 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s12}`}>
-            <div className={css.ch}><div><div className={css.ct}>Outstanding by age</div><div className={css.cs}>As of today · tap a bucket</div></div><div className={css.big}>{lakh(ageTotal)}</div></div>
+            <div className={css.ch}><div><div className={css.ct}>Money owed to you</div><div className={css.cs}>As of today, by how late it is · 40 days' credit, distributors 60 · tap a row</div></div><div className={css.big}>{lakh(ageTotal)}</div></div>
             <div className={css.cb}>
-              <div className={css.stack}>{data.ageing.map((a) => <i key={a.bucket} title={`${a.bucket} days`} style={{ width: `${ageTotal ? (a.amount / ageTotal) * 100 : 0}%`, background: AGE_COLORS[a.bucket] }} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: `Outstanding ${a.bucket} days` })} />)}</div>
+              <div className={css.stack}>{data.ageing.map((a) => <i key={a.bucket} title={AGE_LABELS[a.bucket]} style={{ width: `${ageTotal ? (a.amount / ageTotal) * 100 : 0}%`, background: AGE_COLORS[a.bucket] }} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })} />)}</div>
               {data.ageing.map((a) => (
-                <button type="button" key={a.bucket} className={css.bucket} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: `Outstanding ${a.bucket} days` })}>
+                <button type="button" key={a.bucket} className={css.bucket} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })}>
                   <i style={{ width: 10, height: 10, borderRadius: 3, background: AGE_COLORS[a.bucket], flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>{a.bucket} days<span className={css.sub}> · {a.customers} customers</span></span>
+                  <span style={{ flex: 1 }}>{AGE_LABELS[a.bucket]}<span className={css.sub}> · {a.customers} {a.customers === 1 ? 'customer' : 'customers'}</span></span>
                   <b className={css.num}>{lakh(a.amount)}</b><span className={css.sub} style={{ width: 36, textAlign: 'right' }}>{ageTotal ? Math.round((a.amount / ageTotal) * 100) : 0}%</span>
                 </button>
               ))}
@@ -216,7 +201,7 @@ export default function AdminInsights({ onOpenCustomer }) {
 
           <Paper className={`${css.card} ${css.s6}`}>
             <div className={css.ch}>
-              <div><div className={css.ct}>By MR</div><div className={css.cs}>Tap to filter · target bars are for this month</div></div>
+              <div><div className={css.ct}>By MR</div><div className={css.cs}>Tap to filter · targets for {data.by_mr.month_label}</div></div>
               <Button size="compact-sm" variant="default" leftSection={<IconTarget size={14} />} onClick={() => openFresh({ kind: 'targets' })}>Set targets</Button>
             </div>
             <div className={css.cb}>
@@ -232,7 +217,7 @@ export default function AdminInsights({ onOpenCustomer }) {
                       <div className={css.bar} style={{ height: 5, marginTop: 3 }}><i style={{ width: `${(Math.max(r.collected, 0) / mrMax) * 100}%`, background: '#1c7ed6' }} /></div>
                       <Group justify="space-between" mt={3} wrap="nowrap" gap={6}>
                         <span className={css.sub}>Collected {lakh(r.collected)}</span>
-                        {pct !== null && <span className={css.sub}>Target <b style={{ color: pct >= 100 ? '#2b8a3e' : pct >= 70 ? '#1a1d21' : '#e03131' }}>{pct}%</b> of {lakh(r.sales_target)} · {data.by_mr.days_left} days left</span>}
+                        {pct !== null && <span className={css.sub}>Target <b style={{ color: pct >= 100 ? '#2b8a3e' : pct >= 70 ? '#1a1d21' : '#e03131' }}>{pct}%</b> of {lakh(r.sales_target)}{data.by_mr.current_month ? ` · ${data.by_mr.days_left} days left` : ''}</span>}
                       </Group>
                     </span>
                   </button>
@@ -252,15 +237,15 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Movers</div><div className={css.cs}>Compared with the period before</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>Movers</div><div className={css.cs}>Change in purchases vs {prevShort} · biggest first</div></div></div>
             <div className={`${css.cb} ${css.two}`}>
-              <div><div className={css.mini}>Growing</div><ShowMore key={listKey} items={data.movers.growing} render={(c) => custRow(c, <Badge color="green" variant="light">↑ {c.growth}%</Badge>)} />{!data.movers.growing.length && empty('—')}</div>
-              <div><div className={css.mini}>Declining</div><ShowMore key={listKey} items={data.movers.declining} render={(c) => custRow(c, <Badge color="red" variant="light">↓ {Math.abs(c.growth)}%</Badge>)} />{!data.movers.declining.length && empty('—')}</div>
+              <div><div className={css.mini}>Growing</div><ShowMore key={listKey} items={data.movers.growing} render={moverRow} />{!data.movers.growing.length && empty('—')}</div>
+              <div><div className={css.mini}>Declining</div><ShowMore key={listKey} items={data.movers.declining} render={moverRow} />{!data.movers.declining.length && empty('—')}</div>
             </div>
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>New and stopped customers</div><div className={css.cs}>{periodLabel} vs the period before</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>New and stopped customers</div><div className={css.cs}>{periodLabel} vs {prevShort}</div></div></div>
             <div className={css.cb}>
               <div className={css.counts}>
                 <div style={{ background: '#ebfbee' }}><div className={css.sub}>New</div><div className={css.big} style={{ color: '#2b8a3e' }}>{data.new_and_stopped.new_count ? `+${data.new_and_stopped.new_count}` : 0}</div></div>
@@ -282,7 +267,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Risky credit</div><div className={css.cs}>Slow payers who owe money, or reversed / bounced payments</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>Risky credit</div><div className={css.cs}>Owe you money and pay later than their credit days, or had cheques bounce</div></div></div>
             <div className={css.cb}>
               <ShowMore key={listKey} items={data.risky_credit} initial={6} render={(c) => custRow(c, (
                 <span style={{ textAlign: 'right' }}><b className={css.num}>{lakh(c.outstanding)}</b>
@@ -302,7 +287,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s4}`}>
-            <div className={css.ch}><div><div className={css.ct}>How customers pay</div><div className={css.cs}>Collected in {periodLabel?.toLowerCase()}</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>How customers pay</div><div className={css.cs}>Collected in {periodLabel}</div></div></div>
             <div className={css.cb}>
               {data.payment_modes.map((m) => (
                 <div key={m.mode} style={{ padding: '7px 0' }}>

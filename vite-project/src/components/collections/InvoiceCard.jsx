@@ -13,7 +13,7 @@ import { useLongPress } from '../../hooks/useLongPress';
  *   invoice number · date · 19 days   pending amount (red) / bill amount (grey)
  *   customer · MR                     pending / paid
  *   status badges                 Recorded by <who>
- * The age shows only while something is pending (amber 30+, red 40+ days).
+ * The age shows only while something is pending (red once overdue: 40 days, 60 for distributors).
  * A paid invoice with no collection in the app (e.g. older data) leaves the
  * "who" line blank rather than saying "No collection yet".
  * Tapping it opens the invoice sheet (summary, Collect, history).
@@ -26,7 +26,7 @@ import { useLongPress } from '../../hooks/useLongPress';
  * onSelect / selected / selecting: press and hold a pending invoice to start
  *   selecting (customer screen); while selecting, taps tick instead of opening.
  */
-export default function InvoiceCard({ invoice, showCustomer = true, showMr = false, onOpen, actions, afterStatus, onSelect, selected = false, selecting = false, canTick }) {
+export default function InvoiceCard({ invoice, customerType, showCustomer = true, showMr = false, onOpen, actions, afterStatus, onSelect, selected = false, selecting = false, canTick }) {
   const label = useActorLabel();
   const pending = Number(invoice.pending_amount || 0);
   const customer = invoice.customer_name ?? invoice.customer;
@@ -51,7 +51,7 @@ export default function InvoiceCard({ invoice, showCustomer = true, showMr = fal
         {date && (
           // The date never splits across lines: it stays whole beside the number.
           <Text span size="xs" c="dimmed" fw={400} ml={8} style={{ whiteSpace: 'nowrap' }}>
-            {shortDate(date)}<InvoiceAge date={date} pending={pending} />
+            {shortDate(date)}<InvoiceAge date={date} pending={pending} customerType={invoice.customer_type ?? customerType} />
           </Text>
         )}
       </>}

@@ -16,6 +16,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from . import models
+from .credit import credit_days, is_overdue
 from .excel_export import _IST, _safe, to_ist
 
 TYPE_ORDER = ["Distributor", "Chemist", "Doctor", "Hospital"]
@@ -40,6 +41,7 @@ def type_label(raw: str | None) -> str:
 
 def collect_rows(db: Session, conditions, type_filter) -> dict[str, list[dict]]:
     """Customers (with invoices in the dates) grouped by type, with totals."""
+    today = datetime.now(_IST).date()
     query = (
         db.query(models.Invoice)
         .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
@@ -72,13 +74,15 @@ def collect_rows(db: Session, conditions, type_filter) -> dict[str, list[dict]]:
                 "mr": customer.mr.name if customer and customer.mr else "Unassigned",
                 "phone": (customer.phone if customer else None) or "",
                 "invoices": 0, "billed": 0.0, "collected": 0.0, "pending": 0.0,
-                "oldest": None, "last": None,
+                "oldest": None, "last": None, "overdue": 0.0,
             }
         row["invoices"] += 1
         row["billed"] += float(invoice.total_amount or 0)
         row["collected"] += float(invoice.paid_amount or 0)
         pending = float(invoice.pending_amount or 0)
         row["pending"] += pending
+        if pending > 0 and is_overdue(invoice.invoice_date, customer.type if customer else None, today):
+            row["overdue"] += pending
         if pending > 0 and invoice.invoice_date and (row["oldest"] is None or invoice.invoice_date < row["oldest"]):
             row["oldest"] = invoice.invoice_date
         paid_at = last_paid.get(invoice.id)
@@ -137,7 +141,7 @@ def build_workbook(grouped: dict[str, list[dict]], range_text: str) -> bytes:
     summary = wb.active
     summary.title = "Summary"
     _header(summary, "Customers by type", stamp,
-            ["Customer type", "Customers", "Invoices", "Billed", "Collected", "Pending", "Pending 40+ days", "% collected"],
+            ["Customer type", "Customers", "Invoices", "Billed", "Collected", "Pending", "Overdue", "% collected"],
             [18, 12, 11, 15, 15, 15, 17, 13])
     totals = defaultdict(float)
     for name in order:
@@ -145,7 +149,7 @@ def build_workbook(grouped: dict[str, list[dict]], range_text: str) -> bytes:
         billed = sum(r["billed"] for r in rows)
         collected = sum(r["collected"] for r in rows)
         pending = sum(r["pending"] for r in rows)
-        old = sum(r["pending"] for r in rows if r["oldest"] and (today - r["oldest"]).days >= 40)
+        old = sum(r["overdue"] for r in rows)
         values = [name, len(rows), sum(r["invoices"] for r in rows), billed, collected, pending, old,
                   collected / billed if billed else 0]
         summary.append(values)
@@ -185,10 +189,11 @@ def build_workbook(grouped: dict[str, list[dict]], range_text: str) -> bytes:
             if row["pending"] > 0:
                 line[6].font = Font(color="C92A2A", bold=True)
             line[7].number_format = line[9].number_format = "dd-mmm-yyyy"
-            if days is not None and days >= 40:
+            limit = credit_days(name)
+            if days is not None and days >= limit:
                 line[8].fill = RED_FILL
                 line[8].font = Font(color="C92A2A", bold=True)
-            elif days is not None and days >= 30:
+            elif days is not None and days >= limit - 10:
                 line[8].fill = AMBER
                 line[8].font = Font(color="E67700", bold=True)
             for cell in line:

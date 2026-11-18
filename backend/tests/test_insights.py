@@ -184,11 +184,17 @@ class InsightsTests(unittest.TestCase):
         first = self.db.query(models.Payment).filter_by(invoice_id=bounced.id).first()
         for _ in range(2):
             self.db.add(models.Payment(invoice_id=bounced.id, amount=-300, mode="Cheque", payment_date=pay_at(TODAY), reversal_of_id=first.id))
+        bounced.pending_amount = 300       # bounced: owed again
+        paid_off = self.inv(self.dist, TODAY - timedelta(days=5), 100, [(100, TODAY, "Cheque")])
+        f2 = self.db.query(models.Payment).filter_by(invoice_id=paid_off.id).first()
+        for _ in range(2):
+            self.db.add(models.Payment(invoice_id=paid_off.id, amount=-100, mode="Cheque", payment_date=pay_at(TODAY), reversal_of_id=f2.id))
         self.db.commit()
         s = summary(self.db, TODAY - timedelta(days=200), TODAY, Filters())
         risky = {r["name"]: r for r in s["risky_credit"]}
         self.assertEqual(risky["Dr. Mehta"]["days"], 70)
         self.assertEqual(risky["City Chemist"]["reversals"], 2)
+        self.assertNotIn("Big Distributor", risky)      # bounced but owes nothing now
         self.assertEqual(s["payment_speed"]["slowest"][0]["name"], "Dr. Mehta")
 
     def test_lists_are_complete_and_speed_halves_do_not_overlap(self):
@@ -207,6 +213,32 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(len(fast) + len(slow), 9)
         self.assertEqual(s["payment_speed"]["slowest"][0]["name"], "Cust 8")
 
+    def test_movers_ranked_by_rupees_not_percent(self):
+        small = models.Customer(name="Small Chemist", type="Chemist"); big = models.Customer(name="Big Distributor", type="Distributor")
+        self.db.add_all([small, big]); self.db.commit()
+        self.inv(small, TODAY - timedelta(days=40), 800); self.inv(small, TODAY - timedelta(days=5), 5700)      # +4,900 (+613%)
+        self.inv(big, TODAY - timedelta(days=40), 100000); self.inv(big, TODAY - timedelta(days=5), 115000)    # +15,000 (+15%)
+        s = summary(self.db, TODAY - timedelta(days=29), TODAY, Filters())
+        top = s["movers"]["growing"][0]
+        self.assertEqual(top["name"], "Big Distributor")
+        self.assertEqual((top["change"], top["previous"], top["sales"], top["growth"]), (15000, 100000, 115000, 15))
+
+    def test_overdue_follows_credit_days(self):
+        from app.overdue import overdue_customer_summaries
+        self.inv(self.dist, TODAY - timedelta(days=50), 1000)   # distributor, 50 d: not due
+        self.inv(self.chem, TODAY - timedelta(days=45), 400)    # chemist, 45 d: overdue
+        self.inv(self.chem, TODAY - timedelta(days=5), 600)     # chemist, 5 d: not due
+        names = {r["customer"]: r for r in overdue_customer_summaries(self.db, TODAY)}
+        self.assertEqual(set(names), {"City Chemist"})
+        self.assertEqual((names["City Chemist"]["overdue_amount"], names["City Chemist"]["credit_days"]), (400, 40))
+        self.inv(self.dist, TODAY - timedelta(days=61), 250)    # distributor, 61 d: overdue
+        names = {r["customer"]: r for r in overdue_customer_summaries(self.db, TODAY)}
+        self.assertEqual((names["Big Distributor"]["overdue_amount"], names["Big Distributor"]["credit_days"]), (250, 60))
+        d = dashboard(date_from=TODAY.replace(day=1), date_to=TODAY, customer_type=None, db=self.db, user=self.admin)
+        self.assertEqual((d["owed"], d["owed_overdue"], d["owed_not_due"]), (2250, 650, 1600))
+        c = customer_insights(self.db, self.chem.id)
+        self.assertEqual((c["overdue"], c["credit_days"], c["oldest_overdue_late"]), (400, 40, 5))
+
     # ---------- ageing / modes / trend ----------
     def test_ageing_buckets_as_of_today(self):
         self.inv(self.doc, TODAY - timedelta(days=10), 100)
@@ -214,8 +246,13 @@ class InsightsTests(unittest.TestCase):
         self.inv(self.doc, TODAY - timedelta(days=75), 300, [(100, TODAY, "UPI")])
         self.inv(self.doc, TODAY - timedelta(days=200), 400)
         self.inv(self.doc, TODAY - timedelta(days=95), 50, [(50, TODAY, "UPI")])   # paid: not in ageing
+        self.inv(self.dist, TODAY - timedelta(days=50), 70)    # distributor: 60 days' credit, not due yet
+        self.inv(self.dist, TODAY - timedelta(days=65), 30)    # 5 days past 60
         ages = {a["bucket"]: a["amount"] for a in self.S()["ageing"]}
-        self.assertEqual(ages, {"0-30": 100, "31-60": 200, "61-90": 200, "90+": 400})
+        # doctor 40 days' credit: 10 d not due, 45 d is 5 late, 75 d is 35 late, 200 d is 160 late
+        self.assertEqual(ages, {"not-due": 170, "1-30": 230, "31-60": 200, "60+": 400})
+        k = self.S()["kpis"]["outstanding"]
+        self.assertEqual((k["value"], k["overdue"], k["not_due"]), (1000, 830, 170))
 
     def test_payment_modes_and_trend(self):
         self.books()

@@ -1,6 +1,12 @@
 import axiosClient from './axiosClient';
 
 export const invoicesApi = {
+  /** Earliest invoice date ({ first_invoice_date }): date lists show months from here. */
+  async getFirstDate() {
+    const response = await axiosClient.get('/invoices/first-date');
+    return response.data;
+  },
+
   /**
    * Get all invoices (Admin view).
    * @param {object} params - { mr_id, status, date_from, date_to }

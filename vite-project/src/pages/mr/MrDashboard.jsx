@@ -68,7 +68,7 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
     </Stack>
     <Stack gap={12}>
     <ZoneHeading icon={IconAlertTriangle} tone="red" title="Needs attention" />
-    <OverdueCustomersPanel refined cardClass={partsCss.card} headerClass={tableCss.th} load={mrApi.getOverdueAlerts} emptyText="None of your customers have invoices pending for 40 days or more." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
+    <OverdueCustomersPanel refined cardClass={partsCss.card} headerClass={tableCss.th} load={mrApi.getOverdueAlerts} emptyText="None of your customers have overdue bills (unpaid past 40 days; 60 for distributors)." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
     </Stack>
     <Stack gap={12}>
     <ZoneHeading icon={IconReceipt} tone="blue" title="Activity" />

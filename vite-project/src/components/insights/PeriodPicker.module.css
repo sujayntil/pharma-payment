@@ -1,3 +1,0 @@
-.item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--mantine-color-dark-7); }
-.item:hover { background: var(--mantine-color-gray-0); }
-.item[data-active] { background: var(--mantine-color-green-0); color: var(--mantine-color-green-9); font-weight: 600; }

@@ -26,6 +26,7 @@ from ..excel_export import _XLSX, EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..type_export import build_workbook, collect_rows, range_label
 from fastapi.responses import Response
 from ..deps import require_admin
+from ..credit import is_overdue
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password
 from ..utils import clean_search, compute_status, page_result, query_page, set_customer_numbers
@@ -160,6 +161,21 @@ def dashboard(
             current = current.filter(condition)
         collected_current = current.scalar()
 
+    # What customers owe today, whatever the dates: not yet due vs overdue
+    # (past 40 days' credit; 60 for distributors). Follows the type filter only.
+    today = datetime.now(_IST).date()
+    owed_not_due = owed_overdue = 0.0
+    owed_rows = apply_type_filter(
+        db.query(models.Invoice.invoice_date, models.Invoice.pending_amount, models.Customer.type)
+        .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
+        .filter(models.Invoice.pending_amount > 0)
+    ).all()
+    for invoice_date, pending, ctype in owed_rows:
+        if is_overdue(invoice_date, ctype, today):
+            owed_overdue += float(pending)
+        else:
+            owed_not_due += float(pending)
+
     total_invoices = q.count()
     paid = q.filter(models.Invoice.status == "PAID").count()
     partial = q.filter(models.Invoice.status == "PARTIAL").count()
@@ -173,6 +189,11 @@ def dashboard(
         "recovered": invoice_collected,
         "collected_current": collected_current,
         "collected_older": None if collected_current is None else collected - collected_current,
+        # Earliest invoice: the date lists start their months from here.
+        "first_invoice_date": db.query(func.min(models.Invoice.invoice_date)).scalar(),
+        "owed": round(owed_not_due + owed_overdue, 2),
+        "owed_not_due": round(owed_not_due, 2),
+        "owed_overdue": round(owed_overdue, 2),
         "total_invoices": total_invoices,
         "paid": paid,
         "partial": partial,
@@ -185,7 +206,7 @@ def overdue_alerts(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Customers with at least one invoice unpaid for 40 days or more."""
+    """Customers with overdue invoices (past 40 days' credit; 60 for distributors)."""
     return overdue_customer_summaries(db)
 
 

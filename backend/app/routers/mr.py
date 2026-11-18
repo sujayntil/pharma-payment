@@ -282,6 +282,7 @@ def outstanding(
                 "customer_phone": i.customer.phone if i.customer else None,
                 "customer_alternate_phone": i.customer.alternate_phone if i.customer else None,
                 "customer_whatsapp_on": i.customer.whatsapp_on if i.customer else None,
+                "customer_type": i.customer.type if i.customer else None,
                 "pending_amount": i.pending_amount,
                 "total_amount": i.total_amount,
                 "paid_amount": i.paid_amount,

@@ -23,6 +23,7 @@ import { recorderOf, useActorLabel } from '../../components/collections/collecti
 import { downloadErrorText, errorText, money, saveDownload, dayOf, timeOf } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
+import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 
 /**
  * Second line of a phone collection card, kept to one short line:
@@ -44,6 +45,7 @@ const RECORDED_BY = [{ value: 'MR', label: 'By MR' }, { value: 'ADMIN', label: '
 const ENTRY_TYPES = [{ value: 'collection', label: 'Collections only' }, { value: 'reversal', label: 'Reversals only' }];
 
 export default function AdminCollections() {
+  const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [rows, setRows] = useState([]); const [total, setTotal] = useState(0); const [count, setCount] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -144,7 +146,7 @@ export default function AdminCollections() {
         <FilterSelect placeholder="Recorded by" icon={<IconUserShield size={16} />} data={RECORDED_BY} value={filters.recordedBy} onChange={(recordedBy) => update({ recordedBy })} />
         <FilterSelect placeholder="All entries" data={ENTRY_TYPES} value={filters.entryType} onChange={(entryType) => update({ entryType })} />
     </>}>
-      <DateRangeFilter label="Collected" value={filters.range} onChange={(range) => update({ range })} />
+      <DateRangeFilter label="Collected" value={filters.range} onChange={(range) => update({ range })} months firstDate={firstDate} quick={['today', 'yesterday']} />
     </FilterBar>
 
     <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">

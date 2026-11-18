@@ -69,3 +69,6 @@
   .split span { font-size: 12px; }
   .split > div + div { margin-top: 4px; }
 }
+.overdue { color: var(--mantine-color-red-7) !important; }
+.owedBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--mantine-color-gray-2); }
+.owedBar i { display: block; height: 100%; transition: width 600ms ease; }

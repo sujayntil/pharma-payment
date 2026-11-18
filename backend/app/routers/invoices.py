@@ -31,6 +31,7 @@ def _to_out(invoice: models.Invoice, latest: dict | None = None) -> schemas.Invo
         out.customer_phone = invoice.customer.phone
         out.customer_alternate_phone = invoice.customer.alternate_phone
         out.customer_whatsapp_on = invoice.customer.whatsapp_on
+        out.customer_type = invoice.customer.type
     for key, value in last_collection_fields(latest).items():
         setattr(out, key, value)
     return out
@@ -142,6 +143,12 @@ def _to_out_many(db: Session, invoices) -> list[schemas.InvoiceOut]:
 #     db.refresh(invoice)
 #
 #     return _to_out(invoice)
+
+
+@router.get("/first-date")
+def first_invoice_date(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    """Earliest invoice date: the date lists show months from here on."""
+    return {"first_invoice_date": db.query(func.min(models.Invoice.invoice_date)).scalar()}
 
 
 @router.get("/mine")

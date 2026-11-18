@@ -10,7 +10,7 @@ from .. import models, schemas
 from ..audit import write_audit
 from ..database import get_db
 from ..deps import require_admin
-from ..insights import (AGE_BUCKETS, TYPE_GROUPS, Filters, customer_insights, invoice_list, month_start,
+from ..insights import (DUE_BUCKETS, TYPE_GROUPS, Filters, customer_insights, invoice_list, month_start,
                         save_targets, summary, targets_for, today_ist)
 
 router = APIRouter(prefix="/admin/insights", tags=["insights"])
@@ -67,7 +67,7 @@ def insights_records(
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    if kind == "age" and bucket not in {label for label, _lo, _hi in AGE_BUCKETS}:
+    if kind == "age" and bucket not in {label for label, _lo, _hi in DUE_BUCKETS}:
         raise HTTPException(422, "bucket must be 0-30, 31-60, 61-90 or 90+")
     start, end = _range(date_from, date_to)
     return invoice_list(db, kind, start, end, _filters(customer_type, mr_id, area), bucket)

@@ -143,6 +143,7 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "customer_phone": invoice.customer.phone if invoice.customer else None,
             "customer_alternate_phone": invoice.customer.alternate_phone if invoice.customer else None,
             "customer_whatsapp_on": invoice.customer.whatsapp_on if invoice.customer else None,
+            "customer_type": invoice.customer.type if invoice.customer else None,
             "mr_name": invoice.mr.name if invoice.mr else None,
             "payment_mode": invoice.payment_mode,
             "remarks": invoice.remarks,

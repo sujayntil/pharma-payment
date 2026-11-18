@@ -1,4 +1,4 @@
-"""Customer-level 40-day outstanding reminders."""
+"""Customer-level overdue reminders (40 days; 60 for distributors, see credit.py)."""
 
 import logging
 import os
@@ -8,21 +8,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models
+from .credit import CREDIT_DAYS_BY_TYPE, DEFAULT_CREDIT_DAYS, credit_days, is_overdue
 from .database import SessionLocal
 from .push import send_admin_notification
 
 log = logging.getLogger(__name__)
 _IST = timezone(timedelta(hours=5, minutes=30))
-_OVERDUE_DAYS = 40
 _REMINDER_INTERVAL_DAYS = 2
 _CLAIM_TIMEOUT = timedelta(minutes=15)
 
 
 def overdue_customer_summaries(db: Session, today: date | None = None, mr_id: int | None = None) -> list[dict]:
-    """Customers with invoices unpaid for 40+ days. Pass mr_id to limit the
-    result to invoices assigned to one MR (used by the MR dashboard)."""
+    """Customers with overdue invoices (past their credit period). Pass mr_id to
+    limit the result to invoices assigned to one MR (used by the MR dashboard)."""
     today = today or datetime.now(_IST).date()
-    cutoff = today - timedelta(days=_OVERDUE_DAYS)
+    # The shortest credit period; longer ones are checked per invoice below.
+    cutoff = today - timedelta(days=min(DEFAULT_CREDIT_DAYS, *CREDIT_DAYS_BY_TYPE.values()))
     query = (
         db.query(models.Invoice, models.Customer, models.User)
         .join(models.Customer, models.Invoice.customer_id == models.Customer.id)
@@ -38,10 +39,13 @@ def overdue_customer_summaries(db: Session, today: date | None = None, mr_id: in
     rows = query.order_by(models.Customer.name, models.Invoice.invoice_date, models.Invoice.id).all()
     grouped: dict[int, dict] = {}
     for invoice, customer, mr in rows:
+        if not is_overdue(invoice.invoice_date, customer.type, today):
+            continue
         summary = grouped.setdefault(customer.id, {
             "customer_id": customer.id,
             "customer": customer.name,
             "mr": mr.name if mr else None,
+            "credit_days": credit_days(customer.type),
             "oldest_invoice_id": invoice.id,
             "oldest_invoice_number": invoice.invoice_number,
             "oldest_invoice_date": invoice.invoice_date,
@@ -87,7 +91,7 @@ def _claim_reminder(db: Session, customer_id: int, invoice_id: int, reminder_dat
 
 def process_due_overdue_reminders() -> None:
     if not all(os.getenv(key) for key in ("VAPID_PRIVATE_KEY", "VAPID_SUBJECT")):
-        log.warning("40-day push reminders are inactive: configure VAPID_PRIVATE_KEY and VAPID_SUBJECT")
+        log.warning("Overdue push reminders are inactive: configure VAPID_PRIVATE_KEY and VAPID_SUBJECT")
         return
     today = datetime.now(_IST).date()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -95,7 +99,7 @@ def process_due_overdue_reminders() -> None:
         summaries = overdue_customer_summaries(db, today)
 
     for summary in summaries:
-        crossed_date = summary["oldest_invoice_date"] + timedelta(days=_OVERDUE_DAYS)
+        crossed_date = summary["oldest_invoice_date"] + timedelta(days=summary["credit_days"])
         elapsed = (today - crossed_date).days
         reminder_date = crossed_date + timedelta(
             days=(elapsed // _REMINDER_INTERVAL_DAYS) * _REMINDER_INTERVAL_DAYS
@@ -117,10 +121,11 @@ def process_due_overdue_reminders() -> None:
             continue
 
         payload = {
-            "title": "40-day outstanding reminder",
+            "title": "Payment overdue",
             "body": (
                 f"{summary['customer']} has ₹{summary['overdue_amount']:,.2f} outstanding "
-                f"across {summary['invoice_count']} overdue invoice(s)."
+                f"across {summary['invoice_count']} overdue invoice(s) "
+                f"(past {summary['credit_days']} days' credit)."
             ),
             "url": "admin.html",
             "tag": f"overdue-{summary['customer_id']}-{reminder_date.isoformat()}",

@@ -2,9 +2,9 @@ import { Group, Paper, Progress, Text } from '@mantine/core';
 import css from './DashboardParts.module.css';
 
 const ZONE_TONES = {
-  green: { background: 'var(--mantine-color-green-0)', color: 'var(--mantine-color-green-8)' },
-  red: { background: 'var(--mantine-color-red-0)', color: 'var(--mantine-color-red-7)' },
-  blue: { background: 'var(--mantine-color-blue-0)', color: 'var(--mantine-color-blue-7)' },
+  green: { background: 'var(--mantine-color-green-light)', color: 'var(--mantine-color-green-8)' },
+  red: { background: 'var(--mantine-color-red-light)', color: 'var(--mantine-color-red-7)' },
+  blue: { background: 'var(--mantine-color-blue-light)', color: 'var(--mantine-color-blue-7)' },
 };
 
 /** Section heading: coloured icon tile + bold title (+ optional detail, and an action on the right). */
@@ -32,7 +32,7 @@ export function CollectionBar({ billed, pending, paid = 0, partial = 0, unpaid =
   return (
     <Paper p="md" className={css.card}>
       <Group justify="space-between" align="baseline" mb={8} gap="xs">
-        <Text size="sm" c="dimmed"><Text span fw={700} c="dark" fz="md" className={css.num}>{loading ? '—' : `${rate}%`}</Text> {label}</Text>
+        <Text size="sm" c="dimmed"><Text span fw={700} c="var(--app-ink)" fz="md" className={css.num}>{loading ? '—' : `${rate}%`}</Text> {label}</Text>
       </Group>
       <Progress value={loading ? 0 : rate} color="green.7" size="md" radius="xl" transitionDuration={600} aria-label={`${rate}% ${label}`} />
       <div className={css.statusLine}>

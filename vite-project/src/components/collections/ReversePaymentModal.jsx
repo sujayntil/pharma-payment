@@ -50,7 +50,7 @@ function ReverseForm({ payment, onClose, onSaved }) {
 
   return (
     <Stack>
-      <Paper withBorder p="sm" bg="gray.0">
+      <Paper withBorder p="sm" bg="var(--app-soft)">
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Text fw={700} size="lg">{money(payment.amount)}</Text>
           {payment.mode && <Badge variant="light" color="gray">{payment.mode}</Badge>}

@@ -34,7 +34,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Center mih="100dvh" px="md" bg="gray.0">
+    <Center mih="100dvh" px="md" bg="var(--app-soft)">
       <Container size={420} w="100%">
         <Paper withBorder shadow="sm" radius="lg" p={{ base: 'lg', sm: 32 }}>
           <Stack gap="lg">

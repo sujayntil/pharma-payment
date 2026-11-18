@@ -42,7 +42,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         padding={0}
         withCloseButton
         title={stack.length > 1 ? <Button variant="subtle" size="compact-sm" color="green" leftSection={<IconArrowLeft size={14} />} onClick={onBack}>Back</Button> : null}
-        styles={{ header: { paddingInline: 16, paddingBlock: 10, minHeight: 0, borderBottom: '1px solid var(--mantine-color-gray-2)' }, body: { padding: 16 } }}
+        styles={{ header: { paddingInline: 16, paddingBlock: 10, minHeight: 0, borderBottom: '1px solid var(--app-line)' }, body: { padding: 16 } }}
       >
         {current?.kind === 'records' && <Records key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} />}
         {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} />}
@@ -101,7 +101,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
           {isMobile ? (
             <Stack gap={0}>
               {items.map((r, index) => (
-                <Group key={`${r.invoice_id}-${index}`} justify="space-between" wrap="nowrap" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: 'pointer' }} onClick={() => onInvoice(r.invoice_id)}>
+                <Group key={`${r.invoice_id}-${index}`} justify="space-between" wrap="nowrap" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: 'pointer' }} onClick={() => onInvoice(r.invoice_id)}>
                   <div style={{ minWidth: 0 }}>
                     <Text size="sm" fw={600} truncate onClick={(e) => { e.stopPropagation(); onCustomer({ id: r.customer_id, name: r.customer }); }} c="green.8">{r.customer}</Text>
                     <Text size="xs" c="dimmed">{r.invoice_number} · {shortDate(collected ? r.payment_date : r.invoice_date)}{collected ? ` · ${r.mode}` : ''}</Text>
@@ -191,7 +191,7 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
         <svg viewBox="0 0 480 120" width="100%" role="img" aria-label="Monthly sales, last 12 months">
           {c.months.map((m, i) => {
             const w = 480 / 12; const h = (m.sales / max) * 90;
-            return <g key={m.month}><rect x={i * w + w * 0.2} y={100 - h} width={w * 0.6} height={h} rx="3" fill={i >= 9 ? '#2f9e44' : '#b2f2bb'}><title>{`${m.label}: ${lakh(m.sales)}`}</title></rect><text x={i * w + w / 2} y="116" fontSize="10" fill="#8a929c" textAnchor="middle">{m.label}</text></g>;
+            return <g key={m.month}><rect x={i * w + w * 0.2} y={100 - h} width={w * 0.6} height={h} rx="3" style={{ fill: i >= 9 ? '#2f9e44' : 'var(--app-pending-line)' }}><title>{`${m.label}: ${lakh(m.sales)}`}</title></rect><text x={i * w + w / 2} y="116" fontSize="10" style={{ fill: 'var(--app-axis)' }} textAnchor="middle">{m.label}</text></g>;
           })}
         </svg>
       </div>
@@ -204,7 +204,7 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
       </Group>
       <Stack gap={0}>
         {c.invoices.map((i) => (
-          <Group key={i.invoice_id} justify="space-between" wrap="nowrap" py={8} style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: 'pointer' }} onClick={() => onInvoice(i.invoice_id)}>
+          <Group key={i.invoice_id} justify="space-between" wrap="nowrap" py={8} style={{ borderTop: '1px solid var(--app-line)', cursor: 'pointer' }} onClick={() => onInvoice(i.invoice_id)}>
             <div><Text size="sm" fw={600}>{i.invoice_number}</Text><Text size="xs" c="dimmed">{shortDate(i.invoice_date)}{i.pending > 0 && i.paid > 0 ? ` · ${money(i.pending)} pending` : ''}</Text></div>
             <Group gap={8} wrap="nowrap"><Text fw={700} size="sm" className={css.num}>{money(i.total)}</Text><StatusBadge status={i.status} /></Group>
           </Group>

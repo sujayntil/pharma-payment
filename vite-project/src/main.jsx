@@ -10,15 +10,18 @@ import store from './store';
 import './index.css';
 import App from './App.jsx';
 import UpdateRequired from './components/common/UpdateRequired';
+import { watchSystemTheme } from './utils/themeColor';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.error));
 }
 
+watchSystemTheme();
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Provider store={store}>
-      <MantineProvider theme={{ primaryColor: 'green', defaultRadius: 'md', fontFamily: 'IBM Plex Sans, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif', headings: { fontFamily: 'IBM Plex Sans, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }, components: { Badge: { styles: { label: { textTransform: 'none' } } } } }}>
+      <MantineProvider defaultColorScheme="light" theme={{ primaryColor: 'green', defaultRadius: 'md', fontFamily: 'IBM Plex Sans, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif', headings: { fontFamily: 'IBM Plex Sans, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }, components: { Badge: { styles: { label: { textTransform: 'none' } } } } }}>
         <Notifications position="top-right" />
         <HashRouter>
           <App />

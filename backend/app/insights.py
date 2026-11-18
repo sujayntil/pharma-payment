@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 from .credit import credit_days, days_past_credit, is_overdue
-from .customer_health import follow_ups, profile
+from .customer_health import _hundreds, follow_ups, profile
 
 IST = timezone(timedelta(hours=5, minutes=30))
 OPEN = 0.004
@@ -488,7 +488,9 @@ def customer_insights(db: Session, customer_id: int) -> dict | None:
         "order_every": usual,
         "gap_low": habit["gap_low"], "gap_high": habit["gap_high"],
         "next_expected": habit["next_expected"].isoformat() if habit["next_expected"] else None,
-        "usual_month": habit["usual_month"], "recent_month": habit["recent_month"],
+        # Monthly figures are estimates: nearest Rs 100, same as the follow-up list.
+        "usual_month": _hundreds(habit["usual_month"]) if habit["usual_month"] is not None else None,
+        "recent_month": _hundreds(habit["recent_month"]) if habit["recent_month"] is not None else None,
         "not_ordering": habit["quiet"], "buying_less": habit["less"], "buying_more": habit["more"],
         "days_since_last_order": since,
         "usual_mode": max(modes, key=modes.get) if modes else None,

@@ -86,7 +86,7 @@ function NumberRow({ label, required, placeholder, number, onNumber, whatsapp, o
           onClick={onWhatsapp}
           aria-pressed={whatsapp && filled}
           aria-label={`${label} is on WhatsApp`}
-          style={!(whatsapp && filled) ? { color: filled ? 'var(--mantine-color-gray-6)' : undefined } : undefined}
+          style={!(whatsapp && filled) ? { color: filled ? 'var(--app-muted)' : undefined } : undefined}
         >
           <IconBrandWhatsapp size={20} />
         </ActionIcon>

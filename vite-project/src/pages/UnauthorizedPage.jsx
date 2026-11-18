@@ -9,7 +9,7 @@ export default function UnauthorizedPage() {
   const destination = role === 'ADMIN' ? '/admin' : role === 'MR' ? '/mr' : '/login';
 
   return (
-    <Center mih="100dvh" px="md" bg="gray.0">
+    <Center mih="100dvh" px="md" bg="var(--app-soft)">
       <Paper withBorder shadow="sm" radius="lg" p="xl" maw={440} w="100%">
         <Stack align="center" gap="sm">
           <ThemeIcon size={56} radius="xl" color="red" variant="light"><IconShieldLock size={29} /></ThemeIcon>

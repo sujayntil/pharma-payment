@@ -197,7 +197,7 @@ export default function MrCustomers({ openCustomer = null }) {
             <Paper withBorder p="sm" radius="md">
               <SimpleGrid cols={3} spacing="xs">
                 {[['Invoiced', ledger.total_invoiced, undefined], ['Collected', ledger.total_paid, 'green'], ['Pending', ledger.outstanding, 'red']].map(([label, value, color]) => (
-                  <div key={label} style={{ minWidth: 0, textAlign: 'center', borderLeft: label === 'Invoiced' ? undefined : '1px solid var(--mantine-color-gray-2)' }}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" fw={700} c={color} style={{ overflowWrap: 'anywhere' }}>{money(value)}</Text></div>
+                  <div key={label} style={{ minWidth: 0, textAlign: 'center', borderLeft: label === 'Invoiced' ? undefined : '1px solid var(--app-line)' }}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" fw={700} c={color} style={{ overflowWrap: 'anywhere' }}>{money(value)}</Text></div>
                 ))}
               </SimpleGrid>
             </Paper>

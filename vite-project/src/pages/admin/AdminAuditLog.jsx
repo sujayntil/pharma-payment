@@ -153,7 +153,7 @@ function AuditRow({ item, isMobile, onInvoice, onCustomer }) {
     : <Text span size="sm">{item.customer.name}</Text>);
 
   return (
-    <Box px={isMobile ? 'sm' : 'md'} py={10} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+    <Box px={isMobile ? 'sm' : 'md'} py={10} style={{ borderTop: '1px solid var(--app-line)' }}>
       <Group gap={10} wrap="nowrap" align="flex-start">
         <ThemeIcon size={30} radius="xl" variant="light" color={look.color} aria-hidden><Icon size={16} /></ThemeIcon>
         <Box style={{ flex: 1, minWidth: 0 }}>
@@ -174,7 +174,7 @@ function AuditRow({ item, isMobile, onInvoice, onCustomer }) {
                   <IconChevronDown size={13} color="var(--mantine-color-green-8)" style={{ transform: open ? 'rotate(180deg)' : undefined }} /></Group>
               </UnstyledButton>
               <Collapse expanded={open}>
-                <Stack gap={2} mt={6} p={8} style={{ background: 'var(--mantine-color-gray-0)', borderRadius: 8 }}>
+                <Stack gap={2} mt={6} p={8} style={{ background: 'var(--app-soft)', borderRadius: 8 }}>
                   {item.changes.map((change) => (
                     <Text key={change.field} size="xs">
                       <Text span c="dimmed">{FIELD_LABELS[change.field] || change.field}: </Text>

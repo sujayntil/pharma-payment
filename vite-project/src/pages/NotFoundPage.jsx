@@ -9,7 +9,7 @@ export default function NotFoundPage() {
   const destination = !isAuthenticated ? '/login' : role === 'ADMIN' ? '/admin' : '/mr';
 
   return (
-    <Center mih="100dvh" px="md" bg="gray.0">
+    <Center mih="100dvh" px="md" bg="var(--app-soft)">
       <Paper withBorder shadow="sm" radius="lg" p="xl" maw={440} w="100%">
         <Stack align="center" gap="sm">
           <ThemeIcon size={56} radius="xl" color="gray" variant="light"><Text fw={700}>404</Text></ThemeIcon>

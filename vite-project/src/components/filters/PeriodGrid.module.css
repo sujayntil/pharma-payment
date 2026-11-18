@@ -1,14 +1,14 @@
 .wrap { display: flex; flex-direction: column; }
 .chips { display: flex; gap: 6px; margin-bottom: 14px; }
-.chip { flex: 1; text-align: center; font-size: 13px; padding: 7px 4px; border-radius: 99px; border: 1px solid var(--mantine-color-gray-3); color: var(--mantine-color-dark-6); white-space: nowrap; }
-.chip:hover { background: var(--mantine-color-gray-0); }
-.chip[data-on] { background: var(--mantine-color-green-0); border-color: var(--mantine-color-green-6); color: var(--mantine-color-green-9); font-weight: 600; }
+.chip { flex: 1; text-align: center; font-size: 13px; padding: 7px 4px; border-radius: 99px; border: 1px solid var(--app-line-2); color: var(--app-ink); white-space: nowrap; }
+.chip:hover { background: var(--app-soft); }
+.chip[data-on] { background: var(--mantine-color-green-light); border-color: var(--mantine-color-green-6); color: var(--mantine-color-green-9); font-weight: 600; }
 .months { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
-.month, .quarter { text-align: center; padding: 10px 0; border-radius: 10px; font-size: 13.5px; color: var(--mantine-color-dark-7); background: var(--mantine-color-gray-0); transition: background 120ms ease; }
-.month:hover:not([data-off]), .quarter:hover:not([data-off]) { background: var(--mantine-color-green-0); }
+.month, .quarter { text-align: center; padding: 10px 0; border-radius: 10px; font-size: 13.5px; color: var(--app-ink); background: var(--app-soft); transition: background 120ms ease; }
+.month:hover:not([data-off]), .quarter:hover:not([data-off]) { background: var(--mantine-color-green-light); }
 .month[data-now], .quarter[data-now] { box-shadow: inset 0 0 0 1px var(--mantine-color-green-5); }
 .month[data-on], .quarter[data-on] { background: var(--mantine-color-green-8); color: #fff; font-weight: 600; box-shadow: none; }
-.month[data-off], .quarter[data-off] { background: transparent; color: var(--mantine-color-gray-4); cursor: default; }
-.label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mantine-color-gray-6); margin-bottom: 6px; }
+.month[data-off], .quarter[data-off] { background: transparent; color: var(--app-faint); cursor: default; }
+.label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--app-muted); margin-bottom: 6px; }
 .quarters { display: grid; grid-template-columns: repeat(4, 1fr) 1.5fr; gap: 6px; }
 .quarter { padding: 8px 0; font-size: 13px; }

@@ -12,7 +12,7 @@ export default function SelectMark({ selected, onToggle, label }) {
       style={{
         width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
         background: selected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-body)',
-        border: `2px solid ${selected ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-4)'}`,
+        border: `2px solid ${selected ? 'var(--mantine-color-green-6)' : 'var(--app-faint)'}`,
         boxShadow: '0 1px 3px rgba(0,0,0,.15)',
       }}
     >

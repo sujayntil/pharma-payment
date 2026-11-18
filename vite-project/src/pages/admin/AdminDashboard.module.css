@@ -1,19 +1,19 @@
 /* Admin dashboard only: calmer sizes and colours (the greeting banner is untouched). */
 .card {
-  background: var(--mantine-color-white);
-  border: 1px solid var(--mantine-color-gray-3);
+  background: var(--app-surface);
+  border: 1px solid var(--app-line-2);
   border-radius: var(--mantine-radius-md);
 }
 
 .cardTitle {
   font-size: 14px;
   font-weight: 600;
-  color: var(--mantine-color-gray-7);
+  color: var(--app-text-2);
 }
 
 .label {
   font-size: 13px;
-  color: var(--mantine-color-gray-6);
+  color: var(--app-muted);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -48,8 +48,8 @@
   font-weight: 600 !important;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--mantine-color-gray-6) !important;
-  background: var(--mantine-color-gray-0);
+  color: var(--app-muted) !important;
+  background: var(--app-soft);
   white-space: nowrap;
 }
 
@@ -59,16 +59,16 @@
 
 
 /* Collected card: where the money came from, label left and amount right. */
-.split { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--mantine-color-gray-2); display: flex; flex-direction: column; gap: 4px; }
+.split { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--app-line); display: flex; flex-direction: column; gap: 4px; }
 .split > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
-.split span { color: var(--mantine-color-gray-6); }
+.split span { color: var(--app-muted); }
 .split span::first-letter { text-transform: uppercase; }
-.split b { font-weight: 600; color: var(--mantine-color-dark-6); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.split b { font-weight: 600; color: var(--app-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 600px) {
   .split > div { flex-direction: column; gap: 0; }
   .split span { font-size: 12px; }
   .split > div + div { margin-top: 4px; }
 }
 .overdue { color: var(--mantine-color-red-7) !important; }
-.owedBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--mantine-color-gray-2); }
+.owedBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--app-line); }
 .owedBar i { display: block; height: 100%; transition: width 600ms ease; }

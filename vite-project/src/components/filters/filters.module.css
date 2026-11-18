@@ -1,5 +1,5 @@
 .bar {
-  background: var(--mantine-color-white);
+  background: var(--app-surface);
   box-shadow: var(--mantine-shadow-xs);
 }
 
@@ -28,25 +28,25 @@
   padding: 6px 10px;
   border-radius: var(--mantine-radius-sm);
   font-size: var(--mantine-font-size-sm);
-  color: var(--mantine-color-gray-8);
-  border: 1px solid var(--mantine-color-gray-3);
+  color: var(--app-ink);
+  border: 1px solid var(--app-line-2);
   text-align: left;
   min-height: 36px;
 }
 
 .preset:hover {
-  background: var(--mantine-color-gray-0);
+  background: var(--app-soft);
 }
 
 .preset[data-active] {
   border-color: var(--mantine-color-green-6);
-  background: var(--mantine-color-green-0);
+  background: var(--mantine-color-green-light);
   color: var(--mantine-color-green-9);
   font-weight: 600;
 }
 
 .chips {
-  border-top: 1px dashed var(--mantine-color-gray-3);
+  border-top: 1px dashed var(--app-line-2);
   padding-top: var(--mantine-spacing-xs);
   margin-top: var(--mantine-spacing-sm);
 }
@@ -130,8 +130,8 @@
 .sheetFooter {
   position: sticky;
   bottom: 0;
-  background: var(--mantine-color-white);
-  border-top: 1px solid var(--mantine-color-gray-2);
+  background: var(--app-surface);
+  border-top: 1px solid var(--app-line);
   margin-top: var(--mantine-spacing-md);
   padding-block: var(--mantine-spacing-sm);
   padding-bottom: calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom, 0px));
@@ -149,6 +149,6 @@
     width: 100%;
   }
 }
-.customToggle { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--mantine-color-gray-2); padding-top: 10px; font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); }
+.customToggle { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--app-line); padding-top: 10px; font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); }
 .inlineDates { display: flex; flex-direction: column; width: 100%; }
-.inlinePanel { margin-top: 8px; padding: 12px; border: 1px solid var(--mantine-color-gray-3); border-radius: 12px; background: var(--mantine-color-white); }
+.inlinePanel { margin-top: 8px; padding: 12px; border: 1px solid var(--app-line-2); border-radius: 12px; background: var(--app-surface); }

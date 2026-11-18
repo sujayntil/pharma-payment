@@ -39,6 +39,7 @@ import PullToRefresh from './PullToRefresh';
 import RefreshButton from './RefreshButton';
 import NotificationBell from './NotificationBell';
 import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
+import AppearanceSwitch from './AppearanceSwitch';
 
 const NAV_KEY = 'nav-collapsed';
 const readCollapsed = () => { try { return window.localStorage.getItem(NAV_KEY) === '1'; } catch { return false; } };
@@ -168,7 +169,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
           {/* Refresh: Admin everywhere, MR on laptop (MR phones pull down instead). */}
           {!useBottomNav && <RefreshButton size={isMobile ? 34 : 38} />}
           {role === 'ADMIN' && <NotificationBell size={isMobile ? 34 : 38} />}
-          <Menu shadow="md" width={190} position="bottom-end">
+          <Menu shadow="md" width={250} position="bottom-end">
             <Menu.Target>
               <UnstyledButton aria-label="Open user menu">
                 <Group gap="xs">
@@ -182,13 +183,15 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               </UnstyledButton>
             </Menu.Target>
             <Menu.Dropdown>
-              {/* Who is signed in, then the one action. */}
+              {/* Who is signed in, the look (Light / Dark / System), then Log out. */}
               <Box px="sm" py={6}>
                 <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{user?.name || 'User'}</Text>
                 <Text size="xs" c="dimmed">{role === 'ADMIN' ? 'Administrator' : 'Medical representative'}</Text>
                 {/* Which build this is, so anyone can check they have the latest update. */}
                 <Text size="xs" c="dimmed" mt={4}>Version {APP_NUMBER}</Text>
               </Box>
+              <Menu.Divider />
+              <AppearanceSwitch />
               <Menu.Divider />
               <Menu.Item color="red" leftSection={<IconLogout size={15} />} onClick={signOut}>Log out</Menu.Item>
             </Menu.Dropdown>
@@ -208,8 +211,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               style={{
                 position: 'absolute', top: compact ? 10 : 18, right: -12, zIndex: 5, width: 24, height: 24, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'var(--mantine-color-body)', border: '1px solid var(--mantine-color-gray-3)',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)', color: 'var(--mantine-color-gray-7)',
+                background: 'var(--mantine-color-body)', border: '1px solid var(--app-line-2)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08)', color: 'var(--app-text-2)',
               }}
             >
               {collapsed ? <IconChevronRight size={14} stroke={2.2} /> : <IconChevronLeft size={14} stroke={2.2} />}
@@ -233,7 +236,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
                       style={{
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', borderRadius: 8,
                         background: current ? 'var(--mantine-color-green-light)' : undefined,
-                        color: current ? 'var(--mantine-color-green-8)' : 'var(--mantine-color-gray-7)',
+                        color: current ? 'var(--mantine-color-green-8)' : 'var(--app-text-2)',
                       }}
                     >
                       <Icon size={22} stroke={current ? 2.1 : 1.8} />
@@ -258,7 +261,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
                     variant="light"
                     color="green"
                     // Softer selected item: faint tint, darker green text and icon.
-                    styles={{ root: { borderRadius: 8, ...(active === item.id && { background: 'var(--mantine-color-green-0)', color: 'var(--mantine-color-green-8)', fontWeight: 600 }) } }}
+                    styles={{ root: { borderRadius: 8, ...(active === item.id && { background: 'var(--mantine-color-green-light)', color: 'var(--mantine-color-green-8)', fontWeight: 600 }) } }}
                   />
                 );
               })}
@@ -270,7 +273,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
           {compact ? (
             <Stack gap={4} align="stretch">
               <Tooltip label="Log out" position="right" withArrow openDelay={300}>
-                <UnstyledButton onClick={signOut} aria-label="Log out" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', borderRadius: 8, color: 'var(--mantine-color-gray-7)' }}>
+                <UnstyledButton onClick={signOut} aria-label="Log out" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', borderRadius: 8, color: 'var(--app-text-2)' }}>
                   <IconLogout size={20} />
                   <Text size="11px" fw={500}>Log out</Text>
                 </UnstyledButton>
@@ -293,7 +296,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
                   key={item.id}
                   onClick={() => choose(item.id)}
                   aria-current={current ? 'page' : undefined}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, color: current ? 'var(--mantine-color-green-7)' : 'var(--mantine-color-gray-6)' }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, color: current ? 'var(--mantine-color-green-7)' : 'var(--app-muted)' }}
                 >
                   <Icon size={22} stroke={current ? 2.2 : 1.8} />
                   <Text size="xs" fw={current ? 700 : 500} c="inherit">{item.label}</Text>

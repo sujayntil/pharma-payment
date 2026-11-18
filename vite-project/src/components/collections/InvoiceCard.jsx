@@ -43,7 +43,7 @@ export default function InvoiceCard({ invoice, customerType, showCustomer = true
       onClick={press.onClick}
       press={canSelect && !selecting ? press : undefined}
       // Selecting: same layout; a ticked card turns green with a ✓ on its left edge.
-      highlight={selecting && selected ? 'var(--mantine-color-green-0)' : undefined}
+      highlight={selecting && selected ? 'var(--mantine-color-green-light)' : undefined}
       borderColor={selecting && selected ? 'var(--mantine-color-green-5)' : undefined}
       marker={selecting && canSelect ? <SelectMark selected={selected} onToggle={() => onSelect(invoice)} label={invoice.invoice_number} /> : null}
       title={<>

@@ -59,14 +59,14 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
     return (
       <Paper p="md" className={cardClass}>
         <Group justify="space-between" align="baseline" wrap="nowrap" gap="sm" mb={rows.length ? 'sm' : 0}>
-          <div><Text fw={600} fz={14} c="gray.7">Overdue</Text><Text fz={12} c="dimmed">Unpaid past 40 days · distributors 60</Text></div>
+          <div><Text fw={600} fz={14} c="var(--app-text-2)">Overdue</Text><Text fz={12} c="dimmed">Unpaid past 40 days · distributors 60</Text></div>
           {rows.length > 0 && <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}><Text span fw={700} c="red.7" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(total)}</Text> · {count}</Text>}
         </Group>
         {error && <Alert color="red" mt="sm">{error}</Alert>}
         {loading ? <Group justify="center" p="md"><Loader size="sm" /></Group> : !rows.length ? null : isMobile ? (
           <Stack gap={0}>
             {rows.map((item) => (
-              <Group key={item.customer_id} justify="space-between" align="flex-start" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: onSelect ? 'pointer' : undefined }} {...(onSelect && { component: UnstyledButton, onClick: () => onSelect(item), w: '100%', 'aria-label': `Open ${item.customer}` })}>
+              <Group key={item.customer_id} justify="space-between" align="flex-start" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: onSelect ? 'pointer' : undefined }} {...(onSelect && { component: UnstyledButton, onClick: () => onSelect(item), w: '100%', 'aria-label': `Open ${item.customer}` })}>
                 <div style={{ minWidth: 0 }}>
                   <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer}</Text>
                   <Text size="xs" c="dimmed">Oldest {item.oldest_invoice_number} · {shortDate(item.oldest_invoice_date)}</Text>
@@ -110,9 +110,9 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
     <Paper withBorder={!refined} p="md" className={refined ? cardClass : undefined}>
       <Group justify="space-between" align="flex-start" mb="sm" wrap="nowrap" gap="sm">
         <div style={{ minWidth: 0 }}>
-          {refined ? <Text fw={600} fz={14} c="gray.7">Overdue</Text> : <Title order={3}>Overdue</Title>}
+          {refined ? <Text fw={600} fz={14} c="var(--app-text-2)">Overdue</Text> : <Title order={3}>Overdue</Title>}
           {description && !refined && <Text size="sm" c="dimmed">{description}</Text>}
-          {refined && rows.length > 0 && <Text size="sm" c="dimmed">Total <Text span fw={700} c="dark" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(total)}</Text></Text>}
+          {refined && rows.length > 0 && <Text size="sm" c="dimmed">Total <Text span fw={700} c="var(--app-ink)" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(total)}</Text></Text>}
         </div>
         <Badge color={rows.length ? 'red' : 'gray'} variant={refined ? 'light' : undefined} style={{ flexShrink: 0 }}>{rows.length} {rows.length === 1 ? 'customer' : 'customers'}</Badge>
       </Group>
@@ -121,7 +121,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
       {loading ? <Group justify="center" p="lg"><Loader /></Group> : !rows.length ? <Text c="dimmed" py="md">{emptyText}</Text> : isMobile ? (
         <Stack gap={0}>
           {rows.map((item) => (
-            <Group key={item.customer_id} justify="space-between" align="flex-start" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: onSelect ? 'pointer' : undefined }} {...(onSelect && { component: UnstyledButton, onClick: () => onSelect(item), w: '100%', 'aria-label': `Open ${item.customer}` })}>
+            <Group key={item.customer_id} justify="space-between" align="flex-start" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: onSelect ? 'pointer' : undefined }} {...(onSelect && { component: UnstyledButton, onClick: () => onSelect(item), w: '100%', 'aria-label': `Open ${item.customer}` })}>
               <div style={{ minWidth: 0 }}>
                 <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer}</Text>
                 <Text size="xs" c="dimmed">Oldest {item.oldest_invoice_number} · {shortDate(item.oldest_invoice_date)}</Text>

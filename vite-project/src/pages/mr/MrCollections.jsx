@@ -77,7 +77,7 @@ function ToCollect() {
   );
 
   return <Stack gap="md">
-    <Paper withBorder p="md" bg="green.0"><Text size="sm" c="dimmed">{filtered ? 'Pending in these results' : 'Pending across your invoices'}</Text><Title order={2}>{money(filteredOutstanding)}</Title></Paper>
+    <Paper withBorder p="md" bg="var(--mantine-color-green-light)"><Text size="sm" c="dimmed">{filtered ? 'Pending in these results' : 'Pending across your invoices'}</Text><Title order={2}>{money(filteredOutstanding)}</Title></Paper>
     <FilterBar search={searchQuery} onSearch={onSearch} searchPlaceholder="Search invoice or customer" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All statuses" icon={<IconCircleCheck size={16} />} data={STATUSES} value={status} onChange={(next) => { setStatus(next); setPage(1); }} />
       <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} months firstDate={firstDate} quick={['today', 'yesterday']} />

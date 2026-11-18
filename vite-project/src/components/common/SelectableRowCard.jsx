@@ -15,7 +15,7 @@ export default function SelectableRowCard({ onOpen, canSelect, selecting, select
       {...props}
       onClick={press.onClick}
       press={canSelect && !selecting ? press : undefined}
-      highlight={selecting && selected ? 'var(--mantine-color-green-0)' : undefined}
+      highlight={selecting && selected ? 'var(--mantine-color-green-light)' : undefined}
       borderColor={selecting && selected ? 'var(--mantine-color-green-5)' : undefined}
       marker={selecting && canSelect ? <SelectMark selected={selected} onToggle={onToggle} label={label} /> : null}
     />

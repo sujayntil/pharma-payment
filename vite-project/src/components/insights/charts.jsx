@@ -21,7 +21,7 @@ export function TrendChart({ points = [], selected, onPick }) {
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }} role="img" aria-label="Sales and collections over time">
       {[0, 1, 2, 3, 4].map((k) => {
         const v = (max * k) / 4;
-        return <g key={k}><line x1={pl} x2={W - 6} y1={y(v)} y2={y(v)} stroke="#f1f3f5" /><text x={pl - 8} y={y(v) + 4} fontSize="10.5" fill="#8a929c" textAnchor="end">{short(v)}</text></g>;
+        return <g key={k}><line x1={pl} x2={W - 6} y1={y(v)} y2={y(v)} style={{ stroke: 'var(--app-chart-grid)' }} /><text x={pl - 8} y={y(v) + 4} fontSize="10.5" style={{ fill: 'var(--app-axis)' }} textAnchor="end">{short(v)}</text></g>;
       })}
       {points.map((p, i) => {
         const x = pl + i * bw + bw * 0.18; const w = bw * 0.64;
@@ -33,14 +33,14 @@ export function TrendChart({ points = [], selected, onPick }) {
             <title>{`${p.label}: sales ${lakh(p.sales)} · recovered ${lakh(rec)} (${pct}%) · pending ${lakh(p.sales - rec)} · all collections ${lakh(p.collected)}`}</title>
             <rect x={pl + i * bw} y={pt} width={bw} height={H - pb - pt} fill="transparent" />
             {/* the whole bar = that period's sales; dark = recovered so far, light = still pending */}
-            <rect x={x} y={y(p.sales)} width={w} height={H - pb - y(p.sales)} rx="4" fill="#d3f9d8" stroke={on ? '#2f9e44' : 'none'} strokeWidth={on ? 1.5 : 0} />
+            <rect x={x} y={y(p.sales)} width={w} height={H - pb - y(p.sales)} rx="4" style={{ fill: 'var(--app-pending)' }} stroke={on ? '#2f9e44' : 'none'} strokeWidth={on ? 1.5 : 0} />
             {rec > 0 && <rect x={x} y={y(rec)} width={w} height={H - pb - y(rec)} rx="4" fill="#2f9e44" />}
-            <text x={x + w / 2} y={H - 8} fontSize="10.5" fill={on ? '#1a1d21' : '#8a929c'} fontWeight={on ? 700 : 400} textAnchor="middle">{p.label}</text>
+            <text x={x + w / 2} y={H - 8} fontSize="10.5" style={{ fill: on ? 'var(--app-ink)' : 'var(--app-axis)' }} fontWeight={on ? 700 : 400} textAnchor="middle">{p.label}</text>
           </g>
         );
       })}
       <polyline points={line.join(' ')} fill="none" stroke="#1c7ed6" strokeWidth="2.2" strokeLinejoin="round" pointerEvents="none" />
-      {line.map((pt2) => { const [cx, cy] = pt2.split(','); return <circle key={pt2} cx={cx} cy={cy} r="3.2" fill="#fff" stroke="#1c7ed6" strokeWidth="2" pointerEvents="none" />; })}
+      {line.map((pt2) => { const [cx, cy] = pt2.split(','); return <circle key={pt2} cx={cx} cy={cy} r="3.2" stroke="#1c7ed6" style={{ fill: 'var(--app-surface)' }} strokeWidth="2" pointerEvents="none" />; })}
     </svg>
   );
 }
@@ -57,9 +57,9 @@ export function Donut({ rows = [], total = 0, active, onPick, centerLabel = 'Sal
         a = b;
         return <path key={row.key} d={`M${x1},${y1}A${R},${R} 0 ${big} 1 ${x2},${y2}L${x3},${y3}A${r},${r} 0 ${big} 0 ${x4},${y4}Z`} fill={row.color} opacity={active && active !== row.key ? 0.25 : 1} style={{ cursor: 'pointer' }} onClick={() => onPick?.(row.key)} />;
       })}
-      {!total && <circle cx={c} cy={c} r={(R + r) / 2} fill="none" stroke="#f1f3f5" strokeWidth={R - r} />}
-      <text x={c} y={70} textAnchor="middle" fontSize="11" fill="#8a929c">{centerLabel}</text>
-      <text x={c} y={88} textAnchor="middle" fontSize="14" fontWeight="700" fill="#1a1d21">{lakh(total)}</text>
+      {!total && <circle cx={c} cy={c} r={(R + r) / 2} fill="none" style={{ stroke: 'var(--app-chart-grid)' }} strokeWidth={R - r} />}
+      <text x={c} y={70} textAnchor="middle" fontSize="11" style={{ fill: 'var(--app-axis)' }}>{centerLabel}</text>
+      <text x={c} y={88} textAnchor="middle" fontSize="14" fontWeight="700" style={{ fill: 'var(--app-ink)' }}>{lakh(total)}</text>
     </svg>
   );
 }

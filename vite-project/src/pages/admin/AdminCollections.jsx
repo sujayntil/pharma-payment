@@ -150,7 +150,7 @@ export default function AdminCollections() {
     </FilterBar>
 
     <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
-      <StatCard label={`Net collected${rangeLabel ? ` · ${rangeLabel}` : ''}`} hint="Collections minus reversals" value={money(total)} bg="green.0" />
+      <StatCard label={`Net collected${rangeLabel ? ` · ${rangeLabel}` : ''}`} hint="Collections minus reversals" value={money(total)} bg="var(--mantine-color-green-light)" />
       <StatCard label="Ledger entries" value={count} />
     </SimpleGrid>
 

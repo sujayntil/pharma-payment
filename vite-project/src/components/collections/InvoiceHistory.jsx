@@ -105,7 +105,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
 
   return (
     <Stack gap="md">
-      <Paper withBorder p="sm" radius="md" bg="gray.0">
+      <Paper withBorder p="sm" radius="md" bg="var(--app-soft)">
         <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
           <Text fw={700} size="lg" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{invoice.invoice_number}</Text>
           {actions?.length > 0 && (

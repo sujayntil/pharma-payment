@@ -22,7 +22,7 @@ import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 // Secondary counts: quiet tiles (no border, soft background, smaller number)
 // so the Outstanding figure and its action stand out.
-const Metric = ({ label, value, color }) => <Paper p="sm" h="100%" bg="gray.1" radius="md"><Text size="xs" c="dimmed">{label}</Text><Text fw={700} c={color} fz={{ base: 20, sm: 22 }} style={{ whiteSpace: 'nowrap' }}>{value}</Text></Paper>;
+const Metric = ({ label, value, color }) => <Paper p="sm" h="100%" bg="var(--app-soft-2)" radius="md"><Text size="xs" c="dimmed">{label}</Text><Text fw={700} c={color} fz={{ base: 20, sm: 22 }} style={{ whiteSpace: 'nowrap' }}>{value}</Text></Paper>;
 
 /**
  * MR Home. Same figures and data as before; recent invoices and overdue
@@ -72,7 +72,7 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
     </Stack>
     <Stack gap={12}>
     <ZoneHeading icon={IconReceipt} tone="blue" title="Activity" />
-    <Paper p="md" className={partsCss.card}><Text fw={600} fz={14} c="gray.7" mb="sm">Recent invoices</Text>{loading && !dashboard ? <Group justify="center" p="lg"><Loader /></Group> : !recent.length ? <Text c="dimmed" py="md">No invoices assigned to you yet.</Text> : isMobile ? <CardList>{recent.map((invoice, index) => (
+    <Paper p="md" className={partsCss.card}><Text fw={600} fz={14} c="var(--app-text-2)" mb="sm">Recent invoices</Text>{loading && !dashboard ? <Group justify="center" p="lg"><Loader /></Group> : !recent.length ? <Text c="dimmed" py="md">No invoices assigned to you yet.</Text> : isMobile ? <CardList>{recent.map((invoice, index) => (
       <InvoiceCard key={invoice.invoice_id ?? `${invoice.invoice_number}-${index}`} invoice={invoice} onOpen={invoice.invoice_id ? () => setOpenId(invoice.invoice_id) : undefined} />
     ))}</CardList> : <Table.ScrollContainer minWidth={760}><Table highlightOnHover verticalSpacing="xs"><Table.Thead><Table.Tr><Table.Th {...th}>Invoice</Table.Th><Table.Th {...th}>Date</Table.Th><Table.Th {...th}>Customer</Table.Th><Table.Th {...th} ta="right">Amount</Table.Th><Table.Th {...th} ta="right">Pending</Table.Th><Table.Th {...th}>Status</Table.Th><Table.Th {...th}>Recorded by</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{recent.map((invoice, index) => <Table.Tr key={invoice.invoice_id ?? `${invoice.invoice_number}-${index}`} onClick={invoice.invoice_id ? () => setOpenId(invoice.invoice_id) : undefined} style={invoice.invoice_id ? { cursor: 'pointer' } : undefined}><Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer || '—'}</Table.Td><Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right" fw={600} c={Number(invoice.pending_amount) > 0 ? 'red' : 'green'}>{money(invoice.pending_amount)}</Table.Td><Table.Td><StatusCell row={invoice} /></Table.Td><Table.Td maw={200}><RecordedBy row={invoice} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}</Paper>
     </Stack>

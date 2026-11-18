@@ -3,7 +3,7 @@
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--mantine-color-gray-9);
+  color: var(--app-ink);
   line-height: 1.2;
 }
 
@@ -19,12 +19,12 @@
 .zoneMeta {
   font-size: 13px;
   font-weight: 500;
-  color: var(--mantine-color-gray-6);
+  color: var(--app-muted);
 }
 
 .card {
-  background: var(--mantine-color-white);
-  border: 1px solid var(--mantine-color-gray-3);
+  background: var(--app-surface);
+  border: 1px solid var(--app-line-2);
   border-radius: var(--mantine-radius-md);
 }
 
@@ -37,7 +37,7 @@
   flex-wrap: wrap;
   gap: 4px 16px;
   font-size: 13px;
-  color: var(--mantine-color-gray-7);
+  color: var(--app-text-2);
   margin-top: 10px;
 }
 
@@ -49,7 +49,7 @@
 
 .statusLine b {
   font-variant-numeric: tabular-nums;
-  color: var(--mantine-color-gray-9);
+  color: var(--app-ink);
 }
 
 .statusDot {

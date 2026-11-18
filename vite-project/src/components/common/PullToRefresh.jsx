@@ -72,7 +72,7 @@ export default function PullToRefresh({ top = 52 }) {
     >
       <IconRefresh
         size={20}
-        color={ready || refreshing ? 'var(--mantine-color-green-7)' : 'var(--mantine-color-gray-6)'}
+        color={ready || refreshing ? 'var(--mantine-color-green-7)' : 'var(--app-muted)'}
         className={refreshing ? 'app-spin' : undefined}
         style={refreshing ? undefined : { transform: `rotate(${pull * 3}deg)` }}
       />

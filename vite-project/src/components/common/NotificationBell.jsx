@@ -98,7 +98,7 @@ export default function NotificationBell({ size = 38 }) {
   const monthLines = months.map((month) => <MonthItem key={month.id} month={month} onOpen={() => go('/admin/performance')} />);
   // Turning phone alerts on/off sits at the top of the list.
   const alertsRow = (
-    <Box px="md" py={10} style={{ borderBottom: '1px solid var(--mantine-color-gray-2)', background: 'var(--mantine-color-gray-0)' }}>
+    <Box px="md" py={10} style={{ borderBottom: '1px solid var(--app-line)', background: 'var(--app-soft)' }}>
       <PaymentAlerts compact />
     </Box>
   );
@@ -112,7 +112,7 @@ export default function NotificationBell({ size = 38 }) {
     </Stack>
   );
   const footer = (
-    <Box px="md" py={10} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+    <Box px="md" py={10} style={{ borderTop: '1px solid var(--app-line)' }}>
       <Anchor component="button" type="button" size="sm" c="green.7" fw={600} onClick={() => go('/admin/collections')}>See all collections</Anchor>
     </Box>
   );
@@ -142,7 +142,7 @@ export default function NotificationBell({ size = 38 }) {
     <Popover opened={opened} onChange={setOpened} position="bottom-end" width={380} shadow="md" radius="md" offset={8} withinPortal>
       <Popover.Target>{bell}</Popover.Target>
       <Popover.Dropdown p={0}>
-        <Group justify="space-between" px="md" py={10} style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
+        <Group justify="space-between" px="md" py={10} style={{ borderBottom: '1px solid var(--app-line)' }}>
           <Text fw={700} size="sm">Recent collections</Text>
           {loading && <Loader size={14} />}
         </Group>
@@ -164,7 +164,7 @@ function MonthItem({ month, onOpen }) {
       onClick={onOpen}
       px="md"
       py={10}
-      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--mantine-color-gray-1)', background: month.is_new ? '#fff9db' : undefined }}
+      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)', background: month.is_new ? 'var(--app-highlight)' : undefined }}
       aria-label={`${month.mr_name} cleared ${month.label}`}
     >
       <Group gap={10} wrap="nowrap" align="flex-start">
@@ -195,7 +195,7 @@ function BellItem({ item, onOpen }) {
       onClick={onOpen}
       px="md"
       py={10}
-      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--mantine-color-gray-1)', background: item.is_new ? 'var(--mantine-color-green-0)' : undefined }}
+      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)', background: item.is_new ? 'var(--mantine-color-green-light)' : undefined }}
       aria-label={`${reversal ? 'Reversal' : 'Collection'} ${money(Math.abs(item.amount))} for ${item.invoice_number}`}
     >
       <Group gap={10} wrap="nowrap" align="flex-start">

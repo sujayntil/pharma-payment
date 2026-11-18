@@ -140,7 +140,7 @@ function Splats() {
 }
 
 const CELEBRATION_CSS = `
-.sk-backdrop{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.78);animation:sk-fade 160ms ease-out}
+.sk-backdrop{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--app-celebrate-veil);animation:sk-fade 160ms ease-out}
 .sk-card{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:18px 22px 22px;min-width:270px;max-width:88vw;background:var(--mantine-color-body);border-radius:22px;box-shadow:0 14px 44px rgba(0,0,0,0.18);animation:sk-pop 360ms cubic-bezier(.2,1.4,.4,1)}
 .sk-splats{position:absolute;inset:0;width:100%;height:100%}
 .sk-mascot{position:relative;animation:sk-bounce 900ms ease-in-out 360ms infinite alternate;transform-origin:50% 100%}

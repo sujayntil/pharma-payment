@@ -194,7 +194,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
           justify="flex-end"
           gap="xs"
           py="sm"
-          style={{ position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--mantine-color-body)', borderTop: '1px solid var(--mantine-color-gray-2)' }}
+          style={{ position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--mantine-color-body)', borderTop: '1px solid var(--app-line)' }}
         >
           <Button variant="default" type="button" disabled={busy} onClick={onClose}>Cancel</Button>
           <Button type="submit" loading={busy} disabled={Boolean(problem)}>{entered && !tooMuch ? `Save ${money(value)}` : 'Save'}</Button>

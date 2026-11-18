@@ -75,7 +75,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   const swatch = (bg, extra) => <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: bg, margin: '0 5px -1px 0', ...extra }} />;
   const legend = (
     <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-      {swatch('#2f9e44')}Recovered {swatch('#d3f9d8', { marginLeft: 8, border: '1px solid #b2f2bb' })}Pending {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}All collections
+      {swatch('#2f9e44')}Recovered {swatch('var(--app-pending)', { marginLeft: 8, border: '1px solid var(--app-pending-line)' })}Pending {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}All collections
     </Text>
   );
   const periodPicker = (
@@ -98,7 +98,7 @@ export default function AdminInsights({ onOpenCustomer }) {
     const better = change === null || change === undefined ? null : (good === 'up' ? change >= 0 : change <= 0);
     return (
       <button type="button" key={key} className={`${css.card} ${css.kpi} ${kind ? css.clickable : ''}`} onClick={kind ? () => openFresh({ kind: 'records', records: kind, title: label }) : undefined} style={kind ? undefined : { cursor: 'default' }}>
-        <div className={css.kl}>{label}{kind && <IconChevronRight size={14} color="#adb5bd" />}</div>
+        <div className={css.kl}>{label}{kind && <IconChevronRight size={14} color="var(--app-faint)" />}</div>
         {loading && !data ? <Skeleton height={28} width={120} mt={6} /> : <div className={css.kv}>{value}</div>}
         {note && data && <div className={css.note}>{note}</div>}
         {foot ? <div className={css.kf}>{data && foot}</div> : <div className={css.kf}>
@@ -135,7 +135,7 @@ export default function AdminInsights({ onOpenCustomer }) {
         ))}
         {chips.length > 0 && <Button size="compact-sm" variant="subtle" color="gray" onClick={clearAll}>Clear all</Button>}
       </Group>
-      <Text size="sm" c="dimmed" mt={-8}>Overview › <Text span fw={600} c="dark">{[periodLabel, type, mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean).join(' › ')}</Text></Text>
+      <Text size="sm" c="dimmed" mt={-8}>Overview › <Text span fw={600} c="var(--app-ink)">{[periodLabel, type, mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean).join(' › ')}</Text></Text>
 
       {error && <Alert color="red">{error}</Alert>}
 
@@ -212,7 +212,7 @@ export default function AdminInsights({ onOpenCustomer }) {
                       <div className={css.bar} style={{ height: 5, marginTop: 3 }}><i style={{ width: `${(Math.max(r.collected, 0) / mrMax) * 100}%`, background: '#1c7ed6' }} /></div>
                       <Group justify="space-between" mt={3} wrap="nowrap" gap={6}>
                         <span className={css.sub}>Collected {lakh(r.collected)}</span>
-                        {pct !== null && <span className={css.sub}>Target <b style={{ color: pct >= 100 ? '#2b8a3e' : pct >= 70 ? '#1a1d21' : '#e03131' }}>{pct}%</b> of {lakh(r.sales_target)}{data.by_mr.current_month ? ` · ${data.by_mr.days_left} days left` : ''}</span>}
+                        {pct !== null && <span className={css.sub}>Target <b style={{ color: pct >= 100 ? '#2b8a3e' : pct >= 70 ? 'var(--app-ink)' : '#e03131' }}>{pct}%</b> of {lakh(r.sales_target)}{data.by_mr.current_month ? ` · ${data.by_mr.days_left} days left` : ''}</span>}
                       </Group>
                     </span>
                   </button>
@@ -223,7 +223,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Top customers</div><div className={css.cs}>Top 10 = <b style={{ color: '#1a1d21' }}>{data.top_customers.top10_share}%</b> of sales</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>Top customers</div><div className={css.cs}>Top 10 = <b style={{ color: 'var(--app-ink)' }}>{data.top_customers.top10_share}%</b> of sales</div></div></div>
             <div className={css.cb}>
               {data.top_customers.dependence && <div className={css.warn}>⚠️ <span><b>{data.top_customers.dependence.name}</b> alone is <b>{Math.round(data.top_customers.dependence.share)}%</b> of sales — a lot riding on one customer.</span></div>}
               <ShowMore key={listKey} items={data.top_customers.rows} initial={8} render={(c) => custRow(c, <span style={{ width: 120, textAlign: 'right' }}><b className={css.num}>{lakh(c.sales)}</b><div className={css.bar}><i style={{ width: `${(c.sales / data.top_customers.rows[0].sales) * 100}%`, background: TYPE_COLORS[c.type] }} /></div></span>)} />

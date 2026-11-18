@@ -32,7 +32,7 @@ function History({ invoiceId }) {
 
   return (
     <Stack>
-      <Paper withBorder p="sm" bg="gray.0">
+      <Paper withBorder p="sm" bg="var(--app-soft)">
         <Group justify="space-between" mb="xs">
           <Text fw={700}>{invoice.invoice_number} · {invoice.customer_name || '—'}</Text>
           <StatusBadge status={invoice.status} />

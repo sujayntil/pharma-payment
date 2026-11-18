@@ -35,10 +35,10 @@ function Amount({ value, size = 26, color, animate = true }) {
 
 // Money cards: the same figure size on all three. Tally sales sits on a soft
 // green card; Collected in green, Pending in red.
-const SALES_CARD = { background: '#F1F8F4', borderColor: '#CFE6D8' };
+const SALES_CARD = { background: 'var(--app-sales-bg)', borderColor: 'var(--app-sales-line)' };
 const Stat = ({ label, value, dot, color, sales = false, loading = false, note }) => (
   <Paper p="md" className={css.card} h="100%" style={sales ? SALES_CARD : undefined}>
-    <div className={css.label} style={sales ? { color: '#2E6E4E', fontWeight: 500 } : undefined}>{dot && <span className={css.dot} style={{ background: dot }} />}{label}</div>
+    <div className={css.label} style={sales ? { color: 'var(--app-sales-label)', fontWeight: 500 } : undefined}>{dot && <span className={css.dot} style={{ background: dot }} />}{label}</div>
     {loading ? <Skeleton height={32} width={150} mt={8} mb={4} radius="sm" /> : <Amount value={value} size={30} color={color} />}
     {!loading && note}
   </Paper>
@@ -188,7 +188,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
         </ZoneHeading>
         <SimpleGrid cols={{ base: 2, md: 3 }} spacing="sm">
           <div style={{ gridColumn: isMobile ? 'span 2' : undefined }}>
-            <Stat sales loading={statsPending} label="Tally sales" color="#0B4D35" value={dashboard?.total_sales} />
+            <Stat sales loading={statsPending} label="Tally sales" color="var(--app-sales-value)" value={dashboard?.total_sales} />
           </div>
           <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} />
           <Stat loading={statsPending} label="Outstanding today" dot="var(--mantine-color-red-6)" color="red.7" value={dashboard?.owed} note={owedSplit(dashboard)} />
@@ -208,7 +208,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
               </Group>
               {alertsLoading ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : (
                 isMobile ? <Stack gap={0}>{alerts.map((item, index) => (
-                  <Group key={`${item.invoice_number}-${index}`} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: item.invoice_id ? 'pointer' : undefined }} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined}>
+                  <Group key={`${item.invoice_number}-${index}`} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: item.invoice_id ? 'pointer' : undefined }} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined}>
                     <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>
                     <Text fw={700} c="red.7" className={css.num} style={{ whiteSpace: 'nowrap' }}>{money(item.pending_amount)}</Text>
                   </Group>
@@ -239,7 +239,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
             <Stack gap={10}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={22} radius="sm" />)}</Stack>
           ) : recent.length && isMobile ? (
             <Stack gap={0}>{recent.map((item) => (
-              <Group key={item.payment_id} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--mantine-color-gray-2)', cursor: 'pointer' }} onClick={() => setOpenId(item.invoice_id)}>
+              <Group key={item.payment_id} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: 'pointer' }} onClick={() => setOpenId(item.invoice_id)}>
                 <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
                   <Avatar size={30} radius="xl" name={item.customer_name || '?'} color="initials" />
                   <div style={{ minWidth: 0 }}>

@@ -70,7 +70,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
 
   const panel = months ? (
           <Stack gap={8}>
-            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} onPending={(r) => { pending.current = r; }}
+            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} onPreview={(r) => { pending.current = null; onChange(r); }}
               onClear={value.from || value.to ? () => commit(EMPTY_RANGE) : undefined}
               footer={(
                 <UnstyledButton className={classes.customLink} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>

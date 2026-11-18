@@ -19,14 +19,15 @@ const monthIndex = (d) => d.getFullYear() * 12 + d.getMonth();
  *
  * A range: tap the first month (or quarter), then the last one; everything
  * between is picked (Jan then Mar = Jan–Mar). After the first tap a hint
- * and "Done" show; Done (or closing the picker) uses that one month.
+ * shows and that month is already in use (onPreview); without onPreview a
+ * "Done" button (or closing the picker) uses it.
  *
  * value: { from, to } in use. firstDate: 'YYYY-MM-DD' of the first invoice (or null).
  * chips: [{ id, label, from, to }] shown first ('' from/to = everything).
  * onPick({ from, to }). onPending(range | null): the first tap of a range,
  * so the picker can use it if closed before a second tap.
  */
-export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, onPending, onClear, footer }) {
+export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, onPending, onPreview, onClear, footer }) {
   // MRs work month by month: no quarters / FY for them.
   const showQuarters = useAuth().role !== 'MR';
   const now = new Date();
@@ -54,7 +55,9 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
   const tap = (startIdx, endIdx) => {
     if (!anchor) {
       setAnchor({ start: startIdx, end: endIdx });
-      onPending?.(span(startIdx, endIdx));
+      // The tapped month applies straight away (no "Done" needed); a second
+      // tap turns it into a range.
+      if (onPreview) onPreview(span(startIdx, endIdx)); else onPending?.(span(startIdx, endIdx));
       return;
     }
     const start = Math.min(anchor.start, startIdx);
@@ -119,8 +122,8 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
       )}
       {anchor && (
         <Group className={css.hint} justify="space-between" wrap="nowrap" gap="xs">
-          <Text size="xs" c="dimmed" style={{ minWidth: 0 }}><b style={{ color: 'var(--app-ink)' }}>{nameOf(anchor.start, anchor.end)}</b> · tap another to make a range</Text>
-          <Button size="compact-sm" style={{ flexShrink: 0 }} onClick={() => { const r = span(anchor.start, anchor.end); setAnchor(null); onPending?.(null); onPick(r); }}>Done</Button>
+          <Text size="xs" c="dimmed" style={{ minWidth: 0 }}><b style={{ color: 'var(--app-ink)' }}>{nameOf(anchor.start, anchor.end)}</b> · tap another month for a range</Text>
+          {!onPreview && <Button size="compact-sm" style={{ flexShrink: 0 }} onClick={() => { const r = span(anchor.start, anchor.end); setAnchor(null); onPending?.(null); onPick(r); }}>Done</Button>}
         </Group>
       )}
       {(footer || onClear) && (

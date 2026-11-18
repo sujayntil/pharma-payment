@@ -37,7 +37,7 @@ export default function PeriodPicker({ value, firstDate, label, onPick, onClear,
       </Popover.Target>
       <Popover.Dropdown maw="calc(100vw - 24px)">
         <Stack gap={8}>
-          <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={pick} onPending={(r) => { pending.current = r; }}
+          <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={pick} onPreview={(r) => { pending.current = null; onPick(r); }}
             onClear={onClear ? () => { pending.current = null; onClear(); setOpened(false); } : undefined}
             footer={(
               <UnstyledButton className={classes.customLink} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>

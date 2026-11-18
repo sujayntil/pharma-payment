@@ -90,6 +90,7 @@ def previous_range(start: date, end: date) -> tuple[date, date]:
     * A quarter so far (from 1 Jan/Apr/Jul/Oct): the same days of the previous
       quarter (1 Oct-18 Nov vs 1 Jul-18 Aug).
     * A financial year so far (from 1 Apr): the same days of the previous year.
+    * Other months so far (Sep-Nov to date): the same days that many months before.
     * Anything else (weeks, custom): the same number of days just before."""
     if start.day == 1:
         if end == month_end(end):
@@ -104,6 +105,9 @@ def previous_range(start: date, end: date) -> tuple[date, date]:
             return add_months(start, -3), shift_months(end, -3)
         if start.month == 4 and months_in < 12:
             return add_months(start, -12), shift_months(end, -12)
+        # Several months picked, the last still running (Sep-Nov so far):
+        # the same days that many months before (1 Jun-19 Aug).
+        return add_months(start, -(months_in + 1)), shift_months(end, -(months_in + 1))
     length = (end - start).days + 1
     return start - timedelta(days=length), start - timedelta(days=1)
 
@@ -235,10 +239,14 @@ def _pct(cur: float, prev: float) -> int | None:
     return round((cur - prev) / abs(prev) * 100)
 
 
-def summary(db: Session, start: date, end: date, filters: Filters, trend: str = "monthly") -> dict:
+def summary(db: Session, start: date | None, end: date, filters: Filters, trend: str = "monthly") -> dict:
+    """start=None: all time (first invoice to `end`), with nothing to compare."""
     book = Book(db)
     today = today_ist()
     all_invs = list(book.invoices.values())
+    all_time = start is None
+    if all_time:
+        start = min((i.date for i in all_invs if i.date), default=month_start(today))
     invs = [i for i in all_invs if filters.match(book, i)]
     prev_start, prev_end = previous_range(start, end)
 
@@ -253,9 +261,9 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
         previous.pop(key, None)
         for p in sparks:
             p.pop(key, None)
-    kpis = {key: {"value": current[key], "previous": previous[key],
-                  "change": _pct(current[key] or 0, previous[key] or 0),
-                  "spark": [p[key] or 0 for p in sparks]}
+    kpis = {key: {"value": current[key], "previous": None if all_time else previous[key],
+                  "change": None if all_time else _pct(current[key] or 0, previous[key] or 0),
+                  "spark": [] if all_time else [p[key] or 0 for p in sparks]}
             for key in current}
     # "Owed to you" is always today's position (not tied to the dates):
     # everything unpaid, split into not yet due and overdue.
@@ -378,8 +386,9 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
 
     return {
         "first_invoice_date": min((i.date for i in all_invs if i.date), default=None),
-        "range": {"from": start.isoformat(), "to": end.isoformat(),
-                  "previous_from": prev_start.isoformat(), "previous_to": prev_end.isoformat()},
+        "range": {"from": start.isoformat(), "to": end.isoformat(), "all_time": all_time,
+                  "previous_from": None if all_time else prev_start.isoformat(),
+                  "previous_to": None if all_time else prev_end.isoformat()},
         "kpis": kpis,
         "trend": {"kind": "weekly" if trend == "weekly" else "monthly", "points": trend_rows},
         "by_type": type_rows,

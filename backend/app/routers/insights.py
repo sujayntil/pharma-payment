@@ -50,7 +50,11 @@ def insights_summary(
     trend: str = Query(default="monthly", pattern="^(monthly|weekly)$"),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
+    all_time: bool = False,
 ):
+    if all_time:
+        # Everything since the first invoice; nothing to compare with.
+        return summary(db, None, today_ist(), _filters(customer_type, mr_id, area), trend)
     start, end = _range(date_from, date_to)
     return summary(db, start, end, _filters(customer_type, mr_id, area), trend)
 
@@ -66,10 +70,11 @@ def insights_records(
     area: Optional[str] = Query(default=None, max_length=80),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
+    all_time: bool = False,
 ):
     if kind == "age" and bucket not in {label for label, _lo, _hi in DUE_BUCKETS}:
         raise HTTPException(422, "bucket must be 0-39, 40-59, 60-89 or 90+")
-    start, end = _range(date_from, date_to)
+    start, end = (date(2000, 1, 1), today_ist()) if all_time else _range(date_from, date_to)
     return invoice_list(db, kind, start, end, _filters(customer_type, mr_id, area), bucket)
 
 

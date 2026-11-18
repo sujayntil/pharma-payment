@@ -85,11 +85,16 @@ function monthOrQuarterName(from, to) {
   if (!from || !to) return null;
   const [fy, fm, fd] = from.split('-').map(Number);
   const [ty, tm, td] = to.split('-').map(Number);
-  if (fd !== 1 || td !== new Date(ty, tm, 0).getDate()) return null;
+  // Whole months, the last one may still be running (ends today).
+  const now = new Date();
+  const runningToday = ty === now.getFullYear() && tm === now.getMonth() + 1 && td === now.getDate();
+  if (fd !== 1 || (td !== new Date(ty, tm, 0).getDate() && !runningToday)) return null;
   if (fy === ty && fm === tm) return `${LONG[fm - 1]} ${fy}`;
   const span = (ty * 12 + tm) - (fy * 12 + fm);
   if (span === 2 && [1, 4, 7, 10].includes(fm)) return `${MONTHS[fm - 1]}–${MONTHS[tm - 1]} ${ty} (Q${Math.floor(((fm - 4 + 12) % 12) / 3) + 1})`;
   if (span === 11 && fm === 4) return `FY ${fy}–${String(fy + 1).slice(2)}`;
+  // A range of months picked on the grid: "Jan–Mar 2026", "Nov 2025 – Feb 2026".
+  if (span > 0) return fy === ty ? `${MONTHS[fm - 1]}–${MONTHS[tm - 1]} ${ty}` : `${MONTHS[fm - 1]} ${fy} – ${MONTHS[tm - 1]} ${ty}`;
   return null;
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, Collapse, Group, Popover, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconCalendar, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import PeriodGrid from '../filters/PeriodGrid';
@@ -9,14 +9,16 @@ import classes from '../filters/filters.module.css';
  * grid (year, months, FY quarters, full FY) with "Custom dates" (From/To,
  * for weeks or any range) folded underneath.
  */
-export default function PeriodPicker({ value, firstDate, label, onPick, isCustom = false, fullWidth = false }) {
+export default function PeriodPicker({ value, firstDate, label, onPick, isCustom = false, fullWidth = false, chips = [] }) {
   const [opened, setOpened] = useState(false);
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
 
   const open = () => { setDraft(isCustom ? value : { from: '', to: '' }); setError(''); setCustomOpen(isCustom); setOpened(true); };
-  const pick = (range) => { onPick(range); setOpened(false); };
+  const pending = useRef(null); // a range's first tap, used if the picker closes before the second
+  const pick = (range) => { pending.current = null; onPick(range); setOpened(false); };
+  const close = () => { const r = pending.current; pending.current = null; if (r) onPick(r); setOpened(false); };
   const apply = () => {
     if (!draft.from || !draft.to) { setError('Choose both dates.'); return; }
     if (draft.from > draft.to) { setError('Start date must be on or before end date.'); return; }
@@ -24,16 +26,16 @@ export default function PeriodPicker({ value, firstDate, label, onPick, isCustom
   };
 
   return (
-    <Popover opened={opened} onChange={setOpened} position="bottom-end" shadow="md" width={fullWidth ? 'target' : 330} trapFocus middlewares={{ flip: true, shift: { padding: 12 } }}>
+    <Popover opened={opened} onChange={(o) => (o ? setOpened(true) : close())} position="bottom-end" shadow="md" width={fullWidth ? 'target' : 330} trapFocus middlewares={{ flip: true, shift: { padding: 12 } }}>
       <Popover.Target>
         <Button variant="default" fullWidth={fullWidth} justify="flex-start" styles={{ label: { flex: 1 } }} leftSection={<IconCalendar size={16} />} rightSection={<IconChevronDown size={14} />}
-          onClick={() => (opened ? setOpened(false) : open())} className={classes.trigger} aria-label={`Period: ${label}`}>
+          onClick={() => (opened ? close() : open())} className={classes.trigger} aria-label={`Period: ${label}`}>
           <Text span size="sm" fw={600} truncate ta="left" style={{ flex: 1 }}>{label}</Text>
         </Button>
       </Popover.Target>
       <Popover.Dropdown maw="calc(100vw - 24px)">
         <Stack gap={10}>
-          <PeriodGrid value={value} firstDate={firstDate} onPick={pick} />
+          <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={pick} onPending={(r) => { pending.current = r; }} />
           <UnstyledButton className={classes.customToggle} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>
             <span>Custom dates (weeks or any range)</span>
             <IconChevronRight size={15} style={{ transform: customOpen ? 'rotate(90deg)' : undefined, transition: 'transform 150ms' }} />
@@ -46,7 +48,7 @@ export default function PeriodPicker({ value, firstDate, label, onPick, isCustom
               </Group>
               {error && <Text size="xs" c="red">{error}</Text>}
               <Group justify="flex-end" gap="xs">
-                <Button size="xs" variant="subtle" color="gray" onClick={() => setOpened(false)}>Cancel</Button>
+                <Button size="xs" variant="subtle" color="gray" onClick={() => { pending.current = null; setOpened(false); }}>Cancel</Button>
                 <Button size="xs" onClick={apply}>Apply</Button>
               </Group>
             </Stack>

@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models, schemas
 from app.database import Base
-from app.insights import NOT_SET, Filters, customer_insights, invoice_list, summary, today_ist
+from app.insights import NOT_SET, Filters, customer_insights, invoice_list, previous_range, summary, today_ist
 from app.routers.admin import dashboard
 from app.routers.customers import update_customer
 from app.routers.insights import get_targets, insights_records, insights_summary, put_targets
@@ -271,6 +271,19 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(ages, {"0-39": 100, "40-59": 270, "60-89": 230, "90+": 400})
         k = self.S()["kpis"]["outstanding"]
         self.assertEqual((k["value"], k["overdue"], k["not_due"]), (1000, 830, 170))
+
+    def test_all_time_has_no_comparison(self):
+        self.inv(self.doc, TODAY - timedelta(days=900), 100)
+        self.inv(self.doc, TODAY - timedelta(days=5), 200)
+        s = summary(self.db, None, TODAY, Filters())
+        self.assertTrue(s["range"]["all_time"])
+        self.assertEqual(s["range"]["from"], (TODAY - timedelta(days=900)).isoformat())
+        self.assertIsNone(s["range"]["previous_from"])
+        self.assertEqual((s["kpis"]["sales"]["value"], s["kpis"]["sales"]["change"]), (300, None))
+
+    def test_running_month_range_compares_same_days_months_before(self):
+        self.assertEqual(previous_range(date(2026, 9, 1), date(2026, 11, 19)), (date(2026, 6, 1), date(2026, 8, 19)))
+        self.assertEqual(previous_range(date(2026, 1, 1), date(2026, 3, 31)), (date(2025, 10, 1), date(2025, 12, 31)))
 
     def test_payment_modes_and_trend(self):
         self.books()

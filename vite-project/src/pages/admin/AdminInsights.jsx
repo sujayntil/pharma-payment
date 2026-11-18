@@ -35,11 +35,19 @@ export default function AdminInsights({ onOpenCustomer }) {
 
   // Worked out each render, so a page left open moves on with the date.
   const currentMonth = businessPeriods(null)[0];
-  const range = picked || currentMonth;
-  const periodLabel = describeRange(range, { business: true });
-  const pickRange = (r) => setPicked(r.from === currentMonth.from && r.to === currentMonth.to ? null : { from: r.from, to: r.to });
+  // All time: { all: true } (first invoice to today; nothing to compare with).
+  const allTime = Boolean(picked?.all);
+  const range = allTime ? { from: '', to: '' } : (picked || currentMonth);
+  const periodLabel = allTime ? 'All time' : describeRange(range, { business: true });
+  // All time has nothing before it: tiles say where it starts instead.
+  const firstDay = result.data?.range?.all_time ? result.data.range.from : null;
+  const sinceText = firstDay ? `since ${new Date(`${firstDay}T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}` : 'since the start';
+  const pickRange = (r) => {
+    if (r.all || (!r.from && !r.to)) { setPicked({ all: true }); return; }
+    setPicked(r.from === currentMonth.from && r.to === currentMonth.to ? null : { from: r.from, to: r.to });
+  };
   const filters = {
-    date_from: range.from, date_to: range.to,
+    ...(allTime ? { all_time: true } : { date_from: range.from, date_to: range.to }),
     ...(type && { customer_type: type }), ...(mrId !== null && { mr_id: mrId }), ...(area && { area }),
   };
   // One key per request; the last answer stays on screen (dimmed) while the next loads.
@@ -80,7 +88,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   );
   const periodPicker = (
     <PeriodPicker value={range} firstDate={result.data?.first_invoice_date} label={periodLabel} fullWidth={isMobile} onPick={pickRange}
-      isCustom={isCustomRange(range)} />
+      isCustom={!allTime && isCustomRange(range)} chips={[{ id: 'all', label: 'All time', from: '', to: '', all: true }]} />
   );
   const k = data?.kpis;
   const custRow = (c, right, sub) => (
@@ -102,7 +110,7 @@ export default function AdminInsights({ onOpenCustomer }) {
         {loading && !data ? <Skeleton height={28} width={120} mt={6} /> : <div className={css.kv}>{value}</div>}
         {note && data && <div className={css.note}>{note}</div>}
         {foot ? <div className={css.kf}>{data && foot}</div> : <div className={css.kf}>
-          <span>{change === null || change === undefined ? 'no earlier data' : <><span className={better ? css.up : css.down}>{change >= 0 ? '↑' : '↓'} {suffix === '%' ? pctLabel(change) : `${Math.abs(change)}${suffix}`}</span></>}</span>
+          <span>{change === null || change === undefined ? (allTime ? sinceText : 'no earlier data') : <><span className={better ? css.up : css.down}>{change >= 0 ? '↑' : '↓'} {suffix === '%' ? pctLabel(change) : `${Math.abs(change)}${suffix}`}</span></>}</span>
           <Spark values={item?.spark || []} color={color} />
         </div>}
         {!foot && data && change !== null && change !== undefined && <div className={css.vs}>vs {prevShort}</div>}
@@ -264,7 +272,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s4}`}>
-            <div className={css.ch}><div><div className={css.ct}>New customers</div><div className={css.cs}>First order in {periodLabel}</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>New customers</div><div className={css.cs}>First order {allTime ? 'since the start' : `in ${periodLabel}`}</div></div></div>
             <div className={css.cb}>
               <ShowMore key={listKey} items={data.new_customers} initial={5} render={(c) => custRow(c, <span className={css.stake}><b>{lakh(c.sales)}</b><small>{shortDate(c.first_order)}</small></span>)} />
               {!data.new_customers.length && empty('No new customers in this period.')}
@@ -272,7 +280,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s4}`}>
-            <div className={css.ch}><div><div className={css.ct}>How customers pay</div><div className={css.cs}>Collected in {periodLabel}</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>How customers pay</div><div className={css.cs}>Collected {allTime ? 'since the start' : `in ${periodLabel}`}</div></div></div>
             <div className={css.cb}>
               {data.payment_modes.map((m) => (
                 <div key={m.mode} style={{ padding: '7px 0' }}>

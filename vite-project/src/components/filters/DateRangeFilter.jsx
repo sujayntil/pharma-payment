@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, Collapse, Divider, Group, Popover, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconCalendar, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { datePresets, describeRange, EMPTY_RANGE, isCustomRange } from './dateRanges';
@@ -36,7 +36,10 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
     // Open Custom straight away when the dates in use are a custom range.
     setCustomOpen(months && isCustomRange(value));
   };
-  const commit = (range) => { onChange(range); setOpened(false); };
+  // One month tapped (a range's first tap), then the picker closed: use that month.
+  const pending = useRef(null);
+  const commit = (range) => { pending.current = null; onChange({ from: range.from, to: range.to }); setOpened(false); };
+  const close = () => { const r = pending.current; pending.current = null; if (r) onChange(r); setOpened(false); };
   const applyCustom = () => {
     if (draft.from && draft.to && draft.from > draft.to) { setError('Start date must be on or before end date.'); return; }
     commit(draft);
@@ -50,7 +53,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
       </Group>
       {error && <Text size="xs" c="red">{error}</Text>}
       <Group justify="flex-end" gap="xs">
-        {!inSheet && <Button size="xs" variant="subtle" color="gray" onClick={() => setOpened(false)}>Cancel</Button>}
+        {!inSheet && <Button size="xs" variant="subtle" color="gray" onClick={() => { pending.current = null; setOpened(false); }}>Cancel</Button>}
         {/* In the phone sheet the sheet's own Apply is the only "Apply". */}
         <Button size="xs" onClick={applyCustom} disabled={!draft.from && !draft.to}>{inSheet ? 'Use these dates' : 'Apply'}</Button>
       </Group>
@@ -59,7 +62,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
 
   const panel = months ? (
           <Stack gap={10}>
-            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} />
+            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} onPending={(r) => { pending.current = r; }} />
             <UnstyledButton className={classes.customToggle} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>
               <span>Custom dates (weeks or any range)</span>
               <IconChevronRight size={15} style={{ transform: customOpen ? 'rotate(90deg)' : undefined, transition: 'transform 150ms' }} />
@@ -86,7 +89,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
           variant={summary ? 'light' : 'default'}
           leftSection={<IconCalendar size={16} />}
           rightSection={<IconChevronDown size={14} />}
-          onClick={() => (opened ? setOpened(false) : open())}
+          onClick={() => (opened ? close() : open())}
           className={classes.trigger}
         >
           <Text span size="sm" c="dimmed" mr={4}>{label}:</Text>
@@ -105,7 +108,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
   }
 
   return (
-    <Popover opened={opened} onChange={setOpened} position="bottom-start" shadow="md" width={months ? 330 : 340} trapFocus middlewares={{ flip: true, shift: { padding: 12 } }}>
+    <Popover opened={opened} onChange={(o) => (o ? setOpened(true) : close())} position="bottom-start" shadow="md" width={months ? 330 : 340} trapFocus middlewares={{ flip: true, shift: { padding: 12 } }}>
       <Popover.Target>{trigger}</Popover.Target>
       <Popover.Dropdown maw="calc(100vw - 24px)">{panel}</Popover.Dropdown>
     </Popover>

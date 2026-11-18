@@ -74,11 +74,22 @@ export function describeRange({ from, to } = {}, { business = true } = {}) {
   // Day-based quick ranges keep their names ("Today", "Last 7 days").
   const preset = datePresets().find((p) => p.from === from && p.to === to && (!business || !['month', 'lastMonth', 'fy'].includes(p.id)));
   if (preset) return preset.label;
+  if (isLast15(from, to)) return 'Last 15 days';
   if (from && to) return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
   return from ? `From ${fmt(from)}` : `Until ${fmt(to)}`;
 }
 
 export const EMPTY_RANGE = { from: '', to: '' };
+
+/** "Last 15 days" (a chip on the month picker; not in the old quick-ranges list). */
+export function last15Range(today = new Date()) {
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return { from: formatDateLocal(addDays(t, -14)), to: formatDateLocal(t) };
+}
+function isLast15(from, to) {
+  const r = last15Range();
+  return from === r.from && to === r.to;
+}
 
 /** "October 2025" for a whole calendar month outside the last 12, else null. */
 function monthOrQuarterName(from, to) {
@@ -103,6 +114,7 @@ export function isCustomRange({ from, to } = {}) {
   if (!from && !to) return false;
   if (businessPeriods(null).some((p) => p.from === from && p.to === to)) return false;
   if (monthOrQuarterName(from, to)) return false;
+  if (isLast15(from, to)) return false;
   return !datePresets().some((p) => p.from === from && p.to === to && ['today', 'yesterday', '7d'].includes(p.id));
 }
 

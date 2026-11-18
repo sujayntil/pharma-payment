@@ -1,6 +1,7 @@
 /* Month picker: light tiles, one accent; quarters (Admin) as a quiet pill row. */
 .wrap { display: flex; flex-direction: column; }
 .chips { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.chips > * { flex: 1 1 auto; text-align: center; }
 .chip { font-size: 12.5px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--app-line-2); color: var(--app-ink); white-space: nowrap; }
 .chip:hover { background: var(--app-soft); }
 .chip[data-on] { background: var(--mantine-color-green-light); border-color: var(--mantine-color-green-6); color: var(--mantine-color-green-9); font-weight: 600; }

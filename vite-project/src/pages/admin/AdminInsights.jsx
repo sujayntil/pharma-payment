@@ -5,7 +5,7 @@ import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import PeriodPicker from '../../components/insights/PeriodPicker';
-import { businessPeriods, describeRange, isCustomRange, shortRange } from '../../components/filters/dateRanges';
+import { businessPeriods, describeRange, isCustomRange, last15Range, shortRange } from '../../components/filters/dateRanges';
 import { Donut, Spark, TrendChart } from '../../components/insights/charts';
 import { AGE_COLORS, AGE_LABELS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } from '../../components/insights/insightsFormat';
 import InsightsPanel from '../../components/insights/InsightsPanel';
@@ -86,14 +86,15 @@ export default function AdminInsights({ onOpenCustomer }) {
       {swatch('#2f9e44')}Recovered {swatch('var(--app-pending)', { marginLeft: 8, border: '1px solid var(--app-pending-line)' })}Pending {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}All collections
     </Text>
   );
-  // All time · Today · Last 7 days; Clear goes back to this month.
+  // All time · Today · Last 7 days · Last 15 days; Clear goes back to this month.
   const nowDate = new Date();
   const todayStr = formatDateLocal(nowDate);
   const weekAgoStr = formatDateLocal(new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() - 6));
   const insightChips = [
     { id: 'all', label: 'All time', from: '', to: '', all: true },
     { id: 'today', label: 'Today', from: todayStr, to: todayStr },
-    { id: 'last7', label: 'Last 7 days', from: weekAgoStr, to: todayStr },
+    { id: 'last7', label: '7 days', from: weekAgoStr, to: todayStr },
+    { id: 'last15', label: '15 days', ...last15Range(nowDate) },
   ];
   const periodPicker = (
     <PeriodPicker value={range} firstDate={result.data?.first_invoice_date} label={periodLabel} fullWidth={isMobile} onPick={pickRange}

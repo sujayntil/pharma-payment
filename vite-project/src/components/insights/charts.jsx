@@ -53,12 +53,14 @@ function useChartHover() {
 }
 
 export function Spark({ values = [], color, width = 74, height = 24 }) {
-  // Too little history (fewer than 3 periods with data): a flat line says nothing.
-  if (values.length < 2 || values.filter((v) => v).length < 3) return null;
+  // Only with real history: most of the periods must have data (6 of 8).
+  // A line that is mostly zeros (data starting recently) says nothing.
+  if (values.length < 2 || values.filter((v) => v).length < Math.max(3, values.length - 2)) return null;
   const max = Math.max(...values, 1);
   const min = Math.min(...values);
   const points = values.map((v, i) => `${((i / (values.length - 1)) * width).toFixed(1)},${(height - 2 - ((v - min) / ((max - min) || 1)) * (height - 4)).toFixed(1)}`).join(' ');
-  return <svg width={width} height={height} aria-hidden><polyline points={points} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  // viewBox: if the tile is tight the line shrinks as a whole instead of being cut off.
+  return <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ minWidth: 40, flexShrink: 1 }} aria-hidden><polyline points={points} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
 /** Sales bars + collected line. Hover a bar for its numbers; click (or tap twice) to pick that month / week. */

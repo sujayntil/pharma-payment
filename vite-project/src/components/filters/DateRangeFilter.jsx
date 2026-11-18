@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button, Collapse, Divider, Group, Popover, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconCalendar, IconChevronDown, IconChevronRight, IconX } from '@tabler/icons-react';
-import { datePresets, describeRange, EMPTY_RANGE, isCustomRange } from './dateRanges';
+import { datePresets, describeRange, EMPTY_RANGE, isCustomRange, last15Range } from './dateRanges';
 import { formatDateLocal } from '../../utils/formatters';
 import PeriodGrid from './PeriodGrid';
 import classes from './filters.module.css';
@@ -33,10 +33,12 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
     today: { id: 'today', label: 'Today', from: today, to: today },
     yesterday: { id: 'yesterday', label: 'Yesterday', from: yesterday, to: yesterday },
     last7: { id: 'last7', label: 'Last 7 days', from: weekAgo, to: today },
+    last15: { id: 'last15', label: 'Last 15 days', ...last15Range(now) },
   };
-  // Month picker: the same three chips everywhere (All · Today · Last 7 days).
+  // Month picker: the same chips everywhere (All · Today · Last 7 days · Last 15 days).
   const chips = months
-    ? [{ id: 'all', label: allLabel, from: '', to: '' }, QUICK.today, QUICK.last7]
+    // Short chip names keep them on one line on phones; the button says "Last 7 days".
+    ? [{ id: 'all', label: allLabel, from: '', to: '' }, QUICK.today, { ...QUICK.last7, label: '7 days' }, { ...QUICK.last15, label: '15 days' }]
     : [{ id: 'all', label: allLabel, from: '', to: '' }, ...quick.map((id) => QUICK[id]).filter(Boolean)];
 
   const open = () => {

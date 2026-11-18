@@ -12,7 +12,7 @@ from . import models  # noqa: F401  (ensures models are registered before create
 from .database import Base, SessionLocal, engine
 from .overdue import process_due_overdue_reminders
 from .schema_upgrade import ensure_additive_columns
-from .routers import activity, admin, auth, customers, imports, invoices, mr, notifications, payments, uploads
+from .routers import activity, admin, auth, customers, imports, insights, invoices, mr, notifications, payments, uploads
 
 log = logging.getLogger(__name__)
 
@@ -46,11 +46,28 @@ async def overdue_reminder_scheduler():
         await asyncio.sleep(6 * 60 * 60)
 
 
+async def weekly_summary_scheduler():
+    """Monday morning summary for Admins (last week's sales and collected).
+    Checks every 15 minutes; sends once per Monday after 9 am India time."""
+    from .push import send_weekly_summary_if_due
+
+    while True:
+        try:
+            await asyncio.to_thread(send_weekly_summary_if_due)
+        except Exception:
+            log.exception("Weekly summary failed")
+        await asyncio.sleep(15 * 60)
+
+
 @asynccontextmanager
 async def lifespan(_app):
     # Outstanding reminders remain visible in the dashboard, but their push
     # scheduler is paused. Payment notifications are sent by the payments router.
-    yield
+    task = asyncio.create_task(weekly_summary_scheduler())
+    try:
+        yield
+    finally:
+        task.cancel()
 
 
 # The interactive API pages (/docs, /redoc) and the endpoint list
@@ -105,6 +122,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(invoices.router)
 app.include_router(payments.router)
+app.include_router(insights.router)
 app.include_router(notifications.router)
 app.include_router(customers.router)
 app.include_router(admin.router)

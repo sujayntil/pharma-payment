@@ -79,6 +79,7 @@ def list_customers(
             alternate_phone=customer.alternate_phone,
             whatsapp_on=customer.whatsapp_on,
             address=customer.address,
+            area=customer.area,
             gstin=customer.gstin,
             mr_id=customer.mr_id,
             mr_name=customer.mr.name if customer.mr else None,
@@ -113,6 +114,7 @@ def create_customer(
         name=name,
         type=(payload.type or "").strip() or None,
         address=(payload.address or "").strip() or None,
+        area=(payload.area or "").strip() or None,
         gstin=(payload.gstin or "").strip() or None,
         mr_id=payload.mr_id,
     )
@@ -151,9 +153,9 @@ def update_customer(
         if duplicate:
             raise HTTPException(409, f"Customer name '{name}' already exists")
         customer.name = name
-    for field in ("type", "address", "gstin"):
+    for field in ("type", "address", "gstin", "area"):
         if field in data:
-            setattr(customer, field, data[field] or None)
+            setattr(customer, field, (data[field] or "").strip() or None)
     if "phone" in data:
         # Older numbers may not match today's rules, so an unchanged main
         # number is kept as it is; a new or changed one is checked like the MR's.
@@ -202,6 +204,7 @@ def update_customer(
         alternate_phone=customer.alternate_phone,
         whatsapp_on=customer.whatsapp_on,
         address=customer.address,
+        area=customer.area,
         gstin=customer.gstin,
         mr_id=customer.mr_id,
         mr_name=customer.mr.name if customer.mr else None,

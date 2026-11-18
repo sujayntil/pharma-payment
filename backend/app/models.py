@@ -66,6 +66,8 @@ class Customer(Base):
     # Which saved number the customer uses for WhatsApp: "main", "alternate" or None.
     whatsapp_on = Column(String(12), nullable=True)
     address = Column(String)
+    # Optional area / locality, for Insights "by area" (filled in over time).
+    area = Column(String(80), nullable=True)
     gstin = Column(String)
     mr_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
@@ -222,6 +224,31 @@ class PushSubscription(Base):
     p256dh = Column(String, nullable=False)
     auth = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class MrTarget(Base):
+    """Monthly sales and collection targets per MR (Insights "Set targets").
+    A month without its own row uses the latest earlier month's targets."""
+
+    __tablename__ = "mr_targets"
+    __table_args__ = (UniqueConstraint("user_id", "month", name="uq_mr_target_user_month"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    month = Column(String(7), nullable=False)  # "2026-11"
+    sales_target = Column(Float, nullable=True)
+    collection_target = Column(Float, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ScheduledRun(Base):
+    """Marks a once-off scheduled job as done (e.g. this week's Monday
+    summary), so restarts or several server processes don't repeat it."""
+
+    __tablename__ = "scheduled_runs"
+
+    key = Column(String(60), primary_key=True)
+    ran_at = Column(DateTime, server_default=func.now())
 
 
 class MonthClearance(Base):

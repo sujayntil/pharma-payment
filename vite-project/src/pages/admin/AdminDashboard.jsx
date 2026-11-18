@@ -8,7 +8,7 @@ import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
-import { describeRange } from '../../components/filters/dateRanges';
+import { describeRange, periodThing } from '../../components/filters/dateRanges';
 import { recorderOf, useActorLabel } from '../../components/collections/collectionUtils';
 import { useCountUp } from '../../hooks/useCountUp';
 import css from './AdminDashboard.module.css';
@@ -37,12 +37,21 @@ function Amount({ value, size = 26, color, animate = true }) {
 // Money cards: the same figure size on all three. Tally sales sits on a soft
 // green card; Collected in green, Pending in red.
 const SALES_CARD = { background: '#F1F8F4', borderColor: '#CFE6D8' };
-const Stat = ({ label, value, dot, color, sales = false, loading = false }) => (
+const Stat = ({ label, value, dot, color, sales = false, loading = false, note }) => (
   <Paper p="md" className={css.card} h="100%" style={sales ? SALES_CARD : undefined}>
     <div className={css.label} style={sales ? { color: '#2E6E4E', fontWeight: 500 } : undefined}>{dot && <span className={css.dot} style={{ background: dot }} />}{label}</div>
     {loading ? <Skeleton height={32} width={150} mt={8} mb={4} radius="sm" /> : <Amount value={value} size={30} color={color} />}
+    {!loading && note}
   </Paper>
 );
+
+/** Collected, split into money from this period's bills and from older bills (needs a start date). */
+const collectedSplit = (d, label) => (d && d.collected_current !== null && d.collected_current !== undefined ? (
+  <div className={css.split}>
+    <div><span>From {periodThing(label, 'bills')}</span><b>{money(d.collected_current)}</b></div>
+    <div><span>From older bills</span><b>{money(d.collected_older)}</b></div>
+  </div>
+) : null);
 
 /** Who recorded a collection, with an initials circle (faces/colours are read faster than names). */
 function Recorder({ row }) {
@@ -162,10 +171,10 @@ export default function AdminDashboard({ onOpenCustomer }) {
           <div style={{ gridColumn: isMobile ? 'span 2' : undefined }}>
             <Stat sales loading={statsPending} label="Tally sales" color="#0B4D35" value={dashboard?.total_sales} />
           </div>
-          <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} />
+          <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} note={collectedSplit(dashboard, rangeLabel)} />
           <Stat loading={statsPending} label="Pending" dot="var(--mantine-color-red-6)" color="red.7" value={dashboard?.outstanding} />
         </SimpleGrid>
-        <CollectionBar loading={statsPending} billed={dashboard?.total_sales} pending={dashboard?.outstanding} paid={dashboard?.paid ?? 0} partial={dashboard?.partial ?? 0} unpaid={dashboard?.unpaid ?? 0} />
+        <CollectionBar loading={statsPending} billed={dashboard?.total_sales} pending={dashboard?.outstanding} paid={dashboard?.paid ?? 0} partial={dashboard?.partial ?? 0} unpaid={dashboard?.unpaid ?? 0} label={`of ${periodThing(rangeLabel, 'sales')} recovered`} />
       </Stack>
 
       {/* Needs attention: red only here, where action is needed. */}

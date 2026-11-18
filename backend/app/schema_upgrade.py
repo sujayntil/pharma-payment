@@ -32,6 +32,7 @@ _ADDITIVE_COLUMNS = {
         "title": "VARCHAR(8)",
     },
     "customers": {
+        "area": "VARCHAR(80)",
         "alternate_phone": "VARCHAR",
         "whatsapp_on": "VARCHAR(12)",
     },

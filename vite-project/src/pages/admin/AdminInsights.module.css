@@ -1,0 +1,87 @@
+/* Insights page */
+.card {
+  background: var(--mantine-color-white);
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.clickable { transition: border-color 0.15s, box-shadow 0.15s; cursor: pointer; text-align: left; width: 100%; }
+.clickable:hover { border-color: #b2f2bb; box-shadow: 0 4px 14px rgba(47, 158, 68, 0.1); }
+
+.ch { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 14px 16px 4px; }
+.ct { font-size: 14.5px; font-weight: 700; color: var(--mantine-color-gray-9); }
+.cs { font-size: 12px; color: var(--mantine-color-gray-6); margin-top: 1px; }
+.cb { padding: 8px 16px 14px; }
+
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.kpi { padding: 14px 16px; text-align: left; font: inherit; color: inherit; }
+.kl { font-size: 12.5px; color: var(--mantine-color-gray-7); display: flex; justify-content: space-between; }
+.kv { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.note { font-size: 11.5px; line-height: 1.45; color: var(--mantine-color-gray-6); margin-top: 2px; }
+.note span { white-space: nowrap; }
+.note b { color: var(--mantine-color-gray-8); }
+.kf { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--mantine-color-gray-6); }
+.up { color: var(--mantine-color-green-8); font-weight: 600; }
+.down { color: var(--mantine-color-red-7); font-weight: 600; }
+
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+.s12 { grid-column: span 12; }
+.s8 { grid-column: span 8; }
+.s6 { grid-column: span 6; }
+.s4 { grid-column: span 4; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--mantine-color-gray-1); width: 100%; text-align: left; background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; font: inherit; color: inherit; }
+.row:first-of-type { border-top: 0; }
+.row:hover .nm { color: var(--mantine-color-green-8); }
+.nm { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { font-size: 11.5px; color: var(--mantine-color-gray-6); }
+.ini { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0; }
+.bar { height: 8px; background: var(--mantine-color-gray-1); border-radius: 9px; overflow: hidden; margin-top: 5px; }
+.bar i { display: block; height: 100%; border-radius: 9px; }
+.mini { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mantine-color-gray-6); margin: 2px 0 4px; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.big { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+.legend button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px; border-radius: 7px; font: inherit; font-size: 13px; background: none; border: 0; cursor: pointer; color: inherit; }
+.legend button:hover { background: var(--mantine-color-gray-0); }
+.legend .on { background: var(--mantine-color-green-0); }
+
+.stack { display: flex; height: 14px; border-radius: 99px; overflow: hidden; margin: 6px 0 10px; background: var(--mantine-color-gray-1); }
+.stack i { display: block; height: 100%; cursor: pointer; }
+.bucket { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 8px; width: 100%; text-align: left; background: none; border: 0; cursor: pointer; font: inherit; color: inherit; }
+.bucket:hover { background: var(--mantine-color-gray-0); }
+
+.warn { display: flex; gap: 8px; align-items: center; background: #fff4e6; color: #8a4b00; border: 1px solid #ffd8a8; border-radius: 9px; padding: 8px 11px; font-size: 12.5px; margin: 2px 0 8px; }
+.counts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+.counts > div { border-radius: 10px; padding: 10px 12px; }
+.areaHint { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px dashed var(--mantine-color-gray-4); border-radius: 10px; color: var(--mantine-color-gray-7); font-size: 13px; }
+
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.st { border: 1px solid var(--mantine-color-gray-3); border-radius: 10px; padding: 10px 12px; }
+.st .l { font-size: 11.5px; color: var(--mantine-color-gray-7); }
+.st .v { font-size: 17px; font-weight: 700; margin-top: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.insight { display: flex; gap: 10px; align-items: flex-start; background: var(--mantine-color-gray-0); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
+
+@media (max-width: 760px) {
+  .kpis { grid-template-columns: repeat(5, minmax(150px, 1fr)); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .kpi { scroll-snap-align: start; }
+  .s8, .s6, .s4 { grid-column: span 12; }
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.recovery { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--mantine-color-gray-2); }
+.recovery > div { display: flex; flex-direction: column; gap: 2px; }
+.recovery span { font-size: 12px; color: var(--mantine-color-gray-6); }
+.recovery span::first-letter { text-transform: uppercase; }
+.recovery b { font-size: 17px; font-weight: 700; color: var(--mantine-color-dark-7); font-variant-numeric: tabular-nums; }
+.recovery small { font-size: 12px; font-weight: 500; color: var(--mantine-color-gray-6); }
+.recovery .green { color: var(--mantine-color-green-8); }
+.recovery .red { color: var(--mantine-color-red-7); }
+@media (max-width: 600px) {
+  .recovery { grid-template-columns: 1fr; gap: 6px; }
+  .recovery > div { flex-direction: row; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .recovery b { font-size: 15px; white-space: nowrap; }
+}

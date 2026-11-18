@@ -27,10 +27,13 @@ export function ZoneHeading({ icon: Icon, tone, title, meta, children }) {
  */
 export function CollectionBar({ billed, pending, paid = 0, partial = 0, unpaid = 0, loading = false, label = 'of sales collected' }) {
   const total = Number(billed || 0);
-  const rate = total > 0 ? Math.max(0, Math.min(100, Math.round(((total - Number(pending || 0)) / total) * 100))) : 0;
+  const recovered = Math.max(0, total - Number(pending || 0));
+  const rate = total > 0 ? Math.max(0, Math.min(100, Math.round((recovered / total) * 100))) : 0;
   return (
     <Paper p="md" className={css.card}>
-      <Text size="sm" c="dimmed" mb={8}><Text span fw={700} c="dark" fz="md" className={css.num}>{loading ? '—' : `${rate}%`}</Text> {label}</Text>
+      <Group justify="space-between" align="baseline" mb={8} gap="xs">
+        <Text size="sm" c="dimmed"><Text span fw={700} c="dark" fz="md" className={css.num}>{loading ? '—' : `${rate}%`}</Text> {label}</Text>
+      </Group>
       <Progress value={loading ? 0 : rate} color="green.7" size="md" radius="xl" transitionDuration={600} aria-label={`${rate}% ${label}`} />
       <div className={css.statusLine}>
         <span><i className={css.statusDot} style={{ background: 'var(--mantine-color-green-6)' }} /><b>{paid}</b> paid</span>

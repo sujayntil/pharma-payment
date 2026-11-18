@@ -60,6 +60,7 @@ class CustomerBase(BaseModel):
     type: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    area: Optional[str] = Field(default=None, max_length=80)
     gstin: Optional[str] = None
 
 
@@ -95,6 +96,7 @@ class CustomerUpdate(BaseModel):
     alternate_phone: Optional[str] = None
     whatsapp_on: Optional[str] = None
     address: Optional[str] = None
+    area: Optional[str] = Field(default=None, max_length=80)
     gstin: Optional[str] = None
     mr_id: Optional[int] = None
 
@@ -263,3 +265,14 @@ class PushSubscriptionCreate(BaseModel):
 
 class PushSubscriptionDelete(BaseModel):
     endpoint: AnyHttpUrl
+
+
+class MrTargetIn(BaseModel):
+    mr_id: int
+    sales_target: Optional[float] = Field(default=None, ge=0, le=1e11)
+    collection_target: Optional[float] = Field(default=None, ge=0, le=1e11)
+
+
+class MrTargetsSave(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    targets: list[MrTargetIn] = Field(max_length=500)

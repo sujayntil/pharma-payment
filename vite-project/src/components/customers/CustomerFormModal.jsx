@@ -44,6 +44,7 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved, onPickExisting })
     type: customer.type || '',
     mr_id: customer.mr_id ? String(customer.mr_id) : '',
     address: customer.address || '',
+    area: customer.area || '',
     gstin: customer.gstin || '',
   });
   const [numbers, setNumbers] = useState({
@@ -52,7 +53,7 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved, onPickExisting })
     alternate_phone: displayPhone(customer.alternate_phone),
     whatsapp_on: customer.whatsapp_on ?? (isNew ? 'main' : ''),
   });
-  const [moreOpen, setMoreOpen] = useState(Boolean(customer.address || customer.gstin));
+  const [moreOpen, setMoreOpen] = useState(Boolean(customer.address || customer.area || customer.gstin));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (patch) => { setForm((current) => ({ ...current, ...patch })); setError(''); };
@@ -68,6 +69,7 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved, onPickExisting })
         type: form.type || null,
         mr_id: form.mr_id ? Number(form.mr_id) : null,
         address: form.address.trim() || null,
+        area: form.area.trim() || null,
         gstin: form.gstin.trim() || null,
         ...phones,
         phone: phones.phone || null,
@@ -104,6 +106,7 @@ function CustomerForm({ customer, mrOptions, onClose, onSaved, onPickExisting })
         <Collapse expanded={moreOpen}>
           <Stack gap="sm">
             <TextInput label="Address" placeholder="Shop no., street, area" value={form.address} onChange={(event) => set({ address: event.currentTarget.value })} />
+            <TextInput label="Area" placeholder="Andheri West" maxLength={80} value={form.area} onChange={(event) => set({ area: event.currentTarget.value })} />
             <TextInput label="GSTIN" placeholder="29ABCDE1234F1Z5" value={form.gstin} onChange={(event) => set({ gstin: event.currentTarget.value.toUpperCase() })} />
           </Stack>
         </Collapse>

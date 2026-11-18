@@ -166,3 +166,49 @@ def send_month_cleared_notification(mr_id: int, months: list[str], delay: float 
         db.commit()
     for payload in payloads:
         send_admin_notification(payload, ttl=3600)
+
+
+def send_weekly_summary_if_due(now=None) -> bool:
+    """Monday morning summary to Admins: "Last week: ₹X sales · ₹Y collected".
+    Once per Monday, after 9 am India time; the run is recorded so restarts
+    or several server processes don't send it twice."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy.exc import IntegrityError
+
+    from .insights import last_week_totals
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now = now or datetime.now(ist)
+    if now.weekday() != 0 or now.hour < 9:
+        return False
+    if not os.getenv("VAPID_PRIVATE_KEY") or not os.getenv("VAPID_SUBJECT"):
+        return False
+    key = f"weekly-summary-{now.date().isoformat()}"
+    with SessionLocal() as db:
+        if db.get(models.ScheduledRun, key) is not None:
+            return False
+        db.add(models.ScheduledRun(key=key))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return False   # another process took it
+        _start, _end, sales, collected = last_week_totals(db)
+    send_admin_notification(weekly_summary_payload(sales, collected), ttl=6 * 3600)
+    return True
+
+
+def _lakh(amount: float) -> str:
+    if abs(amount) >= 100000:
+        return f"₹{amount / 100000:.2f} L"
+    return "₹" + f"{round(amount):,}"
+
+
+def weekly_summary_payload(sales: float, collected: float) -> dict:
+    return {
+        "title": f"Last week: {_lakh(sales)} sales · {_lakh(collected)} collected",
+        "body": "Tap to open Insights",
+        "url": "/#/admin/insights",
+        "tag": "weekly-summary",
+    }

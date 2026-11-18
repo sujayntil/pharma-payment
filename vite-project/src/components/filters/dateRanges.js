@@ -33,3 +33,16 @@ export function describeRange({ from, to } = {}) {
 }
 
 export const EMPTY_RANGE = { from: '', to: '' };
+
+const OWN = {
+  Today: "today's", Yesterday: "yesterday's", 'This week': "this week's", 'Last week': "last week's",
+  'This month': "this month's", 'Last month': "last month's", 'Last 3 months': "the last 3 months'",
+  'This FY': "this year's", 'This financial year': "this year's",
+};
+/** "this month's sales" for a preset; "sales in these dates" otherwise. */
+export function periodThing(label, thing) {
+  if (!label) return `all ${thing}`;
+  if (OWN[label]) return `${OWN[label]} ${thing}`;
+  // A single month or day such as "Oct 2026" reads fine in front; ranges do not.
+  return /–|From |Until /.test(label) ? `${thing} in these dates` : `${label} ${thing}`;
+}

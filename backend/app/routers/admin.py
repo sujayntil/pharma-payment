@@ -147,6 +147,19 @@ def dashboard(
     # Outstanding remains the balance for invoices dated in this period.
     invoice_collected = q.with_entities(func.coalesce(func.sum(models.Invoice.paid_amount), 0)).scalar()
 
+    # Cash received in these dates, split into "for bills dated in these
+    # dates" (current) and the rest (old dues). Only meaningful with a start date.
+    collected_current = None
+    if date_from:
+        current = apply_type_filter(
+            db.query(func.coalesce(func.sum(models.Payment.amount), 0))
+            .join(models.Invoice, models.Payment.invoice_id == models.Invoice.id)
+            .outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
+        )
+        for condition in payment_conditions + conditions:
+            current = current.filter(condition)
+        collected_current = current.scalar()
+
     total_invoices = q.count()
     paid = q.filter(models.Invoice.status == "PAID").count()
     partial = q.filter(models.Invoice.status == "PARTIAL").count()
@@ -156,6 +169,10 @@ def dashboard(
         "total_sales": total_sales,
         "collected": collected,
         "outstanding": total_sales - invoice_collected,
+        # Sales recovery: paid so far on the invoices dated in these dates.
+        "recovered": invoice_collected,
+        "collected_current": collected_current,
+        "collected_older": None if collected_current is None else collected - collected_current,
         "total_invoices": total_invoices,
         "paid": paid,
         "partial": partial,

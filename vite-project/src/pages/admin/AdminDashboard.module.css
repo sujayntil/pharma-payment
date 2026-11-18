@@ -57,3 +57,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+
+/* Collected card: where the money came from, label left and amount right. */
+.split { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--mantine-color-gray-2); display: flex; flex-direction: column; gap: 4px; }
+.split > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.split span { color: var(--mantine-color-gray-6); }
+.split span::first-letter { text-transform: uppercase; }
+.split b { font-weight: 600; color: var(--mantine-color-dark-6); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 600px) {
+  .split > div { flex-direction: column; gap: 0; }
+  .split span { font-size: 12px; }
+  .split > div + div { margin-top: 4px; }
+}

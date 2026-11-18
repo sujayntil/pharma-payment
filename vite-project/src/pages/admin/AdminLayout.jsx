@@ -1,10 +1,11 @@
 import { lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Center, Loader } from '@mantine/core';
-import { IconChartBar, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet, IconShieldCheck } from '@tabler/icons-react';
+import { IconChartBar, IconChartPie, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet, IconShieldCheck } from '@tabler/icons-react';
 import AppFrame from '../../components/common/AppFrame';
 
 const AdminDashboard = lazy(() => import('./AdminDashboard'));
+const AdminInsights = lazy(() => import('./AdminInsights'));
 const AdminInvoices = lazy(() => import('./AdminInvoices'));
 const AdminCustomers = lazy(() => import('./AdminCustomers'));
 const AdminPerformance = lazy(() => import('./AdminPerformance'));
@@ -15,6 +16,7 @@ const AdminAuditLog = lazy(() => import('./AdminAuditLog'));
 
 const ADMIN_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: IconChartBar },
+  { id: 'insights', label: 'Insights', icon: IconChartPie },
   { id: 'invoices', label: 'Invoices', icon: IconFileInvoice },
   { id: 'customers', label: 'Customers', icon: IconUsers },
   { id: 'collections', label: 'Collections', icon: IconCash },
@@ -41,6 +43,7 @@ export default function AdminLayout() {
       <main>
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
         {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
+        {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
         {activeTab === 'invoices' && <AdminInvoices />}
         {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
         {activeTab === 'collections' && <AdminCollections />}

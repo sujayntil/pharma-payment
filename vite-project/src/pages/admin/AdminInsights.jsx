@@ -101,14 +101,14 @@ export default function AdminInsights({ onOpenCustomer }) {
   const empty = (text) => <Text size="sm" c="dimmed" py={6}>{text}</Text>;
 
   // count: show the change as a number ("↑ 3 customers") instead of a %.
-  const kpi = (key, label, value, { good = 'up', color, kind, suffix = '%', note, foot, count } = {}) => {
+  const kpi = (key, label, value, { good = 'up', color, kind, open: openItem, suffix = '%', note, foot, count } = {}) => {
     const item = k?.[key];
     const diff = count && item?.previous !== null && item?.previous !== undefined ? (item.value || 0) - (item.previous || 0) : null;
     const change = count ? diff : item?.change;
     const better = change === null || change === undefined ? null : (good === 'up' ? change >= 0 : change <= 0);
     return (
-      <button type="button" key={key} className={`${css.card} ${css.kpi} ${kind ? css.clickable : ''}`} onClick={kind ? () => openFresh({ kind: 'records', records: kind, title: label }) : undefined} style={kind ? undefined : { cursor: 'default' }}>
-        <div className={css.kl}>{label}{kind && <IconChevronRight size={14} color="var(--app-faint)" />}</div>
+      <button type="button" key={key} className={`${css.card} ${css.kpi} ${kind ? css.clickable : ''}`} onClick={openItem ? () => openFresh(openItem) : kind ? () => openFresh({ kind: 'records', records: kind, title: label }) : undefined} style={kind || openItem ? undefined : { cursor: 'default' }}>
+        <div className={css.kl}>{label}{(kind || openItem) && <IconChevronRight size={14} color="var(--app-faint)" />}</div>
         {loading && !data ? <Skeleton height={28} width={120} mt={6} /> : <div className={css.kv}>{value}</div>}
         {note && data && <div className={css.note}>{note}</div>}
         {foot ? <div className={css.kf}>{data && foot}</div> : <div className={css.kf}>
@@ -154,7 +154,8 @@ export default function AdminInsights({ onOpenCustomer }) {
         {kpi('collected', 'Collected', lakh(k?.collected.value), { color: '#1c7ed6', kind: 'collected' })}
         {kpi('outstanding', 'Owed to you today', lakh(k?.outstanding.value), { color: '#e03131', kind: 'outstanding',
           foot: k && <span><b className={css.down}>{lakh(k.outstanding.overdue)}</b> of it overdue</span> })}
-        {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', kind: 'active', count: 'customer' })}
+        {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', open: { kind: 'change' }, count: 'customer',
+          note: k?.active_customers.started !== undefined && (k.active_customers.started || k.active_customers.stopped) ? <><span className={css.up}>+{k.active_customers.started} started</span> · <span className={css.down}>−{k.active_customers.stopped} stopped</span></> : null })}
       </div>
 
       {data && (

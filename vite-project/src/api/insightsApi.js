@@ -10,6 +10,11 @@ export const insightsApi = {
     const response = await axiosClient.get('/admin/insights/records', { params });
     return response.data;
   },
+  /** Active / started / stopped customers for the period (vs the compared one). */
+  async customerChange(params) {
+    const response = await axiosClient.get('/admin/insights/customer-change', { params });
+    return response.data;
+  },
   async customer(customerId) {
     const response = await axiosClient.get(`/admin/insights/customers/${customerId}`);
     return response.data;

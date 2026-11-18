@@ -261,10 +261,15 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
         previous.pop(key, None)
         for p in sparks:
             p.pop(key, None)
+    started, stopped = _active_change(invs, start, end, prev_start, prev_end)
     kpis = {key: {"value": current[key], "previous": None if all_time else previous[key],
                   "change": None if all_time else _pct(current[key] or 0, previous[key] or 0),
                   "spark": [] if all_time else [p[key] or 0 for p in sparks]}
             for key in current}
+    if not all_time:
+        # Behind the net change: who started buying and who stopped.
+        kpis["active_customers"]["started"] = len(started)
+        kpis["active_customers"]["stopped"] = len(stopped)
     # "Owed to you" is always today's position (not tied to the dates):
     # everything unpaid, split into not yet due and overdue.
     owed = [i for i in invs if i.pending > OPEN]
@@ -406,6 +411,62 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
 
 
 # ---------- drill-down lists ----------
+
+def _active_change(invs: list, start: date, end: date, prev_start: date, prev_end: date) -> tuple[set, set]:
+    now = {i.customer_id for i in invs if i.customer_id and within(i.date, start, end)}
+    before = {i.customer_id for i in invs if i.customer_id and within(i.date, prev_start, prev_end)}
+    return now - before, before - now
+
+
+def customer_change(db: Session, start: date, end: date, filters: Filters, all_time: bool = False) -> dict:
+    """Customers behind "Active customers": active in the period, started
+    (active now, not in the compared period) and stopped (bought in the
+    compared period, nothing now). A stopped customer is flagged "late" when
+    it is past their own usual gap between orders (same habit rule as
+    "Customers to follow up"), else "normal" (e.g. orders every 2 months)."""
+    book = Book(db)
+    today = today_ist()
+    invs = [i for i in book.invoices.values() if filters.match(book, i)]
+    if all_time:
+        start = min((i.date for i in invs if i.date), default=start)
+    prev_start, prev_end = previous_range(start, end)
+    by_customer = defaultdict(list)
+    for i in invs:
+        if i.customer_id:
+            by_customer[i.customer_id].append(i)
+
+    def sales(cid, a, b):
+        return round(sum(i.total for i in by_customer[cid] if within(i.date, a, b)), 2)
+
+    def row(cid, **extra):
+        c = book.customers.get(cid)
+        habit = profile(by_customer[cid], c.group if c else None, today)
+        last = habit["last_order"]
+        return {"customer_id": cid, "name": c.name if c else "—", "type": c.group if c else "Other",
+                "mr": book.mr_names.get(c.mr_id) if c and c.mr_id else None,
+                "sales": sales(cid, start, end), "previous_sales": None if all_time else sales(cid, prev_start, prev_end),
+                "last_order": last.isoformat() if last else None, "days_since": habit["days_since"],
+                "gap_low": habit["gap_low"], "gap_high": habit["gap_high"], **extra}
+
+    active = {i.customer_id for i in invs if i.customer_id and within(i.date, start, end)}
+    out = {"range": {"from": start.isoformat(), "to": end.isoformat(),
+                     "previous_from": None if all_time else prev_start.isoformat(),
+                     "previous_to": None if all_time else prev_end.isoformat()},
+           "active": sorted((row(cid) for cid in active), key=lambda r: -r["sales"]),
+           "started": [], "stopped": []}
+    if not all_time:
+        started, stopped = _active_change(invs, start, end, prev_start, prev_end)
+        out["started"] = sorted((row(cid) for cid in started), key=lambda r: -r["sales"])
+        rows = []
+        for cid in stopped:
+            r = row(cid)
+            habit = profile(by_customer[cid], book.customers[cid].group if cid in book.customers else None, today)
+            # Ordered again after the period (a past month was picked): not lost.
+            r["back"] = bool(habit["last_order"] and habit["last_order"] > end)
+            r["late"] = not r["back"] and (bool(habit["quiet"]) or (habit["gap_high"] is None and (r["days_since"] or 0) > 60))
+            rows.append(r)
+        out["stopped"] = sorted(rows, key=lambda r: (r["back"], not r["late"], -(r["previous_sales"] or 0)))
+    return out
 
 def invoice_list(db: Session, kind: str, start: date, end: date, filters: Filters, bucket: str | None = None,
                  limit: int = 500) -> dict:

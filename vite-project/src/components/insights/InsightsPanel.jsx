@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, NumberInput, Stack, Table, Text } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, NumberInput, SegmentedControl, Stack, Table, Text, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
 import { insightsApi } from '../../api/insightsApi';
@@ -52,6 +52,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         styles={{ header: { paddingInline: 16, paddingBlock: 10, minHeight: 0, borderBottom: '1px solid var(--app-line)' }, body: { padding: 16 } }}
       >
         {current?.kind === 'records' && <Records key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} />}
+        {current?.kind === 'change' && <CustomerChange key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} />}
         {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} onEdit={isAdmin ? setEditingCustomer : null} />}
         {current?.kind === 'targets' && <Targets onSaved={() => { onChanged?.(); onClose(); }} />}
       </Drawer>
@@ -75,6 +76,79 @@ function useLoad(load, key) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return { loading: state.key !== key, data: state.data, error: state.error };
+}
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortSpan = (from, to) => {
+  if (!from || !to) return '';
+  const [fy, fm, fd] = from.split('-').map(Number); const [ty, tm, td] = to.split('-').map(Number);
+  const whole = fd === 1 && td === new Date(ty, tm, 0).getDate();
+  if (whole && fy === ty && fm === tm) return `${SHORT_MONTHS[fm - 1]} ${fy}`;
+  if (whole) return `${SHORT_MONTHS[fm - 1]}–${SHORT_MONTHS[tm - 1]} ${ty}`;
+  return fm === tm && fy === ty ? `${fd}–${td} ${SHORT_MONTHS[fm - 1]}` : `${fd} ${SHORT_MONTHS[fm - 1]} – ${td} ${SHORT_MONTHS[tm - 1]}`;
+};
+
+/**
+ * Behind "Active customers": three tabs.
+ *   Active  · bought in the period
+ *   Started · bought now, not in the compared period (new or came back)
+ *   Stopped · bought in the compared period, nothing now; flagged
+ *             "Overdue to order" when past their own usual gap, else "Normal gap".
+ */
+function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
+  const [tab, setTab] = useState(item.tab || 'active');
+  const params = { ...filters };
+  const { loading, data, error } = useLoad(() => insightsApi.customerChange(params), JSON.stringify(params));
+  const compared = data ? shortSpan(data.range.previous_from, data.range.previous_to) : '';
+  const rows = data ? data[tab] : [];
+  const tabs = [
+    { value: 'active', label: `Active ${data ? data.active.length : ''}` },
+    ...(data?.range.previous_from ? [
+      { value: 'started', label: `Started ${data.started.length}` },
+      { value: 'stopped', label: `Stopped ${data.stopped.length}` },
+    ] : []),
+  ];
+  const sub = tab === 'active' ? `Bought in ${periodLabel}` : tab === 'started' ? `Bought in ${periodLabel}, not in ${compared}` : `Bought in ${compared}, nothing in ${periodLabel}`;
+  const habit = (r) => (r.gap_low === null ? null : r.gap_low === r.gap_high ? `usually every ${r.gap_low} days` : `usually every ${r.gap_low}–${r.gap_high} days`);
+  return (
+    <Stack gap="sm">
+      <div>
+        <Text fw={700} fz={18}>Active customers</Text>
+        <Text size="sm" c="dimmed">{sub}</Text>
+      </div>
+      {tabs.length > 1 && <SegmentedControl fullWidth size="sm" value={tab} onChange={setTab} data={tabs} />}
+      {error && <Alert color="red">{error}</Alert>}
+      {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : (
+        <Stack gap={0}>
+          {!rows.length && <Text c="dimmed" size="sm" py="sm">{tab === 'stopped' ? 'No one stopped buying. 👍' : 'Nobody here.'}</Text>}
+          {rows.map((r) => {
+            const amount = tab === 'stopped' ? r.previous_sales : r.sales;
+            const last = r.last_order ? new Date(`${r.last_order}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
+            return (
+              <UnstyledButton key={r.customer_id} onClick={() => onCustomer({ id: r.customer_id, name: r.name })} py={10} style={{ borderTop: '1px solid var(--app-line)', display: 'block', width: '100%' }}>
+                <Group justify="space-between" wrap="nowrap" gap="sm" align="flex-start">
+                  <div style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={600} truncate>{r.name}</Text>
+                    <Text size="xs" c="dimmed" truncate>{[r.type, r.mr || 'No MR'].join(' · ')}</Text>
+                    {tab === 'stopped' && (
+                      <Group gap={6} mt={4} wrap="nowrap">
+                        <Badge size="sm" variant="light" color={r.back ? 'green' : r.late ? 'red' : 'gray'} style={{ flexShrink: 0 }}>{r.back ? 'Ordered again' : r.late ? 'Overdue to order' : 'Normal gap'}</Badge>
+                        <Text size="xs" c="dimmed" truncate>{r.back ? `on ${last}` : `Last order ${last}${r.days_since !== null ? ` (${r.days_since} days ago)` : ''}${habit(r) ? ` · ${habit(r)}` : ''}`}</Text>
+                      </Group>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <Text fw={700} size="sm" className={css.num}>{money(amount)}</Text>
+                    <Text size="xs" c="dimmed">{tab === 'stopped' ? `in ${compared}` : tab === 'started' ? 'new / back' : (isMobile ? '' : periodLabel)}</Text>
+                  </div>
+                </Group>
+              </UnstyledButton>
+            );
+          })}
+        </Stack>
+      )}
+    </Stack>
+  );
 }
 
 function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }) {

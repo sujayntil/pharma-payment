@@ -272,6 +272,21 @@ class InsightsTests(unittest.TestCase):
         k = self.S()["kpis"]["outstanding"]
         self.assertEqual((k["value"], k["overdue"], k["not_due"]), (1000, 830, 170))
 
+    def test_started_and_stopped_customers(self):
+        from app.insights import customer_change
+        start = date(TODAY.year, TODAY.month, 1)
+        prev = previous_range(start, TODAY)[0]
+        self.inv(self.doc, prev, 300)                       # bought last month only: stopped
+        self.inv(self.dist, prev, 100)
+        self.inv(self.dist, TODAY, 50)                      # both months: still active
+        s = summary(self.db, start, TODAY, Filters())
+        k = s["kpis"]["active_customers"]
+        self.assertEqual((k["value"], k["started"], k["stopped"]), (1, 0, 1))
+        change = customer_change(self.db, start, TODAY, Filters())
+        self.assertEqual([r["name"] for r in change["stopped"]], [self.doc.name])
+        self.assertEqual(change["stopped"][0]["previous_sales"], 300)
+        self.assertEqual([r["customer_id"] for r in change["active"]], [self.dist.id])
+
     def test_all_time_has_no_comparison(self):
         self.inv(self.doc, TODAY - timedelta(days=900), 100)
         self.inv(self.doc, TODAY - timedelta(days=5), 200)

@@ -10,7 +10,7 @@ from .. import models, schemas
 from ..audit import write_audit
 from ..database import get_db
 from ..deps import require_admin
-from ..insights import (DUE_BUCKETS, TYPE_GROUPS, Filters, customer_insights, invoice_list, month_start,
+from ..insights import (DUE_BUCKETS, TYPE_GROUPS, Filters, customer_change, customer_insights, invoice_list, month_start,
                         save_targets, summary, targets_for, today_ist)
 
 router = APIRouter(prefix="/admin/insights", tags=["insights"])
@@ -57,6 +57,22 @@ def insights_summary(
         return summary(db, None, today_ist(), _filters(customer_type, mr_id, area), trend)
     start, end = _range(date_from, date_to)
     return summary(db, start, end, _filters(customer_type, mr_id, area), trend)
+
+
+@router.get("/customer-change")
+def insights_customer_change(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    customer_type: Optional[str] = None,
+    mr_id: Optional[int] = None,
+    area: Optional[str] = Query(default=None, max_length=80),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+    all_time: bool = False,
+):
+    """Active / started / stopped customers for the period (vs the compared one)."""
+    start, end = (month_start(today_ist()), today_ist()) if all_time else _range(date_from, date_to)
+    return customer_change(db, start, end, _filters(customer_type, mr_id, area), all_time)
 
 
 @router.get("/records")

@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Drawer, Group, Loader, NumberInput, Stack, Table, Text } from '@mantine/core';
+import { useCallback, useEffect, useState } from 'react';
+import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, NumberInput, Stack, Table, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconBook2, IconCash, IconDownload } from '@tabler/icons-react';
+import { IconArrowLeft, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
 import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useAuth } from '../../hooks/useAppStore';
+import ContactActions from '../customers/ContactActions';
+import EditCustomerModal from '../customers/EditCustomerModal';
 import { errorText, money, shortDate } from '../../utils/formatters';
 import InvoiceHistory from '../collections/InvoiceHistory';
 import RecordCollectionModal from '../collections/RecordCollectionModal';
@@ -27,6 +30,9 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
   const [recording, setRecording] = useState(null);
   const [collecting, setCollecting] = useState(null);
   const [reload, setReload] = useState(0);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const closeEdit = useCallback(() => setEditingCustomer(null), []);
+  const isAdmin = useAuth().role === 'ADMIN';
   const changed = () => { setReload((v) => v + 1); onChanged?.(); };
 
   return (
@@ -35,7 +41,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         opened={Boolean(current)}
         onClose={onClose}
         // Esc closes only the window on top (invoice history / collect), not this panel too.
-        closeOnEscape={!openInvoice && !recording && !collecting}
+        closeOnEscape={!openInvoice && !recording && !collecting && !editingCustomer}
         position={isMobile ? 'bottom' : 'right'}
         size={isMobile ? '92%' : 600}
         radius={isMobile ? 'lg' : 0}
@@ -45,12 +51,14 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         styles={{ header: { paddingInline: 16, paddingBlock: 10, minHeight: 0, borderBottom: '1px solid var(--app-line)' }, body: { padding: 16 } }}
       >
         {current?.kind === 'records' && <Records key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} />}
-        {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} />}
+        {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} onEdit={isAdmin ? setEditingCustomer : null} />}
         {current?.kind === 'targets' && <Targets onSaved={() => { onChanged?.(); onClose(); }} />}
       </Drawer>
       <InvoiceHistory invoiceId={openInvoice} onClose={() => setOpenInvoice(null)} onChanged={changed} onRecord={setRecording} refreshKey={reload} />
       <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={changed} />
       <CustomerCollectModal customer={collecting} onClose={() => setCollecting(null)} onSaved={changed} />
+      {/* Saving can move the customer (new area or MR): Insights reloads behind. */}
+      <EditCustomerModal customerId={editingCustomer} onClose={closeEdit} onSaved={changed} />
     </>
   );
 }
@@ -140,7 +148,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   );
 }
 
-function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
+function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger, onEdit }) {
   const { loading, data: c, error } = useLoad(() => insightsApi.customer(id), String(id));
   if (loading && !c) return <Group justify="center" p="lg"><Loader size="sm" /></Group>;
   if (error) return <Alert color="red">{error}</Alert>;
@@ -170,6 +178,17 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger }) {
           <Text fw={700} fz={18} lh={1.25}>{c.name}</Text>
           <Text size="sm" c="dimmed">Customer insights · {c.type}{c.mr ? ` · MR ${c.mr}` : ' · No MR'} · {c.area || 'Area not set'}</Text>
         </div>
+        <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+          <ContactActions size={isMobile ? 'md' : 'sm'} name={c.name} phone={c.phone} alternatePhone={c.alternate_phone} whatsappOn={c.whatsapp_on} />
+          {onEdit && (
+            <Menu position="bottom-end" shadow="md" withinPortal>
+              <Menu.Target><ActionIcon variant="subtle" color="gray" size={isMobile ? 'lg' : 'md'} aria-label={`More actions for ${c.name}`}><IconDots size={18} /></ActionIcon></Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => onEdit(c.customer_id)}>Edit details</Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
+        </Group>
       </Group>
       {lines.length > 0 && <div className={css.insight}>💡 <span>{lines.map((line, i) => <span key={i}>{i === 0 ? '' : '; '}{line}</span>)}.</span></div>}
       <div className={css.stats}>

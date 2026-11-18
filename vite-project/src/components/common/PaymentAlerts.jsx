@@ -62,7 +62,7 @@ export default function PaymentAlerts({ compact = false }) {
         await notificationsApi.remove(current.endpoint);
         await current.unsubscribe();
         setSubscription(null);
-        setMessage('Payment and overdue alerts are disabled on this device.');
+        setMessage('Alerts are off on this device.');
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') throw new Error('Allow notifications in browser settings, then enable alerts again.');
@@ -80,7 +80,7 @@ export default function PaymentAlerts({ compact = false }) {
         }
         await notificationsApi.save(created.toJSON());
         setSubscription(created);
-        setMessage('Payment and overdue alerts are enabled on this device.');
+        setMessage('Alerts are on for this device.');
       }
     } catch (error) {
       const text = error.response?.data?.detail || error.message || 'Could not update notification settings.';

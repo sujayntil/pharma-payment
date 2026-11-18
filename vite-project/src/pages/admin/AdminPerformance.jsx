@@ -45,13 +45,13 @@ export default function AdminPerformance() {
     <Paper {...listPaperProps(isMobile)}>{loading && !rows.length ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? <Text c="dimmed" ta="center" py="xl">No performance records for this range.</Text> : isMobile ? <CardList>{rows.map((row) => (
       <RowCard
         key={row.mr_id}
-        title={row.name}
+        title={<>{row.name} <span title="Months fully cleared" style={{ fontSize: 13, fontWeight: 600, color: 'var(--app-sales-label)' }}>🏆 {row.trophies ?? 0}</span></>}
         amount={money(row.collected)}
         amountLabel="collected"
         amountColor="green"
         badges={<RateBadge rate={rateOf(row)} />}
         details={[{ label: 'Sales', value: money(row.sales) }, { label: 'Pending', value: <Text span c="red" size="sm">{money(row.pending)}</Text> }]}
       />
-    ))}</CardList> : <ScrollArea><Table miw={640} striped verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Medical representative</Table.Th><Table.Th ta="right">Sales</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Collection rate</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.mr_id}><Table.Td fw={600}>{row.name}</Table.Td><Table.Td ta="right">{money(row.sales)}</Table.Td><Table.Td ta="right" c="green" fw={700}>{money(row.collected)}</Table.Td><Table.Td ta="right" c="red">{money(row.pending)}</Table.Td><Table.Td><RateBadge rate={rateOf(row)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}</Paper>
+    ))}</CardList> : <ScrollArea><Table miw={640} striped verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Medical representative</Table.Th><Table.Th ta="right">Sales</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Collection rate</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.mr_id}><Table.Td fw={600}>{row.name} <span title="Months fully cleared" style={{ fontSize: 13, color: 'var(--app-sales-label)' }}>🏆 {row.trophies ?? 0}</span></Table.Td><Table.Td ta="right">{money(row.sales)}</Table.Td><Table.Td ta="right" c="green" fw={700}>{money(row.collected)}</Table.Td><Table.Td ta="right" c="red">{money(row.pending)}</Table.Td><Table.Td><RateBadge rate={rateOf(row)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}</Paper>
   </Stack>;
 }

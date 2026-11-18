@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionIcon, Alert, Button, Group, Loader, Paper, SegmentedControl, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconArrowsSort, IconCash, IconCategory, IconCircleCheck, IconHistory } from '@tabler/icons-react';
@@ -79,6 +80,22 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const [counts, setCounts] = useState({ pending: null, paid: null, all: null });
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [openId, setOpenId] = useState(null); const [historyKey, setHistoryKey] = useState(0);
+  // A bell entry or phone alert links here as ?invoice=12: swap it for a clean
+  // address (so Back closes the panel and a reload doesn't reopen it), then open that invoice.
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const linkedParam = Number(params.get('invoice')) || null;
+  useEffect(() => {
+    if (linkedParam) navigate(location.pathname, { replace: true, state: { openInvoice: linkedParam, linkId: Date.now() } });
+  }, [linkedParam, location.pathname, navigate]);
+  const wanted = location.state?.openInvoice;
+  const linkId = location.state?.linkId;
+  const [handledLink, setHandledLink] = useState(null);
+  if (wanted && linkId !== handledLink) {
+    setHandledLink(linkId);
+    setOpenId(wanted);
+  }
   const [recording, setRecording] = useState(null);
   // Ticks stay while searching / filtering, so several customers can be collected together.
   const ticks = useInvoiceTicks('invoices');

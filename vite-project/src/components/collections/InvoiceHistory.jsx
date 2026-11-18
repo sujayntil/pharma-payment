@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Paper, SimpleGrid, Stack, Text, ThemeIcon, Timeline } from '@mantine/core';
-import { IconArrowBackUp, IconCash, IconDots, IconFileInvoice, IconFlag } from '@tabler/icons-react';
+import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Timeline } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconArrowBackUp, IconCash, IconDots, IconEdit, IconFileInvoice, IconFlag, IconTrash } from '@tabler/icons-react';
 import { invoicesApi } from '../../api/invoicesApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
@@ -9,7 +10,8 @@ import { useAuth } from '../../hooks/useAppStore';
 import { dateTime, errorText, money, shortDate } from '../../utils/formatters';
 import { ReversedBadge, StatusBadge } from './CollectionBadges';
 import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
-import { useActorLabel } from './collectionUtils';
+import { PAYMENT_MODES, useActorLabel } from './collectionUtils';
+import { deleteWithUndo } from './deleteWithUndo';
 import ReversePaymentModal from './ReversePaymentModal';
 import ContactActions from '../customers/ContactActions';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
@@ -52,10 +54,27 @@ function eventTitle(event) {
  */
 export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord, refreshKey = 0, actions }) {
   const isMobile = useIsMobile();
+  // Admin: Edit / Delete invoice in the ⋯ menu wherever the panel opens
+  // (Insights, Dashboard, Collections, ledgers). A page can pass its own.
+  const isAdmin = useAuth().role === 'ADMIN';
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [edits, setEdits] = useState(0);
+  const menu = actions || (isAdmin ? [
+    { label: 'Edit invoice', icon: <IconEdit size={15} />, onClick: setEditing },
+    { label: 'Delete invoice', icon: <IconTrash size={15} />, color: 'red', onClick: setDeleting },
+  ] : undefined);
+  const remove = () => {
+    const invoice = deleting;
+    setDeleting(null);
+    onClose();
+    deleteWithUndo({ path: `/invoices/${invoice.id}`, message: `${invoice.invoice_number} deleted`, onHide: () => {}, onRestore: () => {}, onDone: () => onChanged?.() });
+  };
   useBackClose(!!invoiceId, onClose);
   useSwipeDownToClose(!!invoiceId && isMobile, onClose);
   const panelWidth = useSidePanelWidth();
   return (
+    <>
     <Drawer
       opened={!!invoiceId}
       onClose={onClose}
@@ -67,8 +86,64 @@ export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord
       classNames={isMobile ? { content: SWIPE_SHEET_CLASS } : undefined}
       {...(!isMobile && { withOverlay: false, trapFocus: false, lockScroll: false, closeOnClickOutside: false, shadow: 'xl', styles: { inner: { top: 64, height: 'calc(100% - 64px)' } } })}
     >
-      {invoiceId && <HistoryBody key={invoiceId} invoiceId={invoiceId} onChanged={onChanged} onRecord={onRecord} refreshKey={refreshKey} actions={actions} />}
+      {invoiceId && <HistoryBody key={invoiceId} invoiceId={invoiceId} onChanged={onChanged} onRecord={onRecord} refreshKey={`${refreshKey}-${edits}`} actions={menu} />}
     </Drawer>
+    {!actions && isAdmin && (
+      <>
+        <InvoiceEditModal invoice={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setEdits((value) => value + 1); onChanged?.(); }} />
+        <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete invoice" centered zIndex={250}>
+          <Stack>
+            <Alert color="red">Delete invoice {deleting?.invoice_number}? Its collection history will also be removed and balances will recalculate.</Alert>
+            <Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" onClick={remove}>Delete invoice</Button></Group>
+          </Stack>
+        </Modal>
+      </>
+    )}
+    </>
+  );
+}
+
+/** Admin "Edit invoice": same fields and checks as the Invoices page. */
+function InvoiceEditModal({ invoice, onClose, onSaved }) {
+  return (
+    <Modal opened={!!invoice} onClose={onClose} title={`Edit invoice ${invoice?.invoice_number || ''}`} centered zIndex={250}>
+      {invoice && <InvoiceEditForm key={invoice.id} invoice={invoice} onSaved={onSaved} />}
+    </Modal>
+  );
+}
+
+function InvoiceEditForm({ invoice, onSaved }) {
+  const [form, setForm] = useState({
+    invoice_number: invoice.invoice_number, invoice_date: invoice.invoice_date || '', customer_name: invoice.customer_name || '',
+    total_amount: invoice.total_amount, payment_mode: invoice.payment_mode || '', remarks: invoice.remarks || '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (patch) => { setForm((current) => ({ ...current, ...patch })); setError(''); };
+  const save = async (event) => {
+    event.preventDefault(); setBusy(true); setError('');
+    try {
+      await invoicesApi.updateInvoice(invoice.id, {
+        ...form, invoice_number: form.invoice_number.trim(), customer_name: form.customer_name.trim(),
+        total_amount: Number(form.total_amount), payment_mode: form.payment_mode || null, remarks: form.remarks.trim() || null,
+      });
+      notifications.show({ color: 'green', message: 'Invoice updated' });
+      onSaved();
+    } catch (err) { setError(errorText(err)); } finally { setBusy(false); }
+  };
+  return (
+    <form onSubmit={save}>
+      <Stack>
+        {error && <Alert color="red">{error}</Alert>}
+        <TextInput required label="Invoice number" value={form.invoice_number} onChange={(event) => set({ invoice_number: event.currentTarget.value })} />
+        <TextInput required type="date" label="Invoice date" value={form.invoice_date} onChange={(event) => set({ invoice_date: event.currentTarget.value })} />
+        <TextInput required label="Customer" value={form.customer_name} onChange={(event) => set({ customer_name: event.currentTarget.value })} />
+        <NumberInput required min={0.01} decimalScale={2} label="Bill amount (₹)" value={form.total_amount} onChange={(value) => set({ total_amount: value })} />
+        <Select label="Payment mode" clearable data={PAYMENT_MODES} value={form.payment_mode || null} onChange={(value) => set({ payment_mode: value || '' })} comboboxProps={{ zIndex: 300 }} />
+        <TextInput label="Remarks" value={form.remarks} onChange={(event) => set({ remarks: event.currentTarget.value })} />
+        <Button type="submit" loading={busy}>Save changes</Button>
+      </Stack>
+    </form>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Tooltip, Alert, Badge, Button, Drawer, Group, Loader, Menu, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconArrowsSort, IconBook, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
@@ -26,7 +26,8 @@ import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { displayPhone, errorText, money, shortDate } from '../../utils/formatters';
-import { CustomerContactModal, CustomerContactRow } from '../../components/customers/CustomerContact';
+import { CustomerContactRow } from '../../components/customers/CustomerContact';
+import EditCustomerModal from '../../components/customers/EditCustomerModal';
 import CustomerFormModal from '../../components/customers/CustomerFormModal';
 
 import { CUSTOMER_TYPES } from '../../utils/customerTypes';
@@ -53,12 +54,14 @@ export default function AdminCustomers({ openCustomer = null }) {
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
   const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState({ mrId: '', type: '', sort: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
-  const [selected, setSelected] = useState(openCustomer); const [editingContact, setEditingContact] = useState(null); const [collectingCustomer, setCollectingCustomer] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
+  const [selected, setSelected] = useState(openCustomer); const [collectingCustomer, setCollectingCustomer] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
   // Back closes the open ledger instead of leaving the screen.
   useBackClose(!!selected, () => setSelected(null));
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [editingDetails, setEditingDetails] = useState(null); // ledger's "Edit details"
+  const closeDetails = useCallback(() => setEditingDetails(null), []);
   const ticks = useInvoiceTicks(selected?.id);
   // Ticked customers on the list (to delete several at once).
   const customerTicks = useInvoiceTicks('customers', { selectable: NO_INVOICES });
@@ -240,7 +243,14 @@ export default function AdminCustomers({ openCustomer = null }) {
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <TickedBar ticks={customerTicks} invoices={shownCustomers} showTotal={false} onDelete={deleteManyCustomers} deleteLabel="Delete customers" />
-    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" title={<div><Text fw={700} style={{ overflowWrap: 'anywhere' }}>{selected?.name || ''}</Text><Text size="sm" c="dimmed">MR: {ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}</Text></div>}>
+    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" title={<Group gap="xs" wrap="nowrap" align="flex-start">
+      <div style={{ minWidth: 0 }}>
+        <Text fw={700} style={{ overflowWrap: 'anywhere' }}>{ledger?.customer?.name || selected?.name || ''}</Text>
+        {/* "Chemist · Andheri West · MR: Neha": what to fix shows at a glance. */}
+        <Text size="sm" c="dimmed">{[ledger?.customer?.type || selected?.type, ledger?.customer?.area, `MR: ${ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}`].filter(Boolean).join(' · ')}</Text>
+      </div>
+
+    </Group>}>
       <Stack gap="md">
         {/* Numbers with call / WhatsApp, Edit, or "+ Add phone" (same as the MR screen). */}
         {selected && (() => {
@@ -251,7 +261,27 @@ export default function AdminCustomers({ openCustomer = null }) {
             alternate_phone: ledger?.customer ? ledger.customer.alternate_phone : selected.alternate_phone,
             whatsapp_on: ledger?.customer ? ledger.customer.whatsapp_on : selected.whatsapp_on,
           };
-          return <CustomerContactRow name={contact.name} phone={contact.phone} alternatePhone={contact.alternate_phone} whatsappOn={contact.whatsapp_on} onEdit={() => setEditingContact(contact)} />;
+          return (
+            // Numbers with call / WhatsApp, then ⋯ > Edit details (same as Insights).
+            <Group gap={6} wrap="nowrap" align="center">
+              <div style={{ flex: 1, minWidth: 0 }}><CustomerContactRow name={contact.name} phone={contact.phone} alternatePhone={contact.alternate_phone} whatsappOn={contact.whatsapp_on} editable={false} onEdit={() => setEditingDetails(contact.id)} /></div>
+              <Menu position="bottom-end" shadow="md" withinPortal>
+                <Menu.Target><ActionIcon variant="subtle" color="gray" size="lg" aria-label={`More actions for ${contact.name}`}><IconDots size={18} /></ActionIcon></Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => setEditingDetails(contact.id)}>Edit details</Menu.Item>
+                  <Menu.Divider />
+                  {/* Same rule as the list: a customer with invoices can't be deleted. */}
+                  {Number(ledger?.invoice_count ?? selected.invoice_count) > 0 ? (
+                    <Tooltip label="Has invoices" position="left" withArrow withinPortal>
+                      <Menu.Item leftSection={<IconTrash size={15} />} closeMenuOnClick={false} aria-disabled c="dimmed" style={{ cursor: 'not-allowed', opacity: 0.6 }} onClick={(event) => event.preventDefault()}>Delete customer</Menu.Item>
+                    </Tooltip>
+                  ) : (
+                    <Menu.Item color="red" leftSection={<IconTrash size={15} />} onClick={() => { const customer = selected; setSelected(null); deleteCustomer(customer); }}>Delete customer</Menu.Item>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            </Group>
+          );
         })()}
         {ledger && (isMobile
           ? (
@@ -286,8 +316,11 @@ export default function AdminCustomers({ openCustomer = null }) {
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
     <MarkUnpaidModal invoice={reversing && { ...reversing, customer_name: selected?.name }} onClose={() => setReversing(null)} onSaved={reloadLedger} /> */}
     {/* Saving reloads the customer screen and the list so the new numbers show everywhere. */}
-    <CustomerContactModal admin customer={editingContact} onClose={() => setEditingContact(null)} onSaved={(saved) => { setSelected((current) => (current && current.id === saved.id ? { ...current, ...saved } : current)); reloadLedger(); setRefresh((value) => value + 1); }} />
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} onChanged={reloadLedger} onRecord={setRecording} refreshKey={ledgerRefresh} />
+    <EditCustomerModal customerId={editingDetails} onClose={closeDetails} onSaved={(saved) => {
+      setSelected((current) => (current && current.id === saved.id ? { ...current, ...saved } : current));
+      setRefresh((value) => value + 1); reloadLedger();
+    }} />
     {/* Add customer ({}) and Edit customer share one form. */}
     <CustomerFormModal customer={editing} mrOptions={mrOptions} onClose={() => setEditing(null)} onSaved={(saved, isNew) => {
       setNotice(isNew ? `${saved.name} added.` : 'Customer details saved.');

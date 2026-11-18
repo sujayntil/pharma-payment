@@ -324,6 +324,11 @@ def customer_ledger(
             "alternate_phone": customer.alternate_phone,
             "whatsapp_on": customer.whatsapp_on,
             "mr_name": customer.mr.name if customer.mr else None,
+            # For "Edit details" (Admin) and the type · area line.
+            "mr_id": customer.mr_id,
+            "area": customer.area,
+            "address": customer.address,
+            "gstin": customer.gstin,
         },
         "total_invoiced": total_invoiced,
         "total_paid": total_paid,

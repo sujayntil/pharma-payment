@@ -1,0 +1,7 @@
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 0 11px 0 9px; border-radius: 999px; font-size: 14px; font-weight: 700; color: #7a4d00; background: linear-gradient(180deg, #fff9db, #ffec99); border: 1px solid #f3d27a; font-variant-numeric: tabular-nums; }
+[data-mantine-color-scheme='dark'] .pill { color: #ffe066; background: rgba(250, 176, 5, 0.14); border-color: rgba(250, 176, 5, 0.45); }
+.pill[data-bump] { animation: bump 650ms cubic-bezier(.2, 1.7, .4, 1); }
+@keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.45); } 100% { transform: scale(1); } }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--app-soft); }
+@media (prefers-reduced-motion: reduce) { .pill[data-bump] { animation: none; } }

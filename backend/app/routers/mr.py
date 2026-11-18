@@ -10,7 +10,7 @@ from ..collection_info import last_collection_fields, latest_collections, revers
 from ..database import get_db
 from ..overdue import overdue_customer_summaries
 from ..deps import get_current_user, require_mr
-from ..month_clear import claim_unseen
+from ..month_clear import claim_unseen, trophy_summary
 from ..push import send_month_cleared_notification
 from ..utils import INVOICE_STATUSES, clean_search, clean_status, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone
 
@@ -301,6 +301,12 @@ def overdue_alerts(
     """This MR's customers with at least one invoice unpaid for 40+ days.
     Same rules as the Admin table, filtered to invoices assigned to them."""
     return overdue_customer_summaries(db, mr_id=user.id)
+
+
+@router.get("/trophies")
+def my_trophies(db: Session = Depends(get_db), user: models.User = Depends(require_mr)):
+    """Trophy counter and list: one trophy per cleared invoice month."""
+    return trophy_summary(db, user.id)
 
 
 @router.post("/months-cleared/claim")

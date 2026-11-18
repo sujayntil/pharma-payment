@@ -129,10 +129,10 @@ class MonthClearTests(unittest.TestCase):
 
     def test_admin_mark_paid_and_mark_unpaid(self):
         a = self.invoice("A", OLD)
-        override_collection_status(a.id, schemas.CollectionStatusUpdate(status="PAID", mode="Cash"), self.db, self.admin)
+        override_collection_status(a.id, schemas.CollectionStatusUpdate(status="PAID", mode="Cash"), BackgroundTasks(), self.db, self.admin)
         record = self.db.query(models.MonthClearance).one()
         self.assertIsNone(record.shown_at)
-        override_collection_status(a.id, schemas.CollectionStatusUpdate(status="UNPAID", reason="wrong"), self.db, self.admin)
+        override_collection_status(a.id, schemas.CollectionStatusUpdate(status="UNPAID", reason="wrong"), BackgroundTasks(), self.db, self.admin)
         self.db.refresh(record)
         self.assertIsNotNone(record.undone_at)
         self.assertEqual(self.claim(), [])                                        # open again: nothing to show
@@ -232,7 +232,7 @@ class MonthClearTests(unittest.TestCase):
     def test_admin_reversal_opens_the_month_again(self):
         a = self.invoice("A", LAST_MONTH_END)
         result = self.pay(a)
-        reverse_payment(result["payment_id"], schemas.PaymentReversalCreate(reason="Cheque bounced"), self.db, self.admin)
+        reverse_payment(result["payment_id"], schemas.PaymentReversalCreate(reason="Cheque bounced"), BackgroundTasks(), self.db, self.admin)
         record = self.db.query(models.MonthClearance).one()
         self.assertIsNotNone(record.undone_at)
 
@@ -256,3 +256,51 @@ class MonthClearTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrophyTests(MonthClearTests):
+    """One trophy per cleared month; the counter shows this FY plus last FY
+    until every last-FY bill is paid."""
+
+    def test_trophy_counts_and_comes_back_off_when_reopened(self):
+        from app.month_clear import trophy_summary
+        a = self.invoice("T1", LAST_MONTH_END)
+        self.pay(a)
+        s = trophy_summary(self.db, self.mr.id)
+        # In April, last month (March) belongs to last FY, which is now fully paid: list only.
+        self.assertEqual(s["count"], 0 if TODAY.month == 4 else 1)
+        self.assertEqual(s["groups"][0]["months"][0]["month"], LAST_MONTH_END.strftime("%Y-%m"))
+        payment = self.db.query(models.Payment).filter_by(invoice_id=a.id).first()
+        reverse_payment(payment.id, schemas.PaymentReversalCreate(reason="Cheque bounced"), BackgroundTasks(), self.db, self.admin)
+        self.assertEqual(trophy_summary(self.db, self.mr.id)["count"], 0)
+
+    def test_last_fy_counts_until_it_closes_then_counter_restarts(self):
+        from app import month_clear
+        may = date(2027, 5, 10)
+        with patch.object(month_clear, "_today", return_value=may):
+            feb = self.invoice("FEB", date(2027, 2, 10))
+            mar = self.invoice("MAR", date(2027, 3, 10))
+            apr = self.invoice("APR", date(2027, 4, 10))
+            self.assertEqual(self.pay(feb)["months_cleared"][0]["month"], "2027-02")
+            self.assertEqual(self.pay(apr)["months_cleared"][0]["month"], "2027-04")
+            s = month_clear.trophy_summary(self.db, self.mr.id, may)
+            self.assertEqual((s["count"], s["carry_fy_label"]), (2, "FY 2026–27"))     # Feb (last FY, still open) + Apr
+            months = self.pay(mar)["months_cleared"]                                  # March paid in May
+            self.assertEqual(months[0]["month"], "2027-03")
+            self.assertEqual(months[0]["fy_closed"], {"label": "FY 2026–27", "trophies": 2})
+            s = month_clear.trophy_summary(self.db, self.mr.id, may)
+            self.assertEqual((s["count"], s["carry_fy_label"]), (1, None))            # counter restarts: Apr only
+            self.assertEqual([g["label"] for g in s["groups"]], ["FY 2027–28", "FY 2026–27"])
+
+    def test_months_paid_before_trophies_existed_count_quietly(self):
+        from app.month_clear import trophy_summary
+        old = self.invoice("OLDPAID", OLD)
+        old.paid_amount, old.pending_amount, old.status = old.total_amount, 0, "PAID"     # paid long ago, no record
+        self.db.commit()
+        s = trophy_summary(self.db, self.mr.id)
+        self.assertEqual(s["groups"][0]["months"][0]["month"], OLD.strftime("%Y-%m"))
+        record = self.db.query(models.MonthClearance).filter_by(user_id=self.mr.id).one()
+        self.assertIsNotNone(record.shown_at)                  # no celebration for old months
+        self.assertIsNotNone(record.notified_at)               # and no Admin alert
+        shown, _noticed = __import__("app.month_clear", fromlist=["claim_unseen"]).claim_unseen(self.db, self.mr)
+        self.assertEqual(shown, [])

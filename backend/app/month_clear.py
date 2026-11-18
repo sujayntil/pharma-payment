@@ -108,6 +108,97 @@ def _mark_cleared(db: Session, mr_id: int, year: int, month: int, rows, show_now
     return show_now
 
 
+# ---------- trophies ----------
+# Every cleared month is a trophy. It belongs to the financial year (Apr-Mar)
+# of the month the bills were made, even when the last payment comes later.
+# The counter shows this FY's trophies, plus last FY's until every one of
+# last FY's bills (for that MR) is paid; then last FY moves to the list only.
+
+def fy_of(key: str) -> int:
+    year, month = map(int, key.split("-"))
+    return year if month >= 4 else year - 1
+
+
+def fy_label(fy: int) -> str:
+    return f"FY {fy}–{str(fy + 1)[2:]}"
+
+
+def _fy_open(db: Session, mr_id: int, fy: int) -> bool:
+    """Any of this MR's bills from that financial year still unpaid?"""
+    return db.query(models.Invoice.id).filter(
+        models.Invoice.mr_id == mr_id,
+        models.Invoice.invoice_date >= date(fy, 4, 1),
+        models.Invoice.invoice_date < date(fy + 1, 4, 1),
+        models.Invoice.pending_amount > OPEN,
+    ).first() is not None
+
+
+def backfill_trophies(db: Session, mr_id: int, today: date | None = None) -> None:
+    """Months fully paid before trophies existed: give them their trophy
+    quietly (no celebration, no Admin alert). Last month is left to
+    claim_unseen, which celebrates it; the running month never counts."""
+    today = today or _today()
+    last = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    have = {m for (m,) in db.query(models.MonthClearance.month).filter_by(user_id=mr_id).all()}
+    by_month: dict[str, list] = {}
+    for inv in db.query(models.Invoice).filter(models.Invoice.mr_id == mr_id, models.Invoice.invoice_date < last).all():
+        by_month.setdefault(_key(inv.invoice_date.year, inv.invoice_date.month), []).append(inv)
+    now = _now_utc()
+    added = False
+    for key, rows in by_month.items():
+        if key in have or not _all_paid(rows):
+            continue
+        last_paid = (db.query(func.max(models.Payment.payment_date))
+                     .filter(models.Payment.invoice_id.in_([r.id for r in rows]), models.Payment.amount > 0).scalar())
+        db.add(models.MonthClearance(user_id=mr_id, month=key, on_time=_on_time(db, rows), invoice_count=len(rows),
+                                     cleared_at=last_paid or now, shown_at=now, notified_at=now, cleared_by=None))
+        added = True
+    if added:
+        db.commit()
+
+
+def trophy_summary(db: Session, mr_id: int, today: date | None = None) -> dict:
+    today = today or _today()
+    backfill_trophies(db, mr_id, today)
+    current_fy = today.year if today.month >= 4 else today.year - 1
+    carry = _fy_open(db, mr_id, current_fy - 1)
+    records = (
+        db.query(models.MonthClearance)
+        .filter(models.MonthClearance.user_id == mr_id, models.MonthClearance.undone_at.is_(None))
+        .order_by(models.MonthClearance.month.desc())
+        .all()
+    )
+    counted = [r for r in records if fy_of(r.month) == current_fy or (carry and fy_of(r.month) == current_fy - 1)]
+    groups: dict[int, list] = {}
+    for r in records:
+        year, month = map(int, r.month.split("-"))
+        groups.setdefault(fy_of(r.month), []).append({
+            "month": r.month, "label": f"{_MONTHS[month - 1]} {year}",
+            "cleared_on": r.cleared_at.replace(tzinfo=timezone.utc).astimezone(IST).date().isoformat() if r.cleared_at else None,
+        })
+    return {
+        "count": len(counted),
+        "counted_months": [r.month for r in counted],
+        "fy": current_fy, "fy_label": fy_label(current_fy),
+        "carry_fy_label": fy_label(current_fy - 1) if carry and any(fy_of(r.month) == current_fy - 1 for r in records) else None,
+        "groups": [{"fy": fy, "label": fy_label(fy), "months": months} for fy, months in sorted(groups.items(), reverse=True)],
+    }
+
+
+def _note_fy_closed(db: Session, mr_id: int, items: list[dict]) -> list[dict]:
+    """Mark the celebration that closed last financial year for this MR:
+    "FY 2026-27 closed with 12 trophies"; the counter then starts fresh."""
+    today = _today()
+    last_fy = (today.year if today.month >= 4 else today.year - 1) - 1
+    mine = [i for i in items if fy_of(i["month"]) == last_fy]
+    if mine and not _fy_open(db, mr_id, last_fy):
+        total = db.query(models.MonthClearance.id).filter(
+            models.MonthClearance.user_id == mr_id, models.MonthClearance.undone_at.is_(None),
+            models.MonthClearance.month >= f"{last_fy}-04", models.MonthClearance.month <= f"{last_fy + 1}-03").count()
+        mine[-1]["fy_closed"] = {"label": fy_label(last_fy), "trophies": total}
+    return items
+
+
 def months_cleared(db: Session, user: models.User, invoices) -> list[dict]:
     """Call after recording collections (before commit). Saves every finished
     month these invoices completed, per MR; returns the ones to celebrate now
@@ -131,7 +222,7 @@ def months_cleared(db: Session, user: models.User, invoices) -> list[dict]:
         show_now = is_mr and mr_id == user.id
         if _mark_cleared(db, mr_id, year, month, rows, show_now, actor_id=user.id):
             result.append({"month": _key(year, month), "label": _label(year, month, today), "invoices": len(rows), "on_time": _on_time(db, rows)})
-    return result
+    return _note_fy_closed(db, user.id, result) if result else result
 
 
 def finished_month_keys(invoices) -> list[str]:
@@ -176,7 +267,7 @@ def claim_unseen(db: Session, mr: models.User) -> tuple[list[dict], list[str]]:
         if taken:
             shown.append(_item(record, today))
     db.commit()
-    return shown, noticed
+    return _note_fy_closed(db, mr.id, shown), noticed
 
 
 def reopen_months(db: Session, invoices) -> None:

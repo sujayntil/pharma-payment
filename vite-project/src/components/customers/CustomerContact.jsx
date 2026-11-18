@@ -13,8 +13,9 @@ import { phonePayload } from '../../utils/phone';
  * Contact line at the top of a customer's screen (MR):
  *   98765 43210 / 080-12345678   (call) (whatsapp)  Edit
  * With no number yet it shows "+ Add phone". onEdit opens CustomerContactModal.
+ * editable={false}: no "Edit" next to the numbers (Admin ledger edits them in "Edit details").
  */
-export function CustomerContactRow({ name, phone, alternatePhone, whatsappOn, onEdit }) {
+export function CustomerContactRow({ name, phone, alternatePhone, whatsappOn, onEdit, editable = true }) {
   if (!phone && !alternatePhone) {
     return (
       <Button variant="light" size="xs" leftSection={<IconPlus size={14} />} onClick={onEdit} style={{ alignSelf: 'flex-start' }}>
@@ -34,7 +35,7 @@ export function CustomerContactRow({ name, phone, alternatePhone, whatsappOn, on
       </div>
       <Group gap={6} wrap="nowrap">
         <ContactActions name={name} phone={phone} alternatePhone={alternatePhone} whatsappOn={whatsappOn} />
-        <Button variant="subtle" size="compact-sm" leftSection={<IconPencil size={14} />} onClick={onEdit}>Edit</Button>
+        {editable && <Button variant="subtle" size="compact-sm" leftSection={<IconPencil size={14} />} onClick={onEdit}>Edit</Button>}
       </Group>
     </Group>
   );

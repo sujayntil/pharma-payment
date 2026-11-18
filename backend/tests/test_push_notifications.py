@@ -7,8 +7,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models, schemas
 from app.database import Base
-from app.push import payment_payload
-from app.routers.notifications import delete_subscription, mark_seen, recent_collections, save_subscription
+from app.push import office_payment_payloads, payment_payload
+from app.routers.admin import reverse_payment
+from app.routers.notifications import delete_subscription, mark_mine_seen, mark_seen, my_updates, recent_collections, save_subscription
 from app.routers.payments import add_payment
 
 
@@ -64,7 +65,7 @@ class PushNotificationTests(unittest.TestCase):
             background.tasks[0].func(*background.tasks[0].args, **background.tasks[0].kwargs)
             send_push.assert_called_once_with(payment.id)
 
-    def test_admin_payment_does_not_schedule_mr_alert(self):
+    def test_admin_payment_alerts_the_mr_not_the_admins(self):
         background = BackgroundTasks()
         invoice = self.db.get(models.Invoice, self.invoice.id)
         add_payment(
@@ -73,7 +74,39 @@ class PushNotificationTests(unittest.TestCase):
             self.db,
             self.admin,
         )
-        self.assertEqual(background.tasks, [])
+        self.assertEqual([task.func.__name__ for task in background.tasks], ["send_office_payment_notification"])
+
+    def test_mr_hears_about_office_collections_and_reversals_only(self):
+        self.pay(self.mr, 10)       # the MR's own: not news to them
+        self.pay(self.admin, 30)    # office recorded it
+        office = self.db.query(models.Payment).filter_by(recorded_by=self.admin.id).one()
+        mine = self.db.query(models.Payment).filter_by(recorded_by=self.mr.id).one()
+        alerts = office_payment_payloads(self.db, [mine.id, office.id])
+        self.assertEqual(len(alerts), 1)
+        mr_id, alert = alerts[0]
+        self.assertEqual(mr_id, self.mr.id)
+        self.assertEqual(alert["title"], "₹30 received · Tulsi Pharmacy")
+        self.assertIn("recorded by Admin", alert["body"])
+        self.assertEqual(alert["url"], f"/#/mr/invoices?invoice={self.invoice.id}")
+
+        reverse_payment(mine.id, schemas.PaymentReversalCreate(reason="Cheque bounced"), BackgroundTasks(), self.db, self.admin)
+        reversal = self.db.query(models.Payment).filter(models.Payment.amount < 0).one()
+        (_, alert), = office_payment_payloads(self.db, [reversal.id])
+        self.assertTrue(alert["title"].startswith("↩️ ₹10 reversed"))
+        self.assertIn("Cheque bounced", alert["body"])
+
+        bell = my_updates(10, self.db, self.mr)
+        self.assertEqual(bell["unread"], 2)
+        self.assertEqual([item["is_reversal"] for item in bell["items"]], [True, False])
+        mark_mine_seen(self.db, self.mr)
+        self.assertEqual(my_updates(10, self.db, self.mr)["unread"], 0)
+
+    def test_undone_office_entry_sends_nothing(self):
+        self.pay(self.admin, 30)
+        office = self.db.query(models.Payment).one()
+        gone = office.id
+        self.db.delete(office); self.db.commit()
+        self.assertEqual(office_payment_payloads(self.db, [gone]), [])
 
 
     def pay(self, user, amount):

@@ -442,6 +442,15 @@ def invoice_list(db: Session, kind: str, start: date, end: date, filters: Filter
     return {"kind": kind, "count": len(items), "total": round(total, 2), "items": items[:limit], "truncated": len(items) > limit}
 
 
+def _contact(db: Session, customer_id: int) -> dict:
+    row = db.get(models.Customer, customer_id)
+    return {
+        "phone": row.phone if row else None,
+        "alternate_phone": row.alternate_phone if row else None,
+        "whatsapp_on": row.whatsapp_on if row else None,
+    }
+
+
 def customer_insights(db: Session, customer_id: int) -> dict | None:
     book = Book(db)
     c = book.customers.get(customer_id)
@@ -474,6 +483,8 @@ def customer_insights(db: Session, customer_id: int) -> dict | None:
     overdue = [i for i in invs if i.pending > OPEN and is_overdue(i.date, c.group, today)]
     return {
         "customer_id": c.id, "name": c.name, "type": c.group, "area": c.area,
+        # Numbers for the call / WhatsApp icons on the customer's panel.
+        **_contact(db, c.id),
         "mr_id": c.mr_id, "mr": book.mr_names.get(c.mr_id) if c.mr_id else None,
         "months": months,
         "last_12_months": round(sum(m["sales"] for m in months), 2),

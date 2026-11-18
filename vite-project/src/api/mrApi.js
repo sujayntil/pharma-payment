@@ -25,6 +25,12 @@ export const mrApi = {
     return response.data;
   },
 
+  /** Trophy counter and list: one trophy per cleared invoice month. */
+  async getTrophies() {
+    const response = await axiosClient.get('/mr/trophies');
+    return response.data;
+  },
+
   /** Cleared months not celebrated yet (Admin collected the last invoice, or the month just ended). Each comes once. */
   async claimMonthsCleared() {
     const response = await axiosClient.post('/mr/months-cleared/claim');

@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
@@ -21,11 +21,12 @@ from ..collection_info import (
 )
 from ..audit import customer_snapshot, invoice_snapshot, user_snapshot, write_audit
 from ..database import get_db
-from ..month_clear import months_cleared, reopen_months
+from ..month_clear import months_cleared, reopen_months, trophy_summary
 from ..excel_export import _XLSX, EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..type_export import build_workbook, collect_rows, range_label
 from fastapi.responses import Response
 from ..deps import require_admin
+from ..push import send_office_payment_notification
 from ..credit import is_overdue
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password
@@ -247,6 +248,7 @@ def mr_performance(
             "sales": r.sales,
             "collected": r.collected,
             "pending": r.pending,
+            "trophies": trophy_summary(db, r.id)["count"],
         }
         for r in rows
     ]
@@ -475,6 +477,7 @@ def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_t
 def override_collection_status(
     invoice_id: int,
     payload: schemas.CollectionStatusUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
@@ -553,6 +556,8 @@ def override_collection_status(
         },
     ))
     db.commit()
+    if ledger_entry:
+        background_tasks.add_task(send_office_payment_notification, [ledger_entry.id])
     return {
         "invoice_id": invoice.id,
         "status": invoice.status,
@@ -566,6 +571,7 @@ def override_collection_status(
 def reverse_payment(
     payment_id: int,
     payload: schemas.PaymentReversalCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
@@ -635,6 +641,7 @@ def reverse_payment(
         },
     ))
     db.commit()
+    background_tasks.add_task(send_office_payment_notification, [reversal.id])
     return {
         "invoice_id": invoice.id,
         "payment_id": payment.id,

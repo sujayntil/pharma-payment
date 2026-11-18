@@ -4,12 +4,23 @@ import logging
 import os
 
 from . import models
+from sqlalchemy.orm import aliased
+
 from .database import SessionLocal
 
 log = logging.getLogger(__name__)
 
 
 def send_admin_notification(payload: dict, ttl: int = 60) -> bool:
+    return _send(payload, ttl, role=models.RoleEnum.ADMIN.value)
+
+
+def send_user_notification(user_id: int, payload: dict, ttl: int = 3600) -> bool:
+    """Phone alert to one person's devices (an MR's)."""
+    return _send(payload, ttl, user_id=user_id)
+
+
+def _send(payload: dict, ttl: int, role=None, user_id=None) -> bool:
     private_key = os.getenv("VAPID_PRIVATE_KEY")
     subject = os.getenv("VAPID_SUBJECT")
     if not private_key or not subject:
@@ -17,12 +28,15 @@ def send_admin_notification(payload: dict, ttl: int = 60) -> bool:
         return False
 
     with SessionLocal() as db:
-        subscriptions = (
+        query = (
             db.query(models.PushSubscription)
             .join(models.User, models.User.id == models.PushSubscription.user_id)
-            .filter(models.User.role == models.RoleEnum.ADMIN.value)
-            .all()
         )
+        if role is not None:
+            query = query.filter(models.User.role == role)
+        if user_id is not None:
+            query = query.filter(models.User.id == user_id)
+        subscriptions = query.all()
         targets = [
             (sub.id, {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}})
             for sub in subscriptions
@@ -51,9 +65,9 @@ def send_admin_notification(payload: dict, ttl: int = 60) -> bool:
                     db.query(models.PushSubscription).filter_by(id=subscription_id).delete()
                     db.commit()
             else:
-                log.exception("Could not send admin push notification")
+                log.exception("Could not send push notification")
         except Exception:
-            log.exception("Could not send admin push notification")
+            log.exception("Could not send push notification")
     return delivered
 
 
@@ -128,6 +142,63 @@ def payment_payload(payment, collector, invoice, customer) -> dict:
         "url": f"/#/admin/invoices?invoice={invoice.id}",
         "tag": f"payment-{payment.id}",
     }
+
+
+def office_payment_payloads(db, payment_ids: list[int]) -> list[tuple[int, dict]]:
+    """(MR id, alert) for collections or reversals the office entered on an
+    MR's invoices. Parts of one split collection make one alert; entries
+    undone in the meantime are gone and send nothing."""
+    recorder = aliased(models.User)
+    rows = (
+        db.query(models.Payment, models.Invoice, models.Customer, models.User, recorder.name)
+        .join(models.Invoice, models.Invoice.id == models.Payment.invoice_id)
+        .outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id)
+        .join(models.User, models.User.id == models.Payment.collected_by)
+        .outerjoin(recorder, recorder.id == models.Payment.recorded_by)
+        .filter(models.Payment.id.in_(payment_ids))
+        .order_by(models.Payment.id.asc())
+        .all()
+    )
+    groups: dict = {}
+    for payment, invoice, customer, mr, recorder_name in rows:
+        if mr.role != models.RoleEnum.MR.value or payment.recorded_by in (None, mr.id):
+            continue  # only news when someone else entered it for this MR
+        key = (mr.id, payment.batch_id or f"p{payment.id}")
+        groups.setdefault(key, []).append((payment, invoice, customer, recorder_name))
+    alerts = []
+    for (mr_id, _key), parts in groups.items():
+        payment, invoice, customer, recorder_name = parts[0]
+        total = abs(sum(part[0].amount or 0 for part in parts))
+        reversal = (payment.amount or 0) < 0
+        who = customer.name if customer else invoice.invoice_number
+        invoices = invoice.invoice_number if len(parts) == 1 else f"{len(parts)} invoices"
+        if reversal:
+            why = (payment.reason or "").strip()
+            title = f"↩️ ₹{total:,.0f} reversed · {who}"
+            body = " · ".join(part for part in (invoices, why, f"by {recorder_name or 'office'}") if part)
+        else:
+            title = f"₹{total:,.0f} received · {who}"
+            body = " · ".join(part for part in (invoices, payment.mode, f"recorded by {recorder_name or 'office'}") if part)
+        alerts.append((mr_id, {
+            "title": title,
+            "body": body,
+            "url": f"/#/mr/invoices?invoice={invoice.id}",
+            "tag": f"office-{payment.id}",
+        }))
+    return alerts
+
+
+def send_office_payment_notification(payment_ids: list[int], delay: float = ALERT_DELAY_SECONDS):
+    """Tells the MR when the office records or reverses a payment on their
+    invoices (they didn't do it themselves, so it is news to them)."""
+    if not os.getenv("VAPID_PRIVATE_KEY") or not os.getenv("VAPID_SUBJECT"):
+        return
+    if delay:
+        time.sleep(delay)
+    with SessionLocal() as db:
+        alerts = office_payment_payloads(db, payment_ids)
+    for mr_id, payload in alerts:
+        send_user_notification(mr_id, payload)
 
 
 def month_alert_payloads(db, mr_id: int, months: list[str]) -> list[dict]:

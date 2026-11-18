@@ -38,8 +38,11 @@ import AppRefreshProvider from './AppRefreshProvider';
 import PullToRefresh from './PullToRefresh';
 import RefreshButton from './RefreshButton';
 import NotificationBell from './NotificationBell';
+import MrNotificationBell from './MrNotificationBell';
+import { notificationsApi } from '../../api/notificationsApi';
 import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
 import AppearanceSwitch from './AppearanceSwitch';
+import TrophyCounter from '../collections/TrophyCounter';
 
 const NAV_KEY = 'nav-collapsed';
 const readCollapsed = () => { try { return window.localStorage.getItem(NAV_KEY) === '1'; } catch { return false; } };
@@ -108,6 +111,16 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
     return () => document.removeEventListener('visibilitychange', renew);
   }, [dispatch, userId]);
 
+  // Alerts follow whoever is signed in on this device: an existing phone-alert
+  // subscription is linked to this person again (sign-out unlinks it).
+  useEffect(() => {
+    if (!userId || !('serviceWorker' in navigator) || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    navigator.serviceWorker.getRegistration('/')
+      .then((registration) => registration?.pushManager?.getSubscription())
+      .then((current) => current && notificationsApi.save(current.toJSON()))
+      .catch(() => {});
+  }, [userId]);
+
   // Messages from the service worker: a tapped payment alert asks to open
   // its invoice (the app was already open), and an alert that arrives while
   // the app is open refreshes the bell.
@@ -137,7 +150,14 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
     onChange(id);
   };
 
-  const signOut = () => {
+  const signOut = async () => {
+    // This device stops getting this person's alerts (a shared phone must not
+    // show the next person someone else's payments). Never blocks signing out.
+    try {
+      const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/') : null;
+      const current = await registration?.pushManager?.getSubscription();
+      if (current) await Promise.race([notificationsApi.remove(current.endpoint), new Promise((r) => setTimeout(r, 1500))]);
+    } catch { /* offline or unsupported: sign out anyway */ }
     // Tell the server to end this session; signing out locally never waits on it.
     authApi.logout(getToken() || token).catch(() => {});
     dispatch(logout());
@@ -169,6 +189,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
           {/* Refresh: Admin everywhere, MR on laptop (MR phones pull down instead). */}
           {!useBottomNav && <RefreshButton size={isMobile ? 34 : 38} />}
           {role === 'ADMIN' && <NotificationBell size={isMobile ? 34 : 38} />}
+          {role === 'MR' && <MrNotificationBell size={isMobile ? 32 : 36} />}
+          {role === 'MR' && <TrophyCounter size={isMobile ? 32 : 36} />}
           <Menu shadow="md" width={250} position="bottom-end">
             <Menu.Target>
               <UnstyledButton aria-label="Open user menu">

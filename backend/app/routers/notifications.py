@@ -8,14 +8,14 @@ from sqlalchemy.orm import Session, aliased
 from .. import models, schemas
 from ..collection_info import as_utc
 from ..database import get_db
-from ..deps import require_admin
+from ..deps import get_current_user, require_admin
 from ..month_clear import short_label
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 @router.get("/vapid-public-key")
-def vapid_public_key(user: models.User = Depends(require_admin)):
+def vapid_public_key(user: models.User = Depends(get_current_user)):
     key = os.getenv("VAPID_PUBLIC_KEY")
     if not key or not os.getenv("VAPID_PRIVATE_KEY") or not os.getenv("VAPID_SUBJECT"):
         raise HTTPException(503, "Push notifications are not configured")
@@ -26,7 +26,7 @@ def vapid_public_key(user: models.User = Depends(require_admin)):
 def save_subscription(
     payload: schemas.PushSubscriptionCreate,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_admin),
+    user: models.User = Depends(get_current_user),
 ):
     endpoint = str(payload.endpoint)
     if not endpoint.startswith("https://") or not payload.keys.get("p256dh") or not payload.keys.get("auth"):
@@ -52,7 +52,7 @@ def save_subscription(
 def delete_subscription(
     payload: schemas.PushSubscriptionDelete,
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_admin),
+    user: models.User = Depends(get_current_user),
 ):
     db.query(models.PushSubscription).filter_by(endpoint=str(payload.endpoint), user_id=user.id).delete()
     db.commit()
@@ -203,5 +203,85 @@ def mark_seen(db: Session = Depends(get_db), user: models.User = Depends(require
         user.notifications_seen_month_id = newest_month
         changed = True
     if changed:
+        db.commit()
+    return Response(status_code=204)
+
+
+# ---- MR bell: what the office did on my invoices ----
+
+def _office_entries(user: models.User):
+    """Collections and reversals someone else (the office) entered for this MR."""
+    return and_(
+        models.Payment.collected_by == user.id,
+        models.Payment.recorded_by.isnot(None),
+        models.Payment.recorded_by != user.id,
+    )
+
+
+@router.get("/mine")
+def my_updates(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """MR bell: payments the office recorded or reversed on this MR's
+    invoices, newest first, with how many are new. A split collection is one entry."""
+    recorder = aliased(models.User)
+    rows = (
+        db.query(models.Payment, models.Invoice, models.Customer, recorder.name)
+        .join(models.Invoice, models.Invoice.id == models.Payment.invoice_id)
+        .outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id)
+        .outerjoin(recorder, recorder.id == models.Payment.recorded_by)
+        .filter(_office_entries(user))
+        .order_by(models.Payment.id.desc())
+        .limit(limit * 8)
+        .all()
+    )
+    unread = (
+        db.query(func.count(func.distinct(_group_key())))
+        .filter(_office_entries(user), _unread_filter(user))
+        .scalar() or 0
+    )
+    seen = user.notifications_seen_payment_id
+    cutoff = _last_day_cutoff()
+    groups: dict = {}
+    order = []
+    for payment, invoice, customer, recorder_name in rows:
+        key = payment.batch_id or f"p{payment.id}"
+        if key not in groups:
+            if len(order) == limit:
+                continue
+            order.append(key)
+            groups[key] = {"parts": [], "customer": customer, "recorder": recorder_name}
+        groups[key]["parts"].append((payment, invoice))
+    items = []
+    for key in order:
+        group = groups[key]
+        parts = sorted(group["parts"], key=lambda pair: pair[0].id)
+        first, first_invoice = parts[0]
+        newest = max(payment.id for payment, _ in parts)
+        is_new = newest > seen if seen is not None else (first.payment_date is not None and first.payment_date >= cutoff)
+        numbers = [invoice.invoice_number for _, invoice in parts]
+        items.append({
+            "payment_id": first.id,
+            "invoice_id": first_invoice.id,
+            "invoice_number": numbers[0] if len(numbers) == 1 else f"{numbers[0]} +{len(numbers) - 1}",
+            "customer_name": group["customer"].name if group["customer"] else None,
+            "amount": round(sum(payment.amount for payment, _ in parts), 2),
+            "mode": first.mode,
+            "is_reversal": (first.amount or 0) < 0,
+            "reason": first.reason,
+            "recorded_by_name": group["recorder"],
+            "payment_date": as_utc(first.payment_date),
+            "is_new": is_new,
+        })
+    return {"items": items, "unread": unread}
+
+
+@router.post("/mine/seen", status_code=204)
+def mark_mine_seen(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    newest = db.query(func.max(models.Payment.id)).filter(_office_entries(user)).scalar()
+    if newest is not None and (user.notifications_seen_payment_id or 0) < newest:
+        user.notifications_seen_payment_id = newest
         db.commit()
     return Response(status_code=204)

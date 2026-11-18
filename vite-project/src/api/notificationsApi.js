@@ -17,6 +17,14 @@ export const notificationsApi = {
   async markSeen() {
     await axiosClient.post('/notifications/seen');
   },
+  /** MR bell: payments the office recorded or reversed on my invoices. */
+  async mine(limit = 10) {
+    const { data } = await axiosClient.get('/notifications/mine', { params: { limit } });
+    return data;
+  },
+  async markMineSeen() {
+    await axiosClient.post('/notifications/mine/seen');
+  },
   async remove(endpoint) {
     await axiosClient.delete('/notifications/subscriptions', { data: { endpoint } });
   },

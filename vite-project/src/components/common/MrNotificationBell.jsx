@@ -23,7 +23,8 @@ function when(value) {
 
 /**
  * MR bell: what the office did on my invoices — a payment it recorded
- * (a cheque or NEFT that came to the office) or one it reversed (a bounce).
+ * (a cheque or NEFT that came to the office), one it reversed (a bounce), or
+ * an invoice it removed (so the MR stops asking for that bill).
  * The MR's own collections aren't listed: they already know. Red count =
  * new since the bell was last opened. Tapping an entry opens that invoice.
  */
@@ -93,9 +94,11 @@ export default function MrNotificationBell({ size = 36 }) {
           : !data.items.length ? (
             <Box p="lg" ta="center">
               <Text size="sm" fw={600}>No updates yet</Text>
-              <Text size="xs" c="dimmed" mt={4}>When the office records or reverses a payment for your customers, you'll see it here.</Text>
+              <Text size="xs" c="dimmed" mt={4}>When the office records, reverses or removes something for your customers, you'll see it here.</Text>
             </Box>
-          ) : data.items.map((item) => <UpdateItem key={item.payment_id} item={item} onOpen={() => go(item.invoice_id)} />)}
+          ) : data.items.map((item) => (item.kind === 'removed'
+            ? <RemovedItem key={item.key} item={item} />
+            : <UpdateItem key={item.key || item.payment_id} item={item} onOpen={() => go(item.invoice_id)} />))}
     </Stack>
   );
 
@@ -150,7 +153,7 @@ function UpdateItem({ item, onOpen }) {
       onClick={onOpen}
       px="md"
       py={10}
-      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)', background: item.is_new ? 'var(--mantine-color-green-light)' : undefined }}
+      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)' }}
       aria-label={`${money(Math.abs(item.amount))} ${reversal ? 'reversed' : 'received'} for ${item.invoice_number}`}
     >
       <Group gap={10} wrap="nowrap" align="flex-start">
@@ -163,7 +166,7 @@ function UpdateItem({ item, onOpen }) {
               {reversal ? '−' : ''}{money(Math.abs(item.amount))} {reversal ? 'reversed' : 'received'}
               <Text span size="sm" fw={400} c="var(--mantine-color-text)"> · {item.customer_name || '—'}</Text>
             </Text>
-            <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{when(item.payment_date)}</Text>
+            <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{when(item.at || item.payment_date)}</Text>
           </Group>
           <Group gap={6} wrap="nowrap" mt={2}>
             <Text size="xs" c="dimmed" truncate>{detail.filter(Boolean).join(' · ')}</Text>
@@ -172,5 +175,35 @@ function UpdateItem({ item, onOpen }) {
         </Box>
       </Group>
     </UnstyledButton>
+  );
+}
+
+/**
+ *   ● INV-1080 removed · Palak Medical          2:01 pm
+ *     ₹12,400 bill · no longer to collect · by Admin
+ * A deleted invoice can't be opened, so this line isn't a link.
+ */
+function RemovedItem({ item }) {
+  const many = item.invoice_count > 1;
+  return (
+    <Box px="md" py={10} style={{ borderBottom: '1px solid var(--app-soft-2)' }}>
+      <Group gap={10} wrap="nowrap" align="flex-start">
+        <Box w={8} mt={7} style={{ flexShrink: 0 }}>
+          {item.is_new && <Box w={8} h={8} bg="green.6" style={{ borderRadius: '50%' }} aria-label="New" />}
+        </Box>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          <Group justify="space-between" gap="xs" wrap="nowrap">
+            <Text size="sm" fw={600} truncate c="dimmed">
+              🗑️ {many ? `${item.invoice_count} invoices removed` : `${item.invoice_number} removed`}
+              <Text span size="sm" fw={400} c="var(--mantine-color-text)"> · {item.customer_name || '—'}</Text>
+            </Text>
+            <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{when(item.at)}</Text>
+          </Group>
+          <Text size="xs" c="dimmed" truncate mt={2}>
+            {[many ? item.invoice_number : null, `${money(item.amount)} ${many ? 'total' : 'bill'}`, 'no longer to collect', item.recorded_by_name && `by ${item.recorded_by_name}`].filter(Boolean).join(' · ')}
+          </Text>
+        </Box>
+      </Group>
+    </Box>
   );
 }

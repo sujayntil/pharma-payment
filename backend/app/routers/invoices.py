@@ -484,8 +484,9 @@ def delete_invoices(
     invoices = db.query(models.Invoice).filter(models.Invoice.id.in_(ids)).all()
     if len(invoices) != len(ids):
         raise HTTPException(404, "Some of these invoices no longer exist. Refresh and try again.")
+    bulk_id = str(uuid.uuid4())  # one "3 invoices removed" line in the MR's bell
     for invoice in invoices:
-        write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True))
+        write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True), new={"bulk_id": bulk_id})
         db.delete(invoice)
     db.commit()
     return None

@@ -29,6 +29,7 @@ _ADDITIVE_COLUMNS = {
         "tokens_valid_after": "TIMESTAMP",
         "notifications_seen_payment_id": "INTEGER",
         "notifications_seen_month_id": "INTEGER",
+        "notifications_seen_audit_id": "INTEGER",
         "title": "VARCHAR(8)",
     },
     "customers": {

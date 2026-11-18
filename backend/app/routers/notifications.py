@@ -275,13 +275,73 @@ def my_updates(
             "payment_date": as_utc(first.payment_date),
             "is_new": is_new,
         })
-    return {"items": items, "unread": unread}
+    for item in items:
+        item["kind"] = "reversed" if item["is_reversal"] else "received"
+        item["key"] = f"p{item['payment_id']}"
+        item["at"] = item["payment_date"]
+    removed = _removed_invoices(db, user)
+    unread += sum(1 for item in removed if item["is_new"])
+    oldest = datetime.min.replace(tzinfo=timezone.utc)
+    merged = sorted(items + removed, key=lambda item: item["at"] or oldest, reverse=True)[:limit]
+    return {"items": merged, "unread": unread}
+
+
+REMOVED_DAYS = 30
+
+
+def _removed_invoices(db: Session, user: models.User) -> list[dict]:
+    """Invoices of this MR that the office deleted (last 30 days). A bulk
+    delete is one line per customer. Undone deletes never reach the server."""
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=REMOVED_DAYS)
+    rows = (
+        db.query(models.AuditLog, models.User.name)
+        .outerjoin(models.User, models.User.id == models.AuditLog.user_id)
+        .filter(models.AuditLog.action == "invoice_deleted", models.AuditLog.timestamp >= since)
+        .order_by(models.AuditLog.id.desc())
+        .limit(500)
+        .all()
+    )
+    seen = user.notifications_seen_audit_id
+    cutoff = _last_day_cutoff()
+    groups: dict = {}
+    for entry, by_name in rows:
+        old = entry.old_value or {}
+        if old.get("mr_id") != user.id or entry.user_id == user.id:
+            continue
+        bulk = (entry.new_value or {}).get("bulk_id")
+        key = (bulk, old.get("customer_id")) if bulk else entry.id
+        groups.setdefault(key, []).append((entry, old, by_name))
+    items = []
+    for parts in groups.values():
+        entry, old, by_name = parts[0]
+        newest = max(part[0].id for part in parts)
+        numbers = [part[1].get("invoice_number") for part in parts]
+        items.append({
+            "kind": "removed",
+            "key": f"a{newest}",
+            "invoice_id": None,
+            "invoice_number": numbers[0] if len(numbers) == 1 else ", ".join(numbers[:2]) + (f" +{len(numbers) - 2}" if len(numbers) > 2 else ""),
+            "invoice_count": len(numbers),
+            "customer_name": old.get("customer_name"),
+            "amount": round(sum(part[1].get("total_amount") or 0 for part in parts), 2),
+            "recorded_by_name": by_name,
+            "at": as_utc(entry.timestamp),
+            "is_new": newest > seen if seen is not None else entry.timestamp >= cutoff,
+        })
+    return items
 
 
 @router.post("/mine/seen", status_code=204)
 def mark_mine_seen(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
     newest = db.query(func.max(models.Payment.id)).filter(_office_entries(user)).scalar()
+    changed = False
     if newest is not None and (user.notifications_seen_payment_id or 0) < newest:
         user.notifications_seen_payment_id = newest
+        changed = True
+    newest_removed = db.query(func.max(models.AuditLog.id)).filter(models.AuditLog.action == "invoice_deleted").scalar()
+    if newest_removed is not None and (user.notifications_seen_audit_id or 0) < newest_removed:
+        user.notifications_seen_audit_id = newest_removed
+        changed = True
+    if changed:
         db.commit()
     return Response(status_code=204)

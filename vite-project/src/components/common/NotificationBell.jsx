@@ -164,7 +164,7 @@ function MonthItem({ month, onOpen }) {
       onClick={onOpen}
       px="md"
       py={10}
-      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)', background: month.is_new ? 'var(--app-highlight)' : undefined }}
+      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)' }}
       aria-label={`${month.mr_name} cleared ${month.label}`}
     >
       <Group gap={10} wrap="nowrap" align="flex-start">
@@ -195,7 +195,7 @@ function BellItem({ item, onOpen }) {
       onClick={onOpen}
       px="md"
       py={10}
-      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)', background: item.is_new ? 'var(--mantine-color-green-light)' : undefined }}
+      style={{ display: 'block', width: '100%', borderBottom: '1px solid var(--app-soft-2)' }}
       aria-label={`${reversal ? 'Reversal' : 'Collection'} ${money(Math.abs(item.amount))} for ${item.invoice_number}`}
     >
       <Group gap={10} wrap="nowrap" align="flex-start">

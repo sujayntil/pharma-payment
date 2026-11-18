@@ -101,6 +101,27 @@ class PushNotificationTests(unittest.TestCase):
         mark_mine_seen(self.db, self.mr)
         self.assertEqual(my_updates(10, self.db, self.mr)["unread"], 0)
 
+    def test_mr_bell_shows_invoices_the_office_removed(self):
+        from app.routers.invoices import delete_invoice, delete_invoices
+        second = models.Invoice(invoice_number="A00002", customer_id=self.invoice.customer_id, mr_id=self.mr.id,
+                                total_amount=50, paid_amount=0, pending_amount=50, status="UNPAID")
+        third = models.Invoice(invoice_number="A00003", customer_id=self.invoice.customer_id, mr_id=self.mr.id,
+                               total_amount=25, paid_amount=0, pending_amount=25, status="UNPAID")
+        self.db.add_all([second, third]); self.db.commit()
+        delete_invoice(self.invoice.id, self.db, self.admin)
+        delete_invoices(schemas.BulkDelete(ids=[second.id, third.id]), self.db, self.admin)
+        bell = my_updates(10, self.db, self.mr)
+        removed = [item for item in bell["items"] if item["kind"] == "removed"]
+        self.assertEqual(sorted(item["invoice_count"] for item in removed), [1, 2])
+        self.assertEqual(sum(item["amount"] for item in removed), 175)
+        self.assertEqual(bell["unread"], 2)
+        mark_mine_seen(self.db, self.mr)
+        self.assertEqual(my_updates(10, self.db, self.mr)["unread"], 0)
+        # Not news to an MR whose invoices these weren't.
+        other = models.User(name="MR Two", employee_code="M2", role="MR", password_hash="x")
+        self.db.add(other); self.db.commit()
+        self.assertEqual(my_updates(10, self.db, other)["items"], [])
+
     def test_undone_office_entry_sends_nothing(self):
         self.pay(self.admin, 30)
         office = self.db.query(models.Payment).one()

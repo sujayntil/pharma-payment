@@ -4,7 +4,7 @@ import { IconChevronRight, IconMapPin, IconTarget, IconX } from '@tabler/icons-r
 import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
-import DateRangeFilter from '../../components/filters/DateRangeFilter';
+import PeriodPicker from '../../components/insights/PeriodPicker';
 import { describeRange, periodThing } from '../../components/filters/dateRanges';
 import { formatDateLocal } from '../../utils/formatters';
 import { Donut, Spark, TrendChart } from '../../components/insights/charts';
@@ -88,7 +88,10 @@ export default function AdminInsights({ onOpenCustomer }) {
       {swatch('#2f9e44')}Recovered {swatch('#d3f9d8', { marginLeft: 8, border: '1px solid #b2f2bb' })}Pending {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}All collections
     </Text>
   );
-  const customPicker = <DateRangeFilter label="Custom" value={periodId === 'custom' ? custom : { from: '', to: '' }} allLabel="Pick dates" onChange={(next) => { if (next.from && next.to) { setCustom(next); setPeriodId('custom'); } else setPeriodId('month'); }} />;
+  const periodPicker = (
+    <PeriodPicker presets={presets} periodId={periodId} custom={custom} label={periodLabel} fullWidth={isMobile}
+      onPreset={setPeriodId} onCustom={(next) => { setCustom(next); setPeriodId('custom'); }} />
+  );
   const k = data?.kpis;
   const custRow = (c, right, sub) => (
     <button type="button" key={`${c.customer_id}-${sub || ''}`} className={css.row} onClick={() => open({ kind: 'customer', id: c.customer_id, name: c.name })}>
@@ -126,17 +129,7 @@ export default function AdminInsights({ onOpenCustomer }) {
     <Stack gap="md">
       <Group justify="space-between" align="center" gap="sm">
         <Title order={1}>Insights</Title>
-        {isMobile ? (
-          <Group gap={8} wrap="nowrap" w="100%">
-            <Select size="sm" style={{ flex: 1, minWidth: 0 }} aria-label="Period" allowDeselect={false} value={periodId === 'custom' ? null : periodId} placeholder={periodLabel} onChange={(v) => v && setPeriodId(v)} data={presets.map((p) => ({ value: p.id, label: p.label }))} />
-            <div style={{ flex: 1, minWidth: 0 }}>{customPicker}</div>
-          </Group>
-        ) : (
-          <Group gap={6} wrap="nowrap">
-            <SegmentedControl size="xs" value={periodId === 'custom' ? '' : periodId} onChange={setPeriodId} data={presets.map((p) => ({ value: p.id, label: p.label }))} />
-            {customPicker}
-          </Group>
-        )}
+        {isMobile ? <div style={{ width: '100%' }}>{periodPicker}</div> : periodPicker}
       </Group>
 
       <Group gap={8} wrap="wrap">

@@ -267,8 +267,8 @@ class InsightsTests(unittest.TestCase):
         self.inv(self.dist, TODAY - timedelta(days=50), 70)    # distributor: 60 days' credit, not due yet
         self.inv(self.dist, TODAY - timedelta(days=65), 30)    # 5 days past 60
         ages = {a["bucket"]: a["amount"] for a in self.S()["ageing"]}
-        # doctor 40 days' credit: 10 d not due, 45 d is 5 late, 75 d is 35 late, 200 d is 160 late
-        self.assertEqual(ages, {"not-due": 170, "1-30": 230, "31-60": 200, "60+": 400})
+        # by bill age: 10 d | 45 d + dist 50 d | 75 d (200 left) + dist 65 d | 200 d
+        self.assertEqual(ages, {"0-39": 100, "40-59": 270, "60-89": 230, "90+": 400})
         k = self.S()["kpis"]["outstanding"]
         self.assertEqual((k["value"], k["overdue"], k["not_due"]), (1000, 830, 170))
 

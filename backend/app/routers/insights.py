@@ -68,7 +68,7 @@ def insights_records(
     user: models.User = Depends(require_admin),
 ):
     if kind == "age" and bucket not in {label for label, _lo, _hi in DUE_BUCKETS}:
-        raise HTTPException(422, "bucket must be 0-30, 31-60, 61-90 or 90+")
+        raise HTTPException(422, "bucket must be 0-39, 40-59, 60-89 or 90+")
     start, end = _range(date_from, date_to)
     return invoice_list(db, kind, start, end, _filters(customer_type, mr_id, area), bucket)
 

@@ -42,7 +42,7 @@
 .bar i { display: block; height: 100%; border-radius: 9px; }
 .mini { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--app-muted); margin: 2px 0 4px; }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.big { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.big { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
 
 .legend button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px; border-radius: 7px; font: inherit; font-size: 13px; background: none; border: 0; cursor: pointer; color: inherit; }
 .legend button:hover { background: var(--app-soft); }

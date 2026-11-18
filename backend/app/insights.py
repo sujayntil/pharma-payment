@@ -35,7 +35,9 @@ IST = timezone(timedelta(hours=5, minutes=30))
 OPEN = 0.004
 TYPE_GROUPS = ("Distributor", "Chemist", "Doctor", "Hospital", "Other")
 # Money owed today by how late it is: days past the credit period (credit.py).
-DUE_BUCKETS = (("not-due", None, -1), ("1-30", 0, 30), ("31-60", 31, 60), ("60+", 61, 10 ** 6))
+# "Money owed" by age of the bill (days since the bill date), one ruler for
+# everyone: 40 = chemists & doctors overdue, 60 = distributors overdue.
+DUE_BUCKETS = (("0-39", 0, 39), ("40-59", 40, 59), ("60-89", 60, 89), ("90+", 90, 10 ** 6))
 DEPENDENCE_SHARE = 15       # % of sales from one customer that triggers the warning
 AREA_MIN_COVERAGE = 60      # % of customers with an area before "by area" shows
 NOT_SET = "__none__"        # area filter value for customers without an area
@@ -221,11 +223,10 @@ def _late(book: "Book", i: Inv, today: date) -> int | None:
     return days_past_credit(i.date, c.group if c else None, today)
 
 
-def _in_bucket(book: "Book", i: Inv, today: date, lo: int | None, hi: int) -> bool:
-    late = _late(book, i, today)
-    if late is None:
-        return lo is None          # undated bills count as not yet due
-    return (late <= hi) if lo is None else (lo <= late <= hi)
+def _in_bucket(book: "Book", i: Inv, today: date, lo: int, hi: int) -> bool:
+    if i.date is None:
+        return lo == 0             # undated bills count as new
+    return lo <= max((today - i.date).days, 0) <= hi
 
 
 def _pct(cur: float, prev: float) -> int | None:

@@ -181,16 +181,17 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           <Paper className={`${css.card} ${css.s12}`}>
-            <div className={css.ch}><div><div className={css.ct}>Money owed to you</div><div className={css.cs}>As of today, by how late it is · 40 days' credit, distributors 60 · tap a row</div></div><div className={css.big}>{lakh(ageTotal)}</div></div>
+            <div className={css.ch}><div><div className={css.ct}>Money owed to you</div><div className={css.cs}>As of today · by age of the bill · tap a row</div></div><div className={css.big}>{lakh(ageTotal)}</div></div>
             <div className={css.cb}>
               <div className={css.stack}>{data.ageing.map((a) => <i key={a.bucket} title={AGE_LABELS[a.bucket]} style={{ width: `${ageTotal ? (a.amount / ageTotal) * 100 : 0}%`, background: AGE_COLORS[a.bucket] }} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })} />)}</div>
               {data.ageing.map((a) => (
                 <button type="button" key={a.bucket} className={css.bucket} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })}>
                   <i style={{ width: 10, height: 10, borderRadius: 3, background: AGE_COLORS[a.bucket], flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>{AGE_LABELS[a.bucket]}<span className={css.sub}> · {a.customers} {a.customers === 1 ? 'customer' : 'customers'}</span></span>
-                  <b className={css.num}>{lakh(a.amount)}</b><span className={css.sub} style={{ width: 36, textAlign: 'right' }}>{ageTotal ? Math.round((a.amount / ageTotal) * 100) : 0}%</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>{AGE_LABELS[a.bucket]}<span className={css.sub} style={{ display: 'block' }}>{a.customers} {a.customers === 1 ? 'customer' : 'customers'}</span></span>
+                  <b className={css.num} style={{ whiteSpace: 'nowrap' }}>{lakh(a.amount)}</b><span className={css.sub} style={{ width: 36, textAlign: 'right' }}>{ageTotal ? Math.round((a.amount / ageTotal) * 100) : 0}%</span>
                 </button>
               ))}
+              <div className={css.sub} style={{ marginTop: 6, paddingInline: 6 }}>Chemists & doctors are overdue after 40 days, distributors after 60.</div>
             </div>
           </Paper>
 

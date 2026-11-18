@@ -27,7 +27,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from statistics import median
 
-from .credit import credit_days, days_past_credit
+from .credit import credit_days, days_past_credit, is_overdue
 
 MIN_MONTH = 2000          # ignore customers who usually buy less than this a month
 MIN_CHANGE = 2000         # and changes smaller than this a month
@@ -118,12 +118,15 @@ def follow_ups(book, invs: list, today: date) -> dict:
             reasons.append({"kind": "less", "text": f"₹{_hundreds(p['recent_month']):,.0f} a month lately · usually ₹{_hundreds(p['usual_month']):,.0f}",
                             "amount": _hundreds(p["usual_month"] - p["recent_month"]), "unit": "less / month"})
         owed = sum(i.pending for i in mine if i.pending > OPEN)
-        late = [i for i in mine if i.pending > OPEN and (days_past_credit(i.date, group, today) or -1) >= 0]
+        late = [i for i in mine if i.pending > OPEN and is_overdue(i.date, group, today)]
         overdue = sum(i.pending for i in late)
         bounced = sum(1 for i in mine for d, _a, _m, rev in i.payments if rev and d and d >= six_months_ago)
         if overdue > OPEN:
-            oldest = max((today - i.date).days for i in late)
-            reasons.append({"kind": "late", "text": f"Oldest unpaid bill {oldest} days old · {credit_days(group)} days' credit",
+            # The oldest overdue bill: its age (as in "Money owed") and how far past the credit.
+            worst = max(late, key=lambda i: days_past_credit(i.date, group, today))
+            past = days_past_credit(worst.date, group, today)
+            due = f"due today ({credit_days(group)} days' credit)" if past == 0 else f"{past} {'day' if past == 1 else 'days'} past {credit_days(group)} days' credit"
+            reasons.append({"kind": "late", "text": f"Bill {(today - worst.date).days} days old · {due}",
                             "amount": round(overdue, 2), "unit": "overdue"})
         elif bounced >= 2 and owed > OPEN:
             reasons.append({"kind": "late", "text": f"{bounced} payments bounced or reversed in 6 months",

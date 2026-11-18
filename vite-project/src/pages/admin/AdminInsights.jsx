@@ -159,7 +159,7 @@ export default function AdminInsights({ onOpenCustomer }) {
         <div className={css.grid} style={loading ? { opacity: 0.6, transition: 'opacity .2s' } : undefined}>
           <Paper className={`${css.card} ${css.s8}`}>
             <div className={css.ch}>
-              <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>Tap a bar to see that {trend === 'weekly' ? 'week' : 'month'}</div></div>
+              <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>{isMobile ? 'Tap a bar for its numbers' : 'Hover a bar for its numbers · click to open it'}</div></div>
               <Group gap={10} wrap="nowrap">
                 {!isMobile && legend}
                 <SegmentedControl size="xs" value={trend} onChange={setTrend} data={[{ value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
@@ -167,7 +167,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
             <div className={css.cb}>
               {isMobile && <div style={{ marginBottom: 6 }}>{legend}</div>}
-              <TrendChart points={data.trend.points} selected={range} onPick={pickTrend} />
+              <TrendChart points={data.trend.points} selected={allTime ? null : range} onPick={pickTrend} weekly={trend === 'weekly'} />
             </div>
           </Paper>
 

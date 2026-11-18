@@ -13,6 +13,7 @@ import RecordCollectionModal from '../collections/RecordCollectionModal';
 import CustomerCollectModal from '../collections/CustomerCollectModal';
 import { StatusBadge } from '../collections/CollectionBadges';
 import { lakh, TYPE_COLORS } from './insightsFormat';
+import { MonthBars } from './charts';
 import css from '../../pages/admin/AdminInsights.module.css';
 
 const RECORD_TITLES = { sales: 'Sales', collected: 'Collected', outstanding: 'Owed to you today', active: 'Invoices of active customers' };
@@ -154,7 +155,6 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger, onEdit
   if (error) return <Alert color="red">{error}</Alert>;
   if (!c) return null;
   const color = TYPE_COLORS[c.type] || '#868e96';
-  const max = Math.max(...c.months.map((m) => m.sales), 1);
   const ini = c.name.replace(/^Dr\.?\s+/i, '').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const lines = [];
   const paidBefore = c.avg_days_to_pay !== null;
@@ -207,12 +207,7 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger, onEdit
       </div>
       <div className={css.card} style={{ padding: '12px 14px', marginBottom: 14 }}>
         <Text fw={700} fz={13.5} mb={8}>Monthly sales</Text>
-        <svg viewBox="0 0 480 120" width="100%" role="img" aria-label="Monthly sales, last 12 months">
-          {c.months.map((m, i) => {
-            const w = 480 / 12; const h = (m.sales / max) * 90;
-            return <g key={m.month}><rect x={i * w + w * 0.2} y={100 - h} width={w * 0.6} height={h} rx="3" style={{ fill: i >= 9 ? '#2f9e44' : 'var(--app-pending-line)' }}><title>{`${m.label}: ${lakh(m.sales)}`}</title></rect><text x={i * w + w / 2} y="116" fontSize="10" style={{ fill: 'var(--app-axis)' }} textAnchor="middle">{m.label}</text></g>;
-          })}
-        </svg>
+        <MonthBars months={c.months} />
       </div>
       <Group justify="space-between" mb={8}>
         <Text fw={700} fz={13.5}>Invoices <Text span c="dimmed" fw={400}>({c.invoice_count})</Text></Text>

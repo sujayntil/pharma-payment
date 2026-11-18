@@ -103,7 +103,7 @@ export function isCustomRange({ from, to } = {}) {
   if (!from && !to) return false;
   if (businessPeriods(null).some((p) => p.from === from && p.to === to)) return false;
   if (monthOrQuarterName(from, to)) return false;
-  return !datePresets().some((p) => p.from === from && p.to === to && ['today', 'yesterday'].includes(p.id));
+  return !datePresets().some((p) => p.from === from && p.to === to && ['today', 'yesterday', '7d'].includes(p.id));
 }
 
 /**

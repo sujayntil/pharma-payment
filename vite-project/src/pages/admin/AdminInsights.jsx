@@ -11,7 +11,7 @@ import { AGE_COLORS, AGE_LABELS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } fro
 import InsightsPanel from '../../components/insights/InsightsPanel';
 import ShowMore from '../../components/insights/ShowMore';
 import css from './AdminInsights.module.css';
-import { shortDate } from '../../utils/formatters';
+import { formatDateLocal, shortDate } from '../../utils/formatters';
 
 const TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital', 'Other'];
 const NOT_SET = '__none__';
@@ -86,9 +86,18 @@ export default function AdminInsights({ onOpenCustomer }) {
       {swatch('#2f9e44')}Recovered {swatch('var(--app-pending)', { marginLeft: 8, border: '1px solid var(--app-pending-line)' })}Pending {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}All collections
     </Text>
   );
+  // All time · Today · Last 7 days; Clear goes back to this month.
+  const nowDate = new Date();
+  const todayStr = formatDateLocal(nowDate);
+  const weekAgoStr = formatDateLocal(new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() - 6));
+  const insightChips = [
+    { id: 'all', label: 'All time', from: '', to: '', all: true },
+    { id: 'today', label: 'Today', from: todayStr, to: todayStr },
+    { id: 'last7', label: 'Last 7 days', from: weekAgoStr, to: todayStr },
+  ];
   const periodPicker = (
     <PeriodPicker value={range} firstDate={result.data?.first_invoice_date} label={periodLabel} fullWidth={isMobile} onPick={pickRange}
-      isCustom={!allTime && isCustomRange(range)} chips={[{ id: 'all', label: 'All time', from: '', to: '', all: true }]} />
+      isCustom={!allTime && isCustomRange(range)} chips={insightChips} onClear={picked ? () => setPicked(null) : undefined} />
   );
   const k = data?.kpis;
   const custRow = (c, right, sub) => (
@@ -154,8 +163,7 @@ export default function AdminInsights({ onOpenCustomer }) {
         {kpi('collected', 'Collected', lakh(k?.collected.value), { color: '#1c7ed6', kind: 'collected' })}
         {kpi('outstanding', 'Owed to you today', lakh(k?.outstanding.value), { color: '#e03131', kind: 'outstanding',
           foot: k && <span><b className={css.down}>{lakh(k.outstanding.overdue)}</b> of it overdue</span> })}
-        {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', open: { kind: 'change' }, count: 'customer',
-          note: k?.active_customers.started !== undefined && (k.active_customers.started || k.active_customers.stopped) ? <><span className={css.up}>+{k.active_customers.started} started</span> · <span className={css.down}>−{k.active_customers.stopped} stopped</span></> : null })}
+        {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', open: { kind: 'change' }, count: 'customer' })}
       </div>
 
       {data && (

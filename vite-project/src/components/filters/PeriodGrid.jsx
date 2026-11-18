@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActionIcon, Button, Group, Text, UnstyledButton } from '@mantine/core';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { formatDateLocal } from '../../utils/formatters';
+import { useAuth } from '../../hooks/useAppStore';
 import css from './PeriodGrid.module.css';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -25,7 +26,9 @@ const monthIndex = (d) => d.getFullYear() * 12 + d.getMonth();
  * onPick({ from, to }). onPending(range | null): the first tap of a range,
  * so the picker can use it if closed before a second tap.
  */
-export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, onPending }) {
+export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, onPending, onClear, footer }) {
+  // MRs work month by month: no quarters / FY for them.
+  const showQuarters = useAuth().role !== 'MR';
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const first = firstDate ? new Date(`${firstDate}T00:00:00`) : null;
@@ -76,8 +79,11 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
   const tile = (key, label, startIdx, endIdx, className, extra, rangeable = true) => {
     const ok = usable(startIdx, endIdx);
     const r = ok ? span(startIdx, endIdx) : null;
-    const on = anchor ? anchor.start === startIdx && anchor.end === endIdx : (r && isOn(r));
-    const inside = !on && ok && shown && startIdx >= shown.start && endIdx <= shown.end && (shown.end > shown.start);
+    const multi = shown && shown.end > shown.start;
+    // A range's first and last month are solid, the months between lightly filled.
+    const edge = !anchor && multi && startIdx === endIdx && (startIdx === shown.start || startIdx === shown.end);
+    const on = anchor ? anchor.start === startIdx && anchor.end === endIdx : Boolean((r && isOn(r)) || edge);
+    const inside = !on && ok && multi && startIdx >= shown.start && endIdx <= shown.end;
     return (
       <UnstyledButton key={key} className={className} disabled={!ok} data-off={!ok || undefined} data-on={on || undefined} data-in={inside || undefined}
         data-now={(startIdx <= todayIdx && todayIdx <= endIdx) || undefined}
@@ -87,6 +93,7 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
     );
   };
 
+  const label = `FY ${year}–${String(year + 1).slice(2)}`;
   return (
     <div className={css.wrap}>
       {chips.length > 0 && (
@@ -96,26 +103,31 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
           ))}
         </div>
       )}
-      <Group justify="space-between" mb={8}>
-        <ActionIcon variant="default" radius="xl" size={30} aria-label="Previous year" disabled={year <= firstYear} onClick={() => setYear(year - 1)}><IconChevronLeft size={16} /></ActionIcon>
-        <Text fw={700} fz={15}>{year}</Text>
-        <ActionIcon variant="default" radius="xl" size={30} aria-label="Next year" disabled={year >= today.getFullYear()} onClick={() => setYear(year + 1)}><IconChevronRight size={16} /></ActionIcon>
+      <Group justify="space-between" mb={6} px={2}>
+        <ActionIcon variant="subtle" color="gray" radius="xl" size={28} aria-label="Previous year" disabled={year <= firstYear} onClick={() => setYear(year - 1)}><IconChevronLeft size={16} /></ActionIcon>
+        <Text fw={700} fz={14}>{year}</Text>
+        <ActionIcon variant="subtle" color="gray" radius="xl" size={28} aria-label="Next year" disabled={year >= today.getFullYear()} onClick={() => setYear(year + 1)}><IconChevronRight size={16} /></ActionIcon>
       </Group>
       <div className={css.months}>
         {MONTHS.map((m, i) => tile(m, m, year * 12 + i, year * 12 + i, css.month, `${m} ${year}`))}
       </div>
-      <div className={css.label}>Quarters · FY {year}–{String(year + 1).slice(2)}</div>
-      <div className={css.quarters}>
-        {quarters.map((q) => tile(q.label, q.label, q.start, q.end, css.quarter, `${q.label} FY ${year}–${String(year + 1).slice(2)}`))}
-        {tile('fy', 'Full FY', fy.start, fy.end, css.quarter, `FY ${year}–${String(year + 1).slice(2)}`, false)}
-      </div>
-      {anchor ? (
+      {showQuarters && (
+        <div className={css.quarters}>
+          {quarters.map((q) => tile(q.label, q.label, q.start, q.end, css.quarter, `${q.label} ${label}`))}
+          {tile('fy', label, fy.start, fy.end, css.quarter, label, false)}
+        </div>
+      )}
+      {anchor && (
         <Group className={css.hint} justify="space-between" wrap="nowrap" gap="xs">
-          <Text size="xs" c="dimmed" style={{ minWidth: 0 }}><b style={{ color: 'var(--app-ink)' }}>{nameOf(anchor.start, anchor.end)}</b> · tap another month or quarter for a range</Text>
+          <Text size="xs" c="dimmed" style={{ minWidth: 0 }}><b style={{ color: 'var(--app-ink)' }}>{nameOf(anchor.start, anchor.end)}</b> · tap another to make a range</Text>
           <Button size="compact-sm" style={{ flexShrink: 0 }} onClick={() => { const r = span(anchor.start, anchor.end); setAnchor(null); onPending?.(null); onPick(r); }}>Done</Button>
         </Group>
-      ) : (
-        <Text size="xs" c="dimmed" mt={10}>Tip: tap two months (or quarters) to pick everything between.</Text>
+      )}
+      {(footer || onClear) && (
+        <Group className={css.footer} justify="space-between" wrap="nowrap" gap="xs">
+          <div style={{ minWidth: 0 }}>{footer}</div>
+          {onClear && <UnstyledButton className={css.clear} onClick={() => { setAnchor(null); onPending?.(null); onClear(); }}>Clear</UnstyledButton>}
+        </Group>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Button, Collapse, Divider, Group, Popover, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
-import { IconCalendar, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { IconCalendar, IconChevronDown, IconChevronRight, IconX } from '@tabler/icons-react';
 import { datePresets, describeRange, EMPTY_RANGE, isCustomRange } from './dateRanges';
 import { formatDateLocal } from '../../utils/formatters';
 import PeriodGrid from './PeriodGrid';
@@ -28,8 +28,16 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
   const now = new Date();
   const today = formatDateLocal(now);
   const yesterday = formatDateLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
-  const QUICK = { today: { id: 'today', label: 'Today', from: today, to: today }, yesterday: { id: 'yesterday', label: 'Yesterday', from: yesterday, to: yesterday } };
-  const chips = [{ id: 'all', label: allLabel, from: '', to: '' }, ...quick.map((id) => QUICK[id]).filter(Boolean)];
+  const weekAgo = formatDateLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+  const QUICK = {
+    today: { id: 'today', label: 'Today', from: today, to: today },
+    yesterday: { id: 'yesterday', label: 'Yesterday', from: yesterday, to: yesterday },
+    last7: { id: 'last7', label: 'Last 7 days', from: weekAgo, to: today },
+  };
+  // Month picker: the same three chips everywhere (All · Today · Last 7 days).
+  const chips = months
+    ? [{ id: 'all', label: allLabel, from: '', to: '' }, QUICK.today, QUICK.last7]
+    : [{ id: 'all', label: allLabel, from: '', to: '' }, ...quick.map((id) => QUICK[id]).filter(Boolean)];
 
   const open = () => {
     setDraft(value); setError(''); setOpened(true);
@@ -61,13 +69,15 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
   );
 
   const panel = months ? (
-          <Stack gap={10}>
-            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} onPending={(r) => { pending.current = r; }} />
-            <UnstyledButton className={classes.customToggle} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>
-              <span>Custom dates (weeks or any range)</span>
-              <IconChevronRight size={15} style={{ transform: customOpen ? 'rotate(90deg)' : undefined, transition: 'transform 150ms' }} />
-            </UnstyledButton>
-            <Collapse expanded={customOpen}><Stack gap="xs">{custom}</Stack></Collapse>
+          <Stack gap={8}>
+            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} onPending={(r) => { pending.current = r; }}
+              onClear={value.from || value.to ? () => commit(EMPTY_RANGE) : undefined}
+              footer={(
+                <UnstyledButton className={classes.customLink} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>
+                  Custom dates <IconChevronRight size={14} style={{ transform: customOpen ? 'rotate(90deg)' : undefined, transition: 'transform 150ms' }} />
+                </UnstyledButton>
+              )} />
+            <Collapse expanded={customOpen}><Stack gap="xs" pt={4}>{custom}</Stack></Collapse>
           </Stack>
         ) : (
           <Stack gap="xs">
@@ -88,7 +98,10 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
         <Button
           variant={summary ? 'light' : 'default'}
           leftSection={<IconCalendar size={16} />}
-          rightSection={<IconChevronDown size={14} />}
+          // Dates set: a small × clears them in one tap (no need to open the picker).
+          rightSection={summary ? <span role="button" tabIndex={0} aria-label="Clear dates" className={classes.clearX}
+              onClick={(e) => { e.stopPropagation(); pending.current = null; setOpened(false); onChange(EMPTY_RANGE); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); pending.current = null; setOpened(false); onChange(EMPTY_RANGE); } }}><IconX size={14} /></span> : <IconChevronDown size={14} />}
           onClick={() => (opened ? close() : open())}
           className={classes.trigger}
         >

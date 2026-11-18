@@ -1,0 +1,4 @@
+.foot { padding-top: 6px; }
+.more { font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); padding: 4px 0; }
+.more:hover { text-decoration: underline; }
+.more span { font-weight: 400; color: var(--mantine-color-gray-6); }

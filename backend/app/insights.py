@@ -309,21 +309,24 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
     total_sales = current["sales"]
     ranked = sorted(((cid, r) for cid, r in per.items() if r["cur"] > 0), key=lambda x: -x[1]["cur"])
     top = [cust(cid, sales=round(r["cur"], 2), share=round(r["cur"] / total_sales * 100, 1) if total_sales else 0)
-           for cid, r in ranked[:8]]
+           for cid, r in ranked]
     top10_share = round(sum(r["cur"] for _cid, r in ranked[:10]) / total_sales * 100) if total_sales else 0
     dependence = top[0] if top and top[0]["share"] >= DEPENDENCE_SHARE else None
 
     movers = [(cid, r, _pct(r["cur"], r["prev"])) for cid, r in per.items() if r["cur"] > 0 and r["prev"] > 0]
-    growing = [cust(cid, growth=g, sales=round(r["cur"], 2)) for cid, r, g in sorted(movers, key=lambda x: -x[2]) if g > 0][:5]
-    declining = [cust(cid, growth=g, sales=round(r["cur"], 2)) for cid, r, g in sorted(movers, key=lambda x: x[2]) if g < 0][:5]
+    growing = [cust(cid, growth=g, sales=round(r["cur"], 2)) for cid, r, g in sorted(movers, key=lambda x: -x[2]) if g > 0]
+    declining = [cust(cid, growth=g, sales=round(r["cur"], 2)) for cid, r, g in sorted(movers, key=lambda x: x[2]) if g < 0]
 
     first_order = {cid: min(r["dates"]) for cid, r in per.items() if r["dates"]}
     new_customers = sorted((cid for cid, d in first_order.items() if within(d, start, end)), key=lambda cid: first_order[cid])
     stopped = [cid for cid, r in per.items() if r["prev"] > 0 and r["cur"] == 0]
 
     speed = [(cid, round(sum(r["pay_days"]) / len(r["pay_days"]))) for cid, r in per.items() if len(r["pay_days"]) >= 2]
-    fastest = [cust(cid, days=d) for cid, d in sorted(speed, key=lambda x: x[1])[:5]]
-    slowest = [cust(cid, days=d) for cid, d in sorted(speed, key=lambda x: -x[1])[:5] if d > 0]
+    # Full lists, split in two halves so "Show more" never lists a customer on both sides.
+    by_speed = sorted(speed, key=lambda x: x[1])
+    half = len(by_speed) // 2
+    fastest = [cust(cid, days=d) for cid, d in by_speed[:half]]
+    slowest = [cust(cid, days=d) for cid, d in reversed(by_speed[half:]) if d > 0]
 
     risky = []
     for cid, r in per.items():
@@ -375,11 +378,11 @@ def summary(db: Session, start: date, end: date, filters: Filters, trend: str = 
         "by_mr": {"rows": mr_rows, "days_left": days_left, "month": m_start.strftime("%Y-%m")},
         "top_customers": {"rows": top, "top10_share": top10_share, "dependence": dependence},
         "movers": {"growing": growing, "declining": declining},
-        "new_and_stopped": {"new": [cust(cid) for cid in new_customers][:20], "new_count": len(new_customers),
-                            "stopped": [cust(cid) for cid in stopped][:20], "stopped_count": len(stopped)},
+        "new_and_stopped": {"new": [cust(cid) for cid in new_customers], "new_count": len(new_customers),
+                            "stopped": [cust(cid) for cid in stopped], "stopped_count": len(stopped)},
         "payment_speed": {"fastest": fastest, "slowest": slowest},
-        "risky_credit": risky[:6],
-        "at_risk": at_risk[:6],
+        "risky_credit": risky,
+        "at_risk": at_risk,
         "ageing": ageing,
         "payment_modes": mode_rows,
         "area": {"coverage": coverage, "show": coverage >= AREA_MIN_COVERAGE, "rows": area_rows,

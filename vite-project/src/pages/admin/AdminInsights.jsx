@@ -10,6 +10,7 @@ import { formatDateLocal } from '../../utils/formatters';
 import { Donut, Spark, TrendChart } from '../../components/insights/charts';
 import { AGE_COLORS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } from '../../components/insights/insightsFormat';
 import InsightsPanel from '../../components/insights/InsightsPanel';
+import ShowMore from '../../components/insights/ShowMore';
 import css from './AdminInsights.module.css';
 
 const TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital', 'Other'];
@@ -58,6 +59,8 @@ export default function AdminInsights({ onOpenCustomer }) {
   };
   // One key per request; the last answer stays on screen (dimmed) while the next loads.
   const requestKey = JSON.stringify({ filters, trend, appRefresh, refreshKey });
+  // Lists fold back to their first few when the period or a filter changes.
+  const listKey = JSON.stringify(filters);
   const { data, error } = result;
   const loading = result.key !== requestKey;
 
@@ -243,7 +246,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             <div className={css.ch}><div><div className={css.ct}>Top customers</div><div className={css.cs}>Top 10 = <b style={{ color: '#1a1d21' }}>{data.top_customers.top10_share}%</b> of sales</div></div></div>
             <div className={css.cb}>
               {data.top_customers.dependence && <div className={css.warn}>⚠️ <span><b>{data.top_customers.dependence.name}</b> alone is <b>{Math.round(data.top_customers.dependence.share)}%</b> of sales — a lot riding on one customer.</span></div>}
-              {data.top_customers.rows.map((c) => custRow(c, <span style={{ width: 120, textAlign: 'right' }}><b className={css.num}>{lakh(c.sales)}</b><div className={css.bar}><i style={{ width: `${(c.sales / data.top_customers.rows[0].sales) * 100}%`, background: TYPE_COLORS[c.type] }} /></div></span>))}
+              <ShowMore key={listKey} items={data.top_customers.rows} initial={8} render={(c) => custRow(c, <span style={{ width: 120, textAlign: 'right' }}><b className={css.num}>{lakh(c.sales)}</b><div className={css.bar}><i style={{ width: `${(c.sales / data.top_customers.rows[0].sales) * 100}%`, background: TYPE_COLORS[c.type] }} /></div></span>)} />
               {!data.top_customers.rows.length && empty('No sales in this period.')}
             </div>
           </Paper>
@@ -251,8 +254,8 @@ export default function AdminInsights({ onOpenCustomer }) {
           <Paper className={`${css.card} ${css.s6}`}>
             <div className={css.ch}><div><div className={css.ct}>Movers</div><div className={css.cs}>Compared with the period before</div></div></div>
             <div className={`${css.cb} ${css.two}`}>
-              <div><div className={css.mini}>Growing</div>{data.movers.growing.map((c) => custRow(c, <Badge color="green" variant="light">↑ {c.growth}%</Badge>))}{!data.movers.growing.length && empty('—')}</div>
-              <div><div className={css.mini}>Declining</div>{data.movers.declining.map((c) => custRow(c, <Badge color="red" variant="light">↓ {Math.abs(c.growth)}%</Badge>))}{!data.movers.declining.length && empty('—')}</div>
+              <div><div className={css.mini}>Growing</div><ShowMore key={listKey} items={data.movers.growing} render={(c) => custRow(c, <Badge color="green" variant="light">↑ {c.growth}%</Badge>)} />{!data.movers.growing.length && empty('—')}</div>
+              <div><div className={css.mini}>Declining</div><ShowMore key={listKey} items={data.movers.declining} render={(c) => custRow(c, <Badge color="red" variant="light">↓ {Math.abs(c.growth)}%</Badge>)} />{!data.movers.declining.length && empty('—')}</div>
             </div>
           </Paper>
 
@@ -264,8 +267,8 @@ export default function AdminInsights({ onOpenCustomer }) {
                 <div style={{ background: '#fff0f0' }}><div className={css.sub}>Stopped ordering</div><div className={css.big} style={{ color: '#e03131' }}>{data.new_and_stopped.stopped_count ? `−${data.new_and_stopped.stopped_count}` : 0}</div></div>
               </div>
               <div className={css.two}>
-                <div><div className={css.mini}>New</div>{data.new_and_stopped.new.slice(0, 4).map((c) => custRow(c, null, `${[c.type, c.mr].filter(Boolean).join(' · ')} · first order`))}{!data.new_and_stopped.new_count && empty('None')}</div>
-                <div><div className={css.mini}>Stopped</div>{data.new_and_stopped.stopped.slice(0, 4).map((c) => custRow(c, null, `${[c.type, c.mr].filter(Boolean).join(' · ')} · bought before`))}{!data.new_and_stopped.stopped_count && empty('None')}</div>
+                <div><div className={css.mini}>New</div><ShowMore key={listKey} items={data.new_and_stopped.new} initial={4} render={(c) => custRow(c, null, `${[c.type, c.mr].filter(Boolean).join(' · ')} · first order`)} />{!data.new_and_stopped.new_count && empty('None')}</div>
+                <div><div className={css.mini}>Stopped</div><ShowMore key={listKey} items={data.new_and_stopped.stopped} initial={4} render={(c) => custRow(c, null, `${[c.type, c.mr].filter(Boolean).join(' · ')} · bought before`)} />{!data.new_and_stopped.stopped_count && empty('None')}</div>
               </div>
             </div>
           </Paper>
@@ -273,19 +276,19 @@ export default function AdminInsights({ onOpenCustomer }) {
           <Paper className={`${css.card} ${css.s6}`}>
             <div className={css.ch}><div><div className={css.ct}>Payment speed</div><div className={css.cs}>Average days from invoice to paid · last 6 months</div></div></div>
             <div className={`${css.cb} ${css.two}`}>
-              <div><div className={css.mini}>Fastest</div>{data.payment_speed.fastest.map((c) => custRow(c, <Badge color="green" variant="light">{c.days} d</Badge>))}{!data.payment_speed.fastest.length && empty('Not enough payments yet.')}</div>
-              <div><div className={css.mini}>Slowest</div>{data.payment_speed.slowest.map((c) => custRow(c, <Badge color={c.days > 40 ? 'red' : 'orange'} variant="light">{c.days} d</Badge>))}{!data.payment_speed.slowest.length && empty('Not enough payments yet.')}</div>
+              <div><div className={css.mini}>Fastest</div><ShowMore key={listKey} items={data.payment_speed.fastest} render={(c) => custRow(c, <Badge color="green" variant="light">{c.days} d</Badge>)} />{!data.payment_speed.fastest.length && empty('Not enough payments yet.')}</div>
+              <div><div className={css.mini}>Slowest</div><ShowMore key={listKey} items={data.payment_speed.slowest} render={(c) => custRow(c, <Badge color={c.days > 40 ? 'red' : 'orange'} variant="light">{c.days} d</Badge>)} />{!data.payment_speed.slowest.length && empty('Not enough payments yet.')}</div>
             </div>
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`}>
             <div className={css.ch}><div><div className={css.ct}>Risky credit</div><div className={css.cs}>Slow payers who owe money, or reversed / bounced payments</div></div></div>
             <div className={css.cb}>
-              {data.risky_credit.map((c) => custRow(c, (
+              <ShowMore key={listKey} items={data.risky_credit} initial={6} render={(c) => custRow(c, (
                 <span style={{ textAlign: 'right' }}><b className={css.num}>{lakh(c.outstanding)}</b>
                   <Group gap={4} justify="flex-end" mt={3} wrap="nowrap">{c.days > 40 && <Badge size="sm" color="orange" variant="light">{c.days} d</Badge>}{c.reversals > 0 && <Badge size="sm" color="red" variant="light">{c.reversals} reversed</Badge>}</Group>
                 </span>
-              )))}
+              ))} />
               {!data.risky_credit.length && empty('Nobody risky right now 🎉')}
             </div>
           </Paper>
@@ -293,7 +296,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           <Paper className={`${css.card} ${css.s8}`}>
             <div className={css.ch}><div><div className={css.ct}>At risk</div><div className={css.cs}>Regular buyers who have gone quiet</div></div></div>
             <div className={css.cb}>
-              {data.at_risk.map((c) => custRow(c, <Badge color="orange" variant="light">No order for {c.days_since} d</Badge>, `${[c.type, c.mr].filter(Boolean).join(' · ')} · usually every ${c.usual_gap} days`))}
+              <ShowMore key={listKey} items={data.at_risk} initial={6} render={(c) => custRow(c, <Badge color="orange" variant="light">No order for {c.days_since} d</Badge>, `${[c.type, c.mr].filter(Boolean).join(' · ')} · usually every ${c.usual_gap} days`)} />
               {!data.at_risk.length && empty('Nobody at risk 🎉')}
             </div>
           </Paper>

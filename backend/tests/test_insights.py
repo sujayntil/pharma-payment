@@ -191,6 +191,22 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(risky["City Chemist"]["reversals"], 2)
         self.assertEqual(s["payment_speed"]["slowest"][0]["name"], "Dr. Mehta")
 
+    def test_lists_are_complete_and_speed_halves_do_not_overlap(self):
+        custs = [models.Customer(name=f"Cust {n}", type="Chemist") for n in range(9)]
+        self.db.add_all(custs); self.db.commit()
+        for n, c in enumerate(custs):
+            for k in range(2):
+                d = TODAY - timedelta(days=60 + k)
+                self.inv(c, d, 100, [(100, d + timedelta(days=n + 1), "UPI")])
+            self.inv(c, TODAY - timedelta(days=3), 100 + n)
+        s = summary(self.db, TODAY - timedelta(days=10), TODAY, Filters())
+        self.assertEqual(len(s["top_customers"]["rows"]), 9)
+        fast = {r["name"] for r in s["payment_speed"]["fastest"]}
+        slow = {r["name"] for r in s["payment_speed"]["slowest"]}
+        self.assertFalse(fast & slow)
+        self.assertEqual(len(fast) + len(slow), 9)
+        self.assertEqual(s["payment_speed"]["slowest"][0]["name"], "Cust 8")
+
     # ---------- ageing / modes / trend ----------
     def test_ageing_buckets_as_of_today(self):
         self.inv(self.doc, TODAY - timedelta(days=10), 100)

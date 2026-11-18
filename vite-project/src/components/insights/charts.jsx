@@ -53,7 +53,8 @@ function useChartHover() {
 }
 
 export function Spark({ values = [], color, width = 74, height = 24 }) {
-  if (values.length < 2) return null;
+  // Too little history (fewer than 3 periods with data): a flat line says nothing.
+  if (values.length < 2 || values.filter((v) => v).length < 3) return null;
   const max = Math.max(...values, 1);
   const min = Math.min(...values);
   const points = values.map((v, i) => `${((i / (values.length - 1)) * width).toFixed(1)},${(height - 2 - ((v - min) / ((max - min) || 1)) * (height - 4)).toFixed(1)}`).join(' ');

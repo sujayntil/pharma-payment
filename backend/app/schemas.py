@@ -14,6 +14,13 @@ class Token(BaseModel):
     name: str
     user_id: int
     title: str = "KING"
+    must_change_password: bool = False
+
+
+class PasswordChange(BaseModel):
+    # Not needed while a new password is required (they just signed in).
+    current_password: Optional[str] = Field(default=None, max_length=200)
+    new_password: str = Field(max_length=200)
 
 
 # ---- Users ----
@@ -37,11 +44,17 @@ class UserOut(BaseModel):
     role: str
     phone: Optional[str] = None
     title: str = "KING"
+    must_change_password: bool = False
 
     @field_validator("title", mode="before")
     @classmethod
     def _default_title(cls, value):
         return value or "KING"
+
+    @field_validator("must_change_password", mode="before")
+    @classmethod
+    def _flag(cls, value):
+        return bool(value)
 
 
 class UserUpdate(BaseModel):

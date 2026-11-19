@@ -51,8 +51,10 @@ def add_payment(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
+    # Locks this invoice until the save finishes: a second collection on the
+    # same invoice at the same moment waits, then sees the new balance.
     invoice = (
-        db.query(models.Invoice).filter(models.Invoice.id == payload.invoice_id).first()
+        db.query(models.Invoice).filter(models.Invoice.id == payload.invoice_id).with_for_update().first()
     )
     if not invoice:
         raise HTTPException(404, "Invoice not found")
@@ -113,6 +115,7 @@ def _apply_batch(db: Session, payload: schemas.PaymentBatchCreate, user: models.
         db.query(models.Invoice)
         .filter(models.Invoice.id.in_(ids), models.Invoice.customer_id == customer.id)
         .order_by(models.Invoice.invoice_date.is_(None), models.Invoice.invoice_date.asc(), models.Invoice.id.asc())
+        .with_for_update()  # same lock as a single collection (always taken in this order)
         .all()
     )
     if len(invoices) != len(ids):
@@ -246,7 +249,7 @@ def undo_payment(
     undone = []
     touched = []
     for item in group:
-        invoice = db.get(models.Invoice, item.invoice_id)
+        invoice = db.get(models.Invoice, item.invoice_id, with_for_update=True)
         touched.append(invoice)
         undone.append({"payment_id": item.id, "invoice_id": invoice.id, "invoice_number": invoice.invoice_number,
                        "amount": item.amount, "mode": item.mode, "reference": item.transaction_reference})

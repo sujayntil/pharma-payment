@@ -40,6 +40,7 @@ export const loginUser = createAsyncThunk(
           name: data.name,
           title: data.title,
           employee_code: employeeCode,
+          must_change_password: Boolean(data.must_change_password),
         },
       };
     } catch (err) {

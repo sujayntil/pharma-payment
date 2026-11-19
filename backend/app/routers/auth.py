@@ -9,7 +9,7 @@ from ..audit import write_audit
 from ..database import get_db
 from ..deps import get_current_user, oauth2_scheme
 from ..login_guard import client_address, ensure_not_locked, record_failure, record_success
-from ..security import REMEMBER_EXPIRE_MINUTES, create_access_token, decode_access_token, verify_password
+from ..security import REMEMBER_EXPIRE_MINUTES, create_access_token, decode_access_token, hash_password, is_weak_password, password_problem, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -67,6 +67,10 @@ def login(
         db.commit()
         raise HTTPException(status_code=401, detail="Invalid employee code or password")
     record_success(db, form_data.username)
+    # An easy-to-guess password (admin123, mr123...): a new one must be set
+    # before anything else works.
+    if is_weak_password(form_data.password, user.employee_code):
+        user.must_change_password = True
     write_audit(db, "signed_in", user, new={"address": address})
     db.commit()
 
@@ -78,6 +82,7 @@ def login(
         name=user.name,
         user_id=user.id,
         title=user.title or "KING",
+        must_change_password=bool(user.must_change_password),
     )
 
 
@@ -103,3 +108,40 @@ def refresh(
     if payload.get("rmb") is False:
         raise HTTPException(status_code=400, detail="This session isn't kept signed in")
     return {"access_token": _issue(user, True), "token_type": "bearer"}
+
+
+@router.post("/change-password", response_model=schemas.Token)
+def change_password(
+    payload: schemas.PasswordChange,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Sets your own new password. Other devices are signed out; this one
+    gets a fresh session so the person carries on."""
+    # Right after signing in with an easy password the current one isn't asked
+    # again; any other change needs it.
+    if not user.must_change_password and not verify_password(payload.current_password or "", user.password_hash):
+        raise HTTPException(400, "Current password is wrong")
+    problem = password_problem(payload.new_password, user.employee_code)
+    if problem:
+        raise HTTPException(400, problem)
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(400, "Choose a password different from the current one")
+    user.password_hash = hash_password(payload.new_password)
+    user.must_change_password = False
+    user.tokens_valid_after = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+    write_audit(db, "password_changed", user, new={"address": client_address(request)})
+    db.commit()
+    # This device keeps going with a fresh session (same "keep me signed in").
+    claims = decode_access_token(request.headers.get("authorization", "").split(" ", 1)[-1])
+    remember = claims.get("rmb", False) is not False
+    return schemas.Token(
+        access_token=_issue(user, remember),
+        token_type="bearer",
+        role=user.role,
+        name=user.name,
+        user_id=user.id,
+        title=user.title or "KING",
+        must_change_password=False,
+    )

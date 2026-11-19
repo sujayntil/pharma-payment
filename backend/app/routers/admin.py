@@ -29,7 +29,7 @@ from ..deps import require_admin
 from ..push import send_office_payment_notification
 from ..credit import is_overdue
 from ..overdue import overdue_customer_summaries
-from ..security import hash_password
+from ..security import hash_password, password_problem
 from ..utils import clean_search, compute_status, page_result, query_page, set_customer_numbers
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -484,7 +484,7 @@ def override_collection_status(
     status = payload.status.upper()
     if status not in (models.StatusEnum.PAID.value, models.StatusEnum.UNPAID.value):
         raise HTTPException(422, "status must be PAID or UNPAID")
-    invoice = db.get(models.Invoice, invoice_id)
+    invoice = db.get(models.Invoice, invoice_id, with_for_update=True)
     if not invoice:
         raise HTTPException(404, "Invoice not found")
 
@@ -587,7 +587,7 @@ def reverse_payment(
     reason = (payload.reason or "").strip()
     if not reason:
         raise HTTPException(422, "A reason is required to reverse a collection")
-    invoice = db.get(models.Invoice, payment.invoice_id)
+    invoice = db.get(models.Invoice, payment.invoice_id, with_for_update=True)
     if not invoice:
         raise HTTPException(404, "Invoice not found")
 
@@ -744,16 +744,12 @@ def create_manual_invoice(
     }
 
 
-MIN_PASSWORD_LENGTH = 8
-
-
-def _check_password(password: str) -> None:
-    """Applies to new users and password resets only; existing passwords and
-    sign-in are untouched."""
-    if len(password or "") < MIN_PASSWORD_LENGTH:
-        raise HTTPException(400, f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
-    if len(password.encode("utf-8")) > 72:
-        raise HTTPException(400, "Password must be 72 characters or fewer")
+def _check_password(password: str, employee_code: str | None = None) -> None:
+    """New users and password resets: at least 8 characters, not an
+    easy-to-guess one (admin123, 12345678, the employee code...)."""
+    problem = password_problem(password, employee_code)
+    if problem:
+        raise HTTPException(400, problem)
 
 
 @router.post("/users", response_model=schemas.UserOut)
@@ -764,7 +760,7 @@ def create_user(
 ):
     if payload.role not in (models.RoleEnum.MR.value, models.RoleEnum.ADMIN.value):
         raise HTTPException(400, "role must be MR or ADMIN")
-    _check_password(payload.password)
+    _check_password(payload.password, payload.employee_code)
     existing = (
         db.query(models.User)
         .filter(models.User.employee_code == payload.employee_code)
@@ -830,7 +826,7 @@ def update_user(
     if data.get("title"):
         target.title = _clean_title(data["title"])
     if "password" in data and data["password"]:
-        _check_password(data["password"])
+        _check_password(data["password"], target.employee_code)
         target.password_hash = hash_password(data["password"])
         # A password reset signs that user out everywhere: sessions issued
         # before now are refused (see deps.get_current_user).

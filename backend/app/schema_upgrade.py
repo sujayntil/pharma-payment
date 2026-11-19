@@ -31,6 +31,7 @@ _ADDITIVE_COLUMNS = {
         "notifications_seen_month_id": "INTEGER",
         "notifications_seen_audit_id": "INTEGER",
         "notifications_cleared_payment_id": "INTEGER",
+        "must_change_password": "BOOLEAN",
         "notifications_cleared_audit_id": "INTEGER",
         "title": "VARCHAR(8)",
     },

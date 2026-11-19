@@ -61,6 +61,10 @@ axiosClient.interceptors.response.use(
       }
     }
 
+    if (error.response?.status === 403 && error.response?.data?.detail === 'PASSWORD_CHANGE_REQUIRED' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:password-change'));
+    }
+
     // Extract detail message from FastAPI backend if present
     const detail =
       error.response?.data?.detail ||

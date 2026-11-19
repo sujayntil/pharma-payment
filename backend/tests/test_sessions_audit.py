@@ -88,6 +88,38 @@ class SessionsAuditUploadsTests(unittest.TestCase):
             return [(row.user_id, row.old_value, row.new_value)
                     for row in db.query(models.AuditLog).filter_by(action=action).order_by(models.AuditLog.id)]
 
+    # ---- easy-to-guess passwords ----
+
+    def test_default_password_must_be_changed_before_anything_else(self):
+        with self.Session() as db:
+            rahul = db.get(models.User, self.rahul_id)
+            rahul.password_hash = hash_password("mr123")
+            db.commit()
+        login = self.client.post("/auth/login", data={"username": "MR001", "password": "mr123"})
+        self.assertTrue(login.json()["must_change_password"])
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        blocked = self.client.get("/mr/trophies", headers=headers)
+        self.assertEqual((blocked.status_code, blocked.json()["detail"]), (403, "PASSWORD_CHANGE_REQUIRED"))
+        self.assertTrue(self.client.get("/auth/me", headers=headers).json()["must_change_password"])
+        # Weak or wrong attempts are refused.
+        weak = self.client.post("/auth/change-password", json={"current_password": "mr123", "new_password": "12345678"}, headers=headers)
+        self.assertEqual(weak.status_code, 400)
+        changed = self.client.post("/auth/change-password", json={"new_password": "Green-Field-42"}, headers=headers)
+        self.assertEqual(changed.status_code, 200, changed.text)
+        fresh = {"Authorization": f"Bearer {changed.json()['access_token']}"}
+        self.assertEqual(self.client.get("/mr/trophies", headers=fresh).status_code, 200)
+        # A later change does need the current password.
+        later = self.client.post("/auth/change-password", json={"new_password": "Blue-Lake-77"}, headers=fresh)
+        self.assertEqual(later.status_code, 400)
+        # Signing in again with the new password: no prompt.
+        self.assertFalse(self.client.post("/auth/login", data={"username": "MR001", "password": "Green-Field-42"}).json()["must_change_password"])
+
+    def test_admin_cannot_set_an_easy_password(self):
+        admin_headers = self.auth("ADMIN01", "admin-pass")
+        for weak in ("admin123", "mr002123", "password"):
+            response = self.client.put(f"/admin/users/{self.neha_id}", json={"password": weak}, headers=admin_headers)
+            self.assertEqual(response.status_code, 400, weak)
+
     # ---- sessions ----
 
     def test_logout_ends_only_that_session(self):
@@ -123,7 +155,7 @@ class SessionsAuditUploadsTests(unittest.TestCase):
     def test_tokens_issued_before_this_change_still_work(self):
         from app.security import ALGORITHM, SECRET_KEY
         from datetime import datetime, timedelta, timezone
-        from jose import jwt
+        import jwt
         legacy = jwt.encode({"sub": str(self.rahul_id), "role": "MR", "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
                             SECRET_KEY, algorithm=ALGORITHM)
         self.assertEqual(self.client.get("/auth/me", headers={"Authorization": f"Bearer {legacy}"}).status_code, 200)

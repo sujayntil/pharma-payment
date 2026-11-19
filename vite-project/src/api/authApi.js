@@ -18,6 +18,12 @@ export const authApi = {
     return response.data;
   },
 
+  /** Sets your own new password; returns a fresh session for this device. */
+  async changePassword(currentPassword, newPassword) {
+    const response = await axiosClient.post('/auth/change-password', { ...(currentPassword ? { current_password: currentPassword } : {}), new_password: newPassword });
+    return response.data;
+  },
+
   async getCurrentUser() {
     const response = await axiosClient.get('/auth/me');
     return response.data;

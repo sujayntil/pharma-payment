@@ -45,6 +45,8 @@ class User(Base):
     # Sessions (login tokens) issued before this moment are no longer accepted.
     # Set when the password is reset. NULL = never reset since this was added.
     tokens_valid_after = Column(DateTime, nullable=True)
+    # Signed in with an easy-to-guess password (admin123...): must set a new one first.
+    must_change_password = Column(Boolean, nullable=True, default=False)
     # Admin bell: newest payment id this user has seen (NULL = never opened).
     notifications_seen_payment_id = Column(Integer, nullable=True)
     notifications_seen_month_id = Column(Integer, nullable=True)  # bell: newest "month cleared" seen

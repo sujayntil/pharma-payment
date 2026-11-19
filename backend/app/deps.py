@@ -1,8 +1,8 @@
 from datetime import timezone
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
+from jwt import PyJWTError as JWTError
 from sqlalchemy.orm import Session
 
 from . import models
@@ -12,8 +12,13 @@ from .security import decode_access_token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+# While a new password is required, only these work (see the login).
+PASSWORD_CHANGE_PATHS = {"/auth/me", "/auth/change-password", "/auth/logout", "/auth/refresh"}
+PASSWORD_CHANGE_REQUIRED = "PASSWORD_CHANGE_REQUIRED"
+
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> models.User:
     credentials_exception = HTTPException(
         status_code=401, detail="Could not validate credentials"
@@ -40,6 +45,11 @@ def get_current_user(
     jti = payload.get("jti")
     if jti and db.query(models.RevokedToken.jti).filter(models.RevokedToken.jti == jti).first():
         raise credentials_exception
+
+    # Signed in with an easy-to-guess password: nothing else works until a
+    # new one is set (enforced here, not only on screen).
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_PATHS:
+        raise HTTPException(status_code=403, detail=PASSWORD_CHANGE_REQUIRED)
     return user
 
 

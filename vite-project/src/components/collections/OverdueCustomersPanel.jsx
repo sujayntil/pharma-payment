@@ -74,7 +74,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <Text fw={700} c="red.7" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(item.overdue_amount)}</Text>
-                  <Badge size="sm" {...badgeFor(item.days_overdue, item.credit_days)}>{item.days_overdue} days old</Badge>
+                  <Badge size="sm" {...badgeFor(item.days_overdue, item.credit_days)} style={{ minWidth: 'max-content' }}>{item.days_overdue} days old</Badge>
                 </div>
               </Group>
             ))}
@@ -96,7 +96,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
                   <Text size="sm">{item.oldest_invoice_number}</Text>
                   <Text size="xs" c="dimmed">{shortDate(item.oldest_invoice_date)}</Text>
                 </Table.Td>
-                <Table.Td><Badge {...badgeFor(item.days_overdue, item.credit_days)}>{item.days_overdue} days old</Badge></Table.Td>
+                <Table.Td><Badge {...badgeFor(item.days_overdue, item.credit_days)} style={{ minWidth: 'max-content' }}>{item.days_overdue} days old</Badge></Table.Td>
                 <Table.Td ta="right" fw={700} c="red.7" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(item.overdue_amount)}</Table.Td>
               </Table.Tr>
             ))}</Table.Tbody>
@@ -129,7 +129,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <Text fw={700} c="red" style={{ whiteSpace: 'nowrap' }}>{money(item.overdue_amount)}</Text>
-                <Badge size="sm" {...badgeFor(item.days_overdue, item.credit_days)}>{item.days_overdue} days old</Badge>
+                <Badge size="sm" {...badgeFor(item.days_overdue, item.credit_days)} style={{ minWidth: 'max-content' }}>{item.days_overdue} days old</Badge>
               </div>
             </Group>
           ))}
@@ -148,7 +148,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
               <Table.Tr key={item.customer_id} onClick={onSelect ? () => onSelect(item) : undefined} style={onSelect ? { cursor: 'pointer' } : undefined}>
                 <Table.Td fw={600}>{item.customer}</Table.Td>
                 <Table.Td>{refined ? <Text size="sm">{item.oldest_invoice_number} <Text span size="xs" c="dimmed">· {shortDate(item.oldest_invoice_date)}</Text></Text> : <>{item.oldest_invoice_number}<Text size="xs" c="dimmed">{shortDate(item.oldest_invoice_date)}</Text></>}</Table.Td>
-                <Table.Td><Badge {...badgeFor(item.days_overdue, item.credit_days)}>{item.days_overdue} days old</Badge></Table.Td>
+                <Table.Td><Badge {...badgeFor(item.days_overdue, item.credit_days)} style={{ minWidth: 'max-content' }}>{item.days_overdue} days old</Badge></Table.Td>
                 {showMr && <Table.Td>{item.mr || '—'}</Table.Td>}
                 <Table.Td ta={refined ? 'center' : undefined}>{item.invoice_count}</Table.Td>
                 <Table.Td ta="right" fw={700} c="red" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(item.overdue_amount)}</Table.Td>

@@ -212,7 +212,9 @@ export default function AdminDashboard({ onOpenCustomer }) {
       {/* Needs attention: red only here, where action is needed. */}
       <Stack gap={12}>
         <ZoneHeading icon={IconAlertTriangle} tone="red" title="Needs attention" />
-        <SimpleGrid cols={{ base: 1, xl: showHigh ? 2 : 1 }} spacing="sm" style={{ alignItems: 'start' }}>
+        {/* One below the other at full width: two side by side left a big
+            empty space under the shorter list. */}
+        <SimpleGrid cols={1} spacing="sm">
           {showHigh && (
             <Paper p="md" className={css.card}>
               <Group justify="space-between" mb="sm" wrap="nowrap">

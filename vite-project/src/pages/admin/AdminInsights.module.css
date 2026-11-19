@@ -107,3 +107,24 @@
 .stake b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stake small { font-size: 11px; color: var(--app-muted); white-space: nowrap; }
 .stake .green { color: var(--mantine-color-green-8); }
+
+/* Two donuts side by side: chart left, legend right, centred in the card. */
+.donutBody { display: flex; align-items: center; gap: 22px; min-height: 230px; }
+@media (max-width: 47.99em) { .donutBody { flex-direction: column; gap: 10px; min-height: 0; } .donutBody > div { width: 100%; } }
+
+/* Customers to follow up: aligned columns on laptop, compact cards on phones. */
+.fuRow { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 1.6fr) 100px 116px 92px; align-items: center; gap: 14px; padding: 10px 6px; border-top: 1px solid var(--app-soft-2); cursor: pointer; border-radius: 6px; }
+.fuRow:hover { background: var(--app-soft); }
+.fuRow:hover .nm { color: var(--mantine-color-green-8); }
+.fuHead { cursor: default; border-top: 0; padding-block: 2px 6px; font-size: 11.5px; font-weight: 600; color: var(--app-muted); }
+.fuHead:hover { background: none; }
+.fuNum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+.fuWhy { display: flex; align-items: baseline; gap: 7px; font-size: 12.5px; line-height: 1.45; }
+.fuWhy b { font-weight: 600; }
+.fuDot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; transform: translateY(-1px); margin-right: 5px; }
+.fuWhy .fuDot { margin-right: 0; }
+.fuDot[data-kind="quiet"] { background: var(--app-tag-red); }
+.fuDot[data-kind="less"] { background: var(--app-tag-orange); }
+.fuDot[data-kind="late"] { background: var(--app-tag-blue); }
+.fuCard { padding: 10px 2px; border-top: 1px solid var(--app-soft-2); cursor: pointer; }
+.fuCard .fuWhy { font-size: 12px; }

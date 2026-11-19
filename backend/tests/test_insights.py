@@ -100,6 +100,19 @@ class InsightsTests(unittest.TestCase):
             collections(date_from=None, date_to=None, mr_id=None, mode=None, recorded_by=None, entry_type=None, search=None,
                         limit=50, offset=0, customer_type="Vet", area=None, sort=None, summary=False, db=self.db, user=self.admin)
 
+    def test_owed_by_type_matches_money_owed(self):
+        self.books()
+        s = self.S()
+        owed = {r["type"]: r["owed"] for r in s["owed_by_type"]}
+        self.assertAlmostEqual(sum(owed.values()), sum(a["amount"] for a in s["ageing"]))
+        self.assertEqual(owed["Doctor"], 500)
+        self.assertEqual(owed["Distributor"], 2000)          # 3000 - 1000 paid; last month's bill is settled
+        # Picking a type keeps every slice (like Sales by type) for comparison.
+        self.assertEqual({r["type"]: r["owed"] for r in self.S(customer_type="Chemist")["owed_by_type"]}, owed)
+        row = next(r for r in self.S()["follow_up"]["rows"] if r["name"] == "Big Distributor") if self.S()["follow_up"]["rows"] else None
+        if row:
+            self.assertIn("overdue", row); self.assertIn("usual_month", row); self.assertIn("phone", row)
+
     # ---------- headline figures ----------
     def test_kpis_and_previous_period(self):
         self.books()

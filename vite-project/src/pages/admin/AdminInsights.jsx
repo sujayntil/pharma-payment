@@ -1,7 +1,8 @@
 import SectionNav from '../../components/common/SectionNav';
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Group, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title, UnstyledButton } from '@mantine/core';
-import { IconChevronRight, IconMapPin, IconTarget, IconX } from '@tabler/icons-react';
+import { ActionIcon, Alert, Badge, Button, Group, Menu, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title, UnstyledButton } from '@mantine/core';
+import { IconBook2, IconChartPie, IconChevronRight, IconDots, IconMapPin, IconTarget, IconX } from '@tabler/icons-react';
+import ContactActions from '../../components/customers/ContactActions';
 import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
@@ -24,6 +25,7 @@ const pctLabel = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v)}
 // "Jump to section" (right-edge dots on laptop, chips on phone).
 const INSIGHT_SECTIONS = [
   { id: 'ins-summary', label: 'Summary' },
+  { id: 'ins-types', label: 'By customer type' },
   { id: 'ins-trend', label: 'Sales vs collections' },
   { id: 'ins-owed', label: 'Money owed' },
   { id: 'ins-mr', label: 'By MR' },
@@ -144,6 +146,10 @@ export default function AdminInsights({ onOpenCustomer }) {
   };
 
   const typeTotal = (data?.by_type || []).reduce((sum, row) => sum + row.sales, 0);
+  const owedByType = [...(data?.owed_by_type || [])].sort((x, y) => y.owed - x.owed);
+  const owedTotal = owedByType.reduce((sum, row) => sum + row.owed, 0);
+  // Tap a slice / row: every unpaid bill of that type, oldest first.
+  const openOwed = (t) => openFresh({ kind: 'records', records: 'outstanding', customerType: t, title: `Owed by ${t === 'Other' ? 'other customers' : `${t.toLowerCase()}s`}` });
   const mrMax = Math.max(...(data?.by_mr.rows || []).map((r) => Math.max(r.sales, r.collected)), 1);
   const ageTotal = (data?.ageing || []).reduce((sum, row) => sum + row.amount, 0);
   const modeTotal = (data?.payment_modes || []).reduce((sum, row) => sum + Math.max(row.amount, 0), 0);
@@ -183,25 +189,12 @@ export default function AdminInsights({ onOpenCustomer }) {
 
       {data && (
         <div className={css.grid} style={loading ? { opacity: 0.6, transition: 'opacity .2s' } : undefined}>
-          <Paper className={`${css.card} ${css.s8}`} id="ins-trend" data-section>
-            <div className={css.ch}>
-              <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>{isMobile ? 'Tap a bar for its numbers' : 'Hover a bar for its numbers · click to open it'}</div></div>
-              <Group gap={10} wrap="nowrap">
-                {!isMobile && legend}
-                <SegmentedControl size="xs" value={trend} onChange={setTrend} data={[{ value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
-              </Group>
-            </div>
-            <div className={css.cb}>
-              {isMobile && <div style={{ marginBottom: 6 }}>{legend}</div>}
-              <TrendChart points={data.trend.points} selected={allTime ? null : range} onPick={pickTrend} weekly={trend === 'weekly'} />
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s4}`}>
-            <div className={css.ch}><div><div className={css.ct}>Sales by customer type</div><div className={css.cs}>Tap a type to filter</div></div></div>
-            <div className={css.cb} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Donut rows={data.by_type.map((r) => ({ key: r.type, value: r.sales, color: TYPE_COLORS[r.type] }))} total={typeTotal} active={type} onPick={(t) => toggle(setType, type, t)} />
-              <div className={css.legend} style={{ flex: 1, minWidth: 200 }}>
+          {/* Two donuts side by side: what each customer type buys, and what it owes today. */}
+          <Paper className={`${css.card} ${css.s6}`} id="ins-types" data-section>
+            <div className={css.ch}><div><div className={css.ct}>Sales by customer type</div><div className={css.cs}>{allTime ? 'Since the start' : periodLabel} · tap a type to filter</div></div></div>
+            <div className={`${css.cb} ${css.donutBody}`}>
+              <Donut size={isMobile ? 168 : 188} rows={data.by_type.map((r) => ({ key: r.type, value: r.sales, color: TYPE_COLORS[r.type] }))} total={typeTotal} active={type} onPick={(t) => toggle(setType, type, t)} />
+              <div className={css.legend} style={{ flex: 1, minWidth: 0 }}>
                 {data.by_type.filter((r) => r.sales > 0 || r.type === type).map((r) => (
                   <button type="button" key={r.type} className={type === r.type ? css.on : undefined} onClick={() => toggle(setType, type, r.type)}>
                     <i style={{ width: 10, height: 10, borderRadius: 3, background: TYPE_COLORS[r.type], flexShrink: 0 }} />{r.type}
@@ -211,6 +204,39 @@ export default function AdminInsights({ onOpenCustomer }) {
                 ))}
                 {!typeTotal && empty('No sales in this period.')}
               </div>
+            </div>
+          </Paper>
+
+          <Paper className={`${css.card} ${css.s6}`}>
+            <div className={css.ch}><div><div className={css.ct}>Owed to you by customer type</div><div className={css.cs}>As of today · tap a type for its bills</div></div></div>
+            <div className={`${css.cb} ${css.donutBody}`}>
+              <Donut size={isMobile ? 168 : 188} centerLabel="Owed" unit="of what's owed" label="Owed to you by customer type"
+                rows={owedByType.map((r) => ({ key: r.type, value: r.owed, color: TYPE_COLORS[r.type] }))} total={owedTotal} active={type} onPick={openOwed} />
+              <div className={css.legend} style={{ flex: 1, minWidth: 0 }}>
+                {owedByType.filter((r) => r.owed > 0).map((r) => (
+                  <button type="button" key={r.type} className={type === r.type ? css.on : undefined} onClick={() => openOwed(r.type)}>
+                    <i style={{ width: 10, height: 10, borderRadius: 3, background: TYPE_COLORS[r.type], flexShrink: 0 }} />
+                    <span style={{ minWidth: 0, textAlign: 'left' }}>{r.type}<span className={css.sub} style={{ display: 'block' }}>{r.customers} {r.customers === 1 ? 'customer' : 'customers'}</span></span>
+                    <b className={css.num} style={{ marginLeft: 'auto' }}>{lakh(r.owed)}</b>
+                    <span className={css.sub} style={{ width: 34, textAlign: 'right' }}>{owedTotal ? Math.round((r.owed / owedTotal) * 100) : 0}%</span>
+                  </button>
+                ))}
+                {!owedTotal && empty('Nothing owed right now 🎉')}
+              </div>
+            </div>
+          </Paper>
+
+          <Paper className={`${css.card} ${css.s12}`} id="ins-trend" data-section>
+            <div className={css.ch}>
+              <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>{isMobile ? 'Tap a bar for its numbers' : 'Hover a bar for its numbers · click to open it'}</div></div>
+              <Group gap={10} wrap="nowrap">
+                {!isMobile && legend}
+                <SegmentedControl size="xs" value={trend} onChange={setTrend} data={[{ value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
+              </Group>
+            </div>
+            <div className={css.cb}>
+              {isMobile && <div style={{ marginBottom: 6 }}>{legend}</div>}
+              <TrendChart points={data.trend.points} selected={allTime ? null : range} onPick={pickTrend} weekly={trend === 'weekly'} wide={!isMobile} />
             </div>
           </Paper>
 
@@ -271,19 +297,56 @@ export default function AdminInsights({ onOpenCustomer }) {
             <div className={css.cb}>
               <div className={css.fchips}>
                 {[['all', 'All', data.follow_up.rows.length], ['quiet', 'Not ordering', data.follow_up.counts.quiet], ['less', 'Buying less', data.follow_up.counts.less], ['late', 'Paying late', data.follow_up.counts.late]].map(([kind, text, count]) => (
-                  <UnstyledButton key={kind} className={css.fchip} data-on={followKind === kind || undefined} onClick={() => setFollowKind(kind)}>{text} <b>{count}</b></UnstyledButton>
+                  <UnstyledButton key={kind} className={css.fchip} data-on={followKind === kind || undefined} onClick={() => setFollowKind(kind)}>{kind !== 'all' && <i className={css.fuDot} data-kind={kind} />}{text} <b>{count}</b></UnstyledButton>
                 ))}
               </div>
-              <ShowMore key={`${listKey}-${followKind}`} items={data.follow_up.rows.filter((r) => followKind === 'all' || r.reasons.some((x) => x.kind === followKind))} initial={6} render={(c) => {
+              {/* Laptop: one row per customer in aligned columns; phone: compact cards. */}
+              {!isMobile && data.follow_up.rows.length > 0 && (
+                <div className={`${css.fuRow} ${css.fuHead}`}><span>Customer</span><span>Why</span><span className={css.fuNum}>Overdue</span><span className={css.fuNum}>Usual / month</span><span /></div>
+              )}
+              <ShowMore key={`${listKey}-${followKind}`} items={data.follow_up.rows.filter((r) => followKind === 'all' || r.reasons.some((x) => x.kind === followKind))} initial={8} render={(c) => {
                 const shown = followKind === 'all' ? c.reasons : c.reasons.filter((x) => x.kind === followKind);
-                const top = shown.reduce((m, x) => (x.amount > m.amount ? x : m), shown[0]);
-                return custRow(c, (
-                  <span className={css.stake}><b>{lakh(top.amount)}</b><small>{top.unit}</small></span>
-                ), (
-                  <>{[c.type, c.mr].filter(Boolean).join(' · ')}
-                    {shown.map((x) => <div key={x.kind} className={css.why}><span className={css.tag} data-kind={x.kind}>{FOLLOW_LABEL[x.kind]}</span>{x.text}</div>)}
-                  </>
-                ));
+                const openIt = () => open({ kind: 'customer', id: c.customer_id, name: c.name });
+                const why = shown.map((x) => {
+                  const [main, ...rest] = x.text.split(' · ');
+                  return <div key={x.kind} className={css.fuWhy}><i className={css.fuDot} data-kind={x.kind} title={FOLLOW_LABEL[x.kind]} /><span><b>{main}</b>{rest.length > 0 && <span className={css.sub}> · {rest.join(' · ')}</span>}</span></div>;
+                });
+                const actions = (
+                  <Group gap={2} wrap="nowrap" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                    <ContactActions size="sm" name={c.name} phone={c.phone} alternatePhone={c.alternate_phone} whatsappOn={c.whatsapp_on} />
+                    <Menu position="bottom-end" shadow="md" withinPortal>
+                      <Menu.Target><ActionIcon variant="subtle" color="gray" aria-label={`More actions for ${c.name}`}><IconDots size={16} /></ActionIcon></Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item leftSection={<IconChartPie size={15} />} onClick={openIt}>Customer insights</Menu.Item>
+                        {onOpenCustomer && <Menu.Item leftSection={<IconBook2 size={15} />} onClick={() => onOpenCustomer({ id: c.customer_id, name: c.name })}>Open ledger</Menu.Item>}
+                      </Menu.Dropdown>
+                    </Menu>
+                  </Group>
+                );
+                const who = [c.type, c.mr].filter(Boolean).join(' · ');
+                if (isMobile) {
+                  return (
+                    <div key={c.customer_id} role="button" tabIndex={0} className={css.fuCard} onClick={openIt} onKeyDown={(e) => { if (e.key === 'Enter') openIt(); }}>
+                      <Group justify="space-between" wrap="nowrap" gap={8} align="flex-start">
+                        <div style={{ minWidth: 0 }}><div className={css.nm}>{c.name}</div><div className={css.sub}>{who}</div></div>
+                        <span className={css.stake}>{c.overdue > 0 ? <><b style={{ color: 'var(--app-tag-red)' }}>{lakh(c.overdue)}</b><small>overdue</small></> : <><b>{lakh(c.usual_month)}</b><small>usual / month</small></>}</span>
+                      </Group>
+                      <Group justify="space-between" wrap="nowrap" gap={6} align="flex-end" mt={4}>
+                        <div style={{ minWidth: 0 }}>{why}</div>
+                        {actions}
+                      </Group>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={c.customer_id} role="button" tabIndex={0} className={css.fuRow} onClick={openIt} onKeyDown={(e) => { if (e.key === 'Enter') openIt(); }}>
+                    <span style={{ minWidth: 0 }}><div className={css.nm}>{c.name}</div><div className={css.sub}>{who}</div></span>
+                    <span style={{ minWidth: 0 }}>{why}</span>
+                    <span className={css.fuNum}>{c.overdue > 0 ? <b style={{ color: 'var(--app-tag-red)' }}>{lakh(c.overdue)}</b> : <span className={css.sub}>—</span>}</span>
+                    <span className={css.fuNum}>{c.usual_month ? lakh(c.usual_month) : <span className={css.sub}>—</span>}</span>
+                    {actions}
+                  </div>
+                );
               }} />
               {!data.follow_up.rows.length && empty('Nobody needs a follow-up right now 🎉')}
             </div>

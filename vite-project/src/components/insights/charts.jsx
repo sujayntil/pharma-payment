@@ -64,8 +64,9 @@ export function Spark({ values = [], color, width = 74, height = 24 }) {
 }
 
 /** Sales bars + collected line. Hover a bar for its numbers; click (or tap twice) to pick that month / week. */
-export function TrendChart({ points = [], selected, onPick, weekly = false }) {
-  const W = 760; const H = 230; const pl = 48; const pb = 26; const pt = 10;
+/** wide: drawn across the full page width (keeps the chart from growing too tall). */
+export function TrendChart({ points = [], selected, onPick, weekly = false, wide = false }) {
+  const W = wide ? 1180 : 760; const H = 230; const pl = 48; const pb = 26; const pt = 10;
   const max = Math.max(...points.map((p) => Math.max(p.sales, p.collected)), 1);
   const bw = (W - pl - 10) / Math.max(points.length, 1);
   const y = (v) => H - pb - (Math.max(v, 0) / max) * (H - pb - pt);
@@ -143,14 +144,15 @@ export function MonthBars({ months = [], highlightFrom = 9 }) {
 }
 
 /** Hover (or tap) a slice: the centre shows that type's amount and share. */
-export function Donut({ rows = [], total = 0, active, onPick, centerLabel = 'Sales' }) {
+/** size: drawn size in px; unit: hover line ("of sales", "of what's owed"). */
+export function Donut({ rows = [], total = 0, active, onPick, centerLabel = 'Sales', size = 148, unit = 'of sales', label = 'Sales by customer type' }) {
   const R = 62; const r = 40; const c = 74;
   let a = -Math.PI / 2;
   const [hover, setHover] = useState(null);
   const hRow = rows.find((row) => row.key === hover);
   const at = (ang, rad) => [c + rad * Math.cos(ang), c + rad * Math.sin(ang)];
   return (
-    <svg width="148" height="148" viewBox="0 0 148 148" style={{ flexShrink: 0 }} role="img" aria-label="Sales by customer type">
+    <svg width={size} height={size} viewBox="0 0 148 148" style={{ flexShrink: 0 }} role="img" aria-label={label}>
       {total > 0 && rows.filter((row) => row.value > 0).map((row) => {
         const f = row.value / total; const b = a + f * Math.PI * 2; const big = f > 0.5 ? 1 : 0;
         const [x1, y1] = at(a, R); const [x2, y2] = at(b - 0.0001, R); const [x3, y3] = at(b - 0.0001, r); const [x4, y4] = at(a, r);
@@ -164,7 +166,7 @@ export function Donut({ rows = [], total = 0, active, onPick, centerLabel = 'Sal
       {!total && <circle cx={c} cy={c} r={(R + r) / 2} fill="none" style={{ stroke: 'var(--app-chart-grid)' }} strokeWidth={R - r} />}
       <text x={c} y={hRow ? 64 : 70} textAnchor="middle" fontSize="11" style={{ fill: 'var(--app-axis)' }}>{hRow ? hRow.key : centerLabel}</text>
       <text x={c} y={hRow ? 82 : 88} textAnchor="middle" fontSize="14" fontWeight="700" style={{ fill: 'var(--app-ink)' }}>{lakh(hRow ? hRow.value : total)}</text>
-      {hRow && total > 0 && <text x={c} y={97} textAnchor="middle" fontSize="10.5" style={{ fill: 'var(--app-axis)' }}>{Math.round((hRow.value / total) * 100)}% of sales</text>}
+      {hRow && total > 0 && <text x={c} y={97} textAnchor="middle" fontSize="10.5" style={{ fill: 'var(--app-axis)' }}>{Math.round((hRow.value / total) * 100)}% {unit}</text>}
     </svg>
   );
 }

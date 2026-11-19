@@ -306,6 +306,16 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
         if filters.match(book, i, ignore="type") and within(i.date, start, end):
             by_type[book.group_of(i)] += i.total
     type_rows = [{"type": t, "sales": round(by_type.get(t, 0), 2)} for t in TYPE_GROUPS]
+    # Owed to you today by customer type (the donut beside Sales): every unpaid
+    # bill whatever its date, same as "Money owed to you".
+    owed_type = defaultdict(float)
+    owed_people = defaultdict(set)
+    for i in all_invs:
+        if filters.match(book, i, ignore="type") and i.pending > OPEN:
+            owed_type[book.group_of(i)] += i.pending
+            owed_people[book.group_of(i)].add(i.customer_id)
+    owed_type_rows = [{"type": t, "owed": round(owed_type.get(t, 0), 2), "customers": len(owed_people.get(t, ()))}
+                      for t in TYPE_GROUPS]
 
     # By MR, with target progress: for the month picked (when one calendar
     # month is picked), otherwise for the current month.
@@ -369,6 +379,15 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
 
     # Customers to follow up / buying more: each against their own history, as of today.
     health = follow_ups(book, invs, today)
+    # Phone numbers for the 📞 on each follow-up row (one query).
+    ids = [r["customer_id"] for r in health["rows"]]
+    if ids:
+        phones = {c.id: c for c in db.query(models.Customer.id, models.Customer.phone, models.Customer.alternate_phone,
+                                              models.Customer.whatsapp_on).filter(models.Customer.id.in_(ids)).all()}
+        for r in health["rows"]:
+            c = phones.get(r["customer_id"])
+            r.update(phone=c.phone if c else None, alternate_phone=c.alternate_phone if c else None,
+                     whatsapp_on=c.whatsapp_on if c else None)
 
     ageing = []
     for label, lo, hi in DUE_BUCKETS:
@@ -399,6 +418,7 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
         "kpis": kpis,
         "trend": {"kind": "weekly" if trend == "weekly" else "monthly", "points": trend_rows},
         "by_type": type_rows,
+        "owed_by_type": owed_type_rows,
         "by_mr": {"rows": mr_rows, "days_left": days_left, "month": m_start.strftime("%Y-%m"),
                   "month_label": m_start.strftime("%B %Y"), "current_month": current_target_month},
         "top_customers": {"rows": top, "top10_share": top10_share, "dependence": dependence},

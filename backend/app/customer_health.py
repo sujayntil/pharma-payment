@@ -132,7 +132,9 @@ def follow_ups(book, invs: list, today: date) -> dict:
             reasons.append({"kind": "late", "text": f"{bounced} payments bounced or reversed in 6 months",
                             "amount": round(owed, 2), "unit": "owed"})
         if reasons:
-            rows.append({**base, "reasons": reasons, "stake": max(r["amount"] for r in reasons)})
+            # Two plain numbers for the list's columns: overdue now and usual monthly buying.
+            rows.append({**base, "reasons": reasons, "stake": max(r["amount"] for r in reasons),
+                         "overdue": round(overdue, 2), "usual_month": _hundreds(p["usual_month"] or 0)})
         if p["more"]:
             growing.append({**base, "change": _hundreds(p["recent_month"] - p["usual_month"]),
                             "recent_month": _hundreds(p["recent_month"]), "usual_month": _hundreds(p["usual_month"])})

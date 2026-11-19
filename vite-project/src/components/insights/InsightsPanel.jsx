@@ -159,7 +159,8 @@ function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
 }
 
 function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }) {
-  const params = { ...filters, kind: item.records, ...(item.bucket && { bucket: item.bucket }) };
+  // customerType: from "Owed to you by customer type" (that type only).
+  const params = { ...filters, kind: item.records, ...(item.bucket && { bucket: item.bucket }), ...(item.customerType && { customer_type: item.customerType }) };
   const { loading, data, error } = useLoad(() => insightsApi.records(params), JSON.stringify(params));
   const collected = item.records === 'collected';
   const age = item.records === 'age' || item.records === 'outstanding';

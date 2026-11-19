@@ -8,6 +8,7 @@
   --app-surface: var(--mantine-color-white);
   --app-soft: var(--mantine-color-gray-0);
   --app-soft-2: var(--mantine-color-gray-1);
+  --app-row-selected: #edf7ef;
   --app-line: var(--mantine-color-gray-2);
   --app-line-2: var(--mantine-color-gray-3);
   --app-faint: var(--mantine-color-gray-4);
@@ -40,6 +41,7 @@
   --app-surface: var(--mantine-color-dark-7);
   --app-soft: var(--mantine-color-dark-6);
   --app-soft-2: var(--mantine-color-dark-5);
+  --app-row-selected: rgba(64, 192, 87, 0.09);
   --app-line: var(--mantine-color-dark-5);
   --app-line-2: var(--mantine-color-dark-4);
   --app-faint: var(--mantine-color-dark-3);
@@ -119,8 +121,14 @@ textarea {
   background: var(--app-soft-2);
 }
 
+/* The row whose details are open: a faint green tint and a green bar on the
+   left, so its buttons (Collect) stay easy to see in light and dark. */
+table tbody tr[data-selected] td,
 .pin-last tbody tr[data-selected] td:last-child {
-  background: var(--mantine-color-green-light);
+  background: var(--app-row-selected);
+}
+table tbody tr[data-selected] td:first-child {
+  box-shadow: inset 3px 0 0 var(--mantine-color-green-6);
 }
 
 /* Phones: page and section headings are smaller so they stay on one line and

@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
@@ -9,10 +9,14 @@ from .. import models, schemas
 from ..collection_info import last_collection_fields, latest_collections
 from ..audit import customer_snapshot, write_audit
 from ..database import get_db
+from ..ledger_pdf import build_ledger_pdf, nice_date
 from ..deps import get_current_user, require_admin
 from ..utils import clean_search, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone, set_customer_numbers
 
 router = APIRouter(prefix="/customers", tags=["customers"])
+
+# A shared ledger PDF lists at most this many invoices (newest pending first).
+LEDGER_PDF_MAX = 2000
 
 
 @router.get("")
@@ -255,18 +259,8 @@ def delete_customer(
     return None
 
 
-@router.get("/{customer_id}/ledger")
-def customer_ledger(
-    customer_id: int,
-    search: str | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
-    status: str | None = None,
-    limit: int | None = None,
-    offset: int | None = None,
-    db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
-):
+def _ledger_query(db, user, customer_id, search, date_from, date_to, status):
+    """The ledger's customer and its filtered invoice query (screen and PDF)."""
     customer = (
         db.query(models.Customer).filter(models.Customer.id == customer_id).first()
     )
@@ -295,21 +289,41 @@ def customer_ledger(
             models.Invoice.status.ilike(term),
             models.Invoice.mr.has(models.User.name.ilike(term)),
         ))
+    return customer, invoice_query, search
+
+
+def _ledger_order(invoice_query):
+    # Pending invoices first, oldest first (the order they are chased in);
+    # then settled ones, newest first.
+    is_pending = models.Invoice.pending_amount > 0
+    return invoice_query.order_by(
+        case((is_pending, 0), else_=1),
+        case((is_pending, models.Invoice.invoice_date), else_=None).asc(),
+        models.Invoice.invoice_date.desc(),
+        models.Invoice.id.desc(),
+    )
+
+
+@router.get("/{customer_id}/ledger")
+def customer_ledger(
+    customer_id: int,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status)
     # Totals come from the exact same filtered set as the rows (search
     # included), so the summary always matches what is listed.
     total_invoiced, total_paid = invoice_query.with_entities(
         func.coalesce(func.sum(models.Invoice.total_amount), 0),
         func.coalesce(func.sum(models.Invoice.paid_amount), 0),
     ).one()
-    # Pending invoices first, oldest first (the order they are chased in);
-    # then settled ones, newest first.
-    is_pending = models.Invoice.pending_amount > 0
-    invoice_query = invoice_query.order_by(
-        case((is_pending, 0), else_=1),
-        case((is_pending, models.Invoice.invoice_date), else_=None).asc(),
-        models.Invoice.invoice_date.desc(),
-        models.Invoice.id.desc(),
-    )
+    invoice_query = _ledger_order(invoice_query)
     invoices, invoice_count, page_size, page_offset = query_page(
         invoice_query, limit, offset, search
     )
@@ -353,3 +367,49 @@ def customer_ledger(
         ],
     }
     return result
+
+
+@router.get("/{customer_id}/ledger/pdf")
+def customer_ledger_pdf(
+    customer_id: int,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """The ledger as a PDF to share: the same filters and order as the screen,
+    every matching invoice (no paging), each with its payments under it."""
+    customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status)
+    totals = invoice_query.with_entities(
+        func.coalesce(func.sum(models.Invoice.total_amount), 0),
+        func.coalesce(func.sum(models.Invoice.paid_amount), 0),
+    ).one()
+    invoices = _ledger_order(invoice_query).limit(LEDGER_PDF_MAX).all()
+    payments = (
+        db.query(models.Payment)
+        .filter(models.Payment.invoice_id.in_([i.id for i in invoices] or [0]))
+        .order_by(models.Payment.payment_date.asc(), models.Payment.id.asc())
+        .all()
+    )
+    by_invoice = {}
+    for p in payments:
+        by_invoice.setdefault(p.invoice_id, []).append(p)
+    ids = {p.collected_by for p in payments if p.collected_by}
+    collectors = dict(db.query(models.User.id, models.User.name).filter(models.User.id.in_(ids)).all()) if ids else {}
+
+    scope = []
+    if date_from or date_to:
+        scope.append(f"{nice_date(date_from) if date_from else 'Start'} – {nice_date(date_to) if date_to else 'today'}")
+    if status:
+        scope.append({"PAID": "Paid only", "PARTIAL": "Part paid only", "UNPAID": "Unpaid only"}[status.upper()])
+    if search and search.strip():
+        scope.append(f"Search: “{search.strip()}”")
+    pdf = build_ledger_pdf(customer, customer.mr.name if customer.mr else None, invoices, by_invoice, collectors, totals, scope)
+    safe = "".join(ch for ch in customer.name if ch.isalnum() or ch in " .-_").strip() or "Customer"
+    filename = f"Ledger - {safe}.pdf"
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+    })

@@ -1,0 +1,48 @@
+/* Laptop: slim dot rail on the right edge, next to the scrollbar. */
+.rail {
+  position: fixed; right: 10px; top: 50%; transform: translateY(-50%); z-index: 150;
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 5px;
+  border-radius: 99px; background: var(--app-surface); border: 1px solid var(--app-line);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.dot { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; }
+.dot span { width: 8px; height: 8px; border-radius: 50%; background: var(--app-faint); transition: transform 150ms ease, background 150ms ease; }
+.dot:hover span { background: var(--app-muted); transform: scale(1.25); }
+.dot[data-on] span { background: var(--mantine-color-green-6); transform: scale(1.4); }
+
+/* Phone: chip row that slides in under the top bar once you scroll. */
+.chips {
+  position: fixed; left: 0; right: 0; top: 52px; z-index: 150;
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  padding: 8px 12px; background: var(--app-surface); border-bottom: 1px solid var(--app-line);
+  transform: translateY(-110%); opacity: 0; pointer-events: none;
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chips[data-shown] { transform: none; opacity: 1; pointer-events: auto; }
+.chip { flex-shrink: 0; font-size: 13px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--app-line-2); color: var(--app-ink); white-space: nowrap; }
+.chip[data-on] { background: var(--mantine-color-green-light); border-color: var(--mantine-color-green-6); color: var(--mantine-color-green-9); font-weight: 600; }
+
+/* Back to top. */
+.top {
+  position: fixed; right: 18px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); z-index: 150;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity 180ms ease, transform 180ms ease;
+}
+.top[data-shown] { opacity: 1; transform: none; pointer-events: auto; }
+/* MR phone: above the bottom tab bar. */
+.top[data-above-nav] { bottom: calc(64px + 16px + env(safe-area-inset-bottom, 0px)); }
+/* Laptop: in the right margin (under the section rail, where there is one). */
+@media (min-width: 48em) { .top { right: 9px; bottom: 24px; } }
+
+/* Inside a side panel: sticks to the bottom-right of the panel, takes no space. */
+.panelTop { position: sticky; bottom: 16px; height: 0; display: flex; justify-content: flex-end; pointer-events: none; z-index: 5; }
+.panelTopButton { transform: translateY(-100%) translateY(12px); opacity: 0; transition: opacity 180ms ease, transform 180ms ease; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15); }
+.panelTopButton[data-shown] { opacity: 1; transform: translateY(-100%); pointer-events: auto; }
+
+/* Jumping lands below the top bar (and the phone chip row). */
+:global([data-section]) { scroll-margin-top: 112px; }
+@media (min-width: 48em) { :global([data-section]) { scroll-margin-top: 80px; } }
+
+/* Room for the rail so it never covers amounts at the right edge. */
+:global(body.has-section-rail .mantine-AppShell-main) { padding-right: calc(var(--app-shell-padding, 16px) + 40px); }

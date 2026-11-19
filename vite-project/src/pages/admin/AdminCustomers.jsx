@@ -23,6 +23,8 @@ import CustomerCollectModal from '../../components/collections/CustomerCollectMo
 // Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
+import { PanelTop } from '../../components/common/BackToTop';
+import LedgerShareButton from '../../components/customers/LedgerShareButton';
 import InvoiceCard from '../../components/collections/InvoiceCard';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import { displayPhone, errorText, money, shortDate } from '../../utils/formatters';
@@ -116,6 +118,8 @@ export default function AdminCustomers({ openCustomer = null }) {
   ];
 
   const updateLedger = (patch) => { setLedgerFilters((current) => ({ ...current, ...patch })); setLedgerPage(1); };
+  // The ledger's filters (no paging), for the PDF.
+  const ledgerPdfParams = { ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }) };
   const onLedgerSearch = (value) => { setLedgerSearch(value); setLedgerPage(1); };
   const resetLedger = () => { setLedgerFilters(BLANK_LEDGER); setLedgerSearch(''); setLedgerPage(1); };
   const ledgerRange = describeRange(ledgerFilters.range);
@@ -243,13 +247,14 @@ export default function AdminCustomers({ openCustomer = null }) {
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <TickedBar ticks={customerTicks} invoices={shownCustomers} showTotal={false} onDelete={deleteManyCustomers} deleteLabel="Delete customers" />
-    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" title={<Group gap="xs" wrap="nowrap" align="flex-start">
+    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" styles={{ title: { flex: 1, minWidth: 0, marginRight: 8 } }} title={<Group gap="xs" wrap="nowrap" align="flex-start" style={{ flex: 1 }}>
       <div style={{ minWidth: 0 }}>
         <Text fw={700} style={{ overflowWrap: 'anywhere' }}>{ledger?.customer?.name || selected?.name || ''}</Text>
         {/* "Chemist · Andheri West · MR: Neha": what to fix shows at a glance. */}
         <Text size="sm" c="dimmed">{[ledger?.customer?.type || selected?.type, ledger?.customer?.area, `MR: ${ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}`].filter(Boolean).join(' · ')}</Text>
       </div>
-
+      {/* Ledger as a PDF: Share on phones, Download on laptops. */}
+      <div style={{ marginLeft: 'auto' }}>{selected && <LedgerShareButton customerId={selected.id} customerName={ledger?.customer?.name || selected.name} params={ledgerPdfParams} disabled={!ledger || !ledger.invoice_count} />}</div>
     </Group>}>
       <Stack gap="md">
         {/* Numbers with call / WhatsApp, Edit, or "+ Add phone" (same as the MR screen). */}
@@ -310,6 +315,8 @@ export default function AdminCustomers({ openCustomer = null }) {
         </Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
         <TickedBar ticks={ticks} invoices={ledger?.invoices} onCollect={() => setCollectingCustomer({ id: selected.id, name: selected.name, invoiceIds: ticks.ids() })} />
       </Stack>
+      {/* Long ledger: ↑ back to the totals and filters. */}
+      <PanelTop hidden={ticks.count > 0} />
     </Drawer>
     <CustomerCollectModal customer={collectingCustomer} onClose={() => setCollectingCustomer(null)} onSaved={() => { setRefresh((value) => value + 1); reloadLedger(); ticks.clearSoon(); }} />
     <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={() => { reloadLedger(); ticks.clearSoon(); }} />

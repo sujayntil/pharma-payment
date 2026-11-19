@@ -38,6 +38,7 @@ import AppRefreshProvider from './AppRefreshProvider';
 import PullToRefresh from './PullToRefresh';
 import RefreshButton from './RefreshButton';
 import NotificationBell from './NotificationBell';
+import BackToTop from './BackToTop';
 import MrNotificationBell from './MrNotificationBell';
 import { notificationsApi } from '../../api/notificationsApi';
 import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
@@ -316,7 +317,8 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               return (
                 <UnstyledButton
                   key={item.id}
-                  onClick={() => choose(item.id)}
+                  // Tapping the tab you're already on glides that page back to the top.
+                  onClick={() => (current ? window.scrollTo({ top: 0, behavior: 'smooth' }) : choose(item.id))}
                   aria-current={current ? 'page' : undefined}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, color: current ? 'var(--mantine-color-green-7)' : 'var(--app-muted)' }}
                 >
@@ -329,6 +331,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
         </AppShell.Footer>
       )}
 
+      <BackToTop aboveBottomNav={useBottomNav} />
       <AppShell.Main>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>{children}</div>
       </AppShell.Main>

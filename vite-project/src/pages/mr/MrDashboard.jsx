@@ -4,6 +4,7 @@ import { Button, Grid, Group, Loader, Paper, Stack, Table, Text } from '@mantine
 // import { IconUpload } from '@tabler/icons-react';
 import { IconAlertTriangle, IconArrowRight, IconChartBar, IconReceipt } from '@tabler/icons-react';
 import { CollectionBar, ZoneHeading } from '../../components/common/DashboardParts';
+import SectionNav from '../../components/common/SectionNav';
 import partsCss from '../../components/common/DashboardParts.module.css';
 import tableCss from '../admin/AdminDashboard.module.css';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
@@ -31,6 +32,13 @@ const Metric = ({ label, value, color }) => <Paper p="sm" h="100%" bg="var(--app
  * onOpenPending:  go to Invoices on the Pending tab
  * onOpenCustomer: ({ id, name }) => open that customer's ledger
  */
+// "Jump to section": chips on phone, dots on laptop.
+const MR_HOME_SECTIONS = [
+  { id: 'mr-overview', label: 'Overview' },
+  { id: 'mr-attention', label: 'Needs attention' },
+  { id: 'mr-activity', label: 'Activity' },
+];
+
 export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disabled: onNavigateToUpload */) {
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const dispatch = useAppDispatch(); const { dashboard, totalOutstanding, outstandingLoaded, loading } = useAppSelector((state) => state.mr);
@@ -41,8 +49,8 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
   const recent = dashboard?.recent || [];
 
   const th = { className: tableCss.th };
-  return <Stack gap={28}><Group justify="space-between"><div style={{ flex: 1, minWidth: 0 }}><GreetingBanner name={dashboard?.name} /></div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
-    <Stack gap={12}>
+  return <Stack gap={28}><SectionNav watch={Boolean(dashboard)} sections={MR_HOME_SECTIONS} /><Group justify="space-between"><div style={{ flex: 1, minWidth: 0 }}><GreetingBanner name={dashboard?.name} /></div>{/* Disabled: Add Invoice. Re-enable if needed. <Button leftSection={<IconUpload size={16} />} onClick={onNavigateToUpload}>Upload invoice</Button> */}</Group>
+    <Stack gap={12} id="mr-overview" data-section>
     <ZoneHeading icon={IconChartBar} tone="green" title="Overview" meta="All time" />
     {/* Phones: the money figure gets its own full row (so it never wraps) and
         comes first; the three counts share one row. Desktop: four in a row. */}
@@ -66,11 +74,11 @@ export default function MrDashboard({ onOpenPending, onOpenCustomer } /* Disable
     {/* Same bar as the Admin dashboard: share of this MR's invoice value collected. */}
     <CollectionBar loading={!dashboard || !outstandingLoaded} billed={dashboard?.total_amount} pending={totalOutstanding} paid={dashboard?.paid || 0} partial={dashboard?.partial || 0} unpaid={dashboard?.unpaid || 0} label="of your invoices collected" />
     </Stack>
-    <Stack gap={12}>
+    <Stack gap={12} id="mr-attention" data-section>
     <ZoneHeading icon={IconAlertTriangle} tone="red" title="Needs attention" />
     <OverdueCustomersPanel refined cardClass={partsCss.card} headerClass={tableCss.th} load={mrApi.getOverdueAlerts} emptyText="None of your customers have overdue bills (unpaid past 40 days; 60 for distributors)." onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} />
     </Stack>
-    <Stack gap={12}>
+    <Stack gap={12} id="mr-activity" data-section>
     <ZoneHeading icon={IconReceipt} tone="blue" title="Activity" />
     <Paper p="md" className={partsCss.card}><Text fw={600} fz={14} c="var(--app-text-2)" mb="sm">Recent invoices</Text>{loading && !dashboard ? <Group justify="center" p="lg"><Loader /></Group> : !recent.length ? <Text c="dimmed" py="md">No invoices assigned to you yet.</Text> : isMobile ? <CardList>{recent.map((invoice, index) => (
       <InvoiceCard key={invoice.invoice_id ?? `${invoice.invoice_number}-${index}`} invoice={invoice} onOpen={invoice.invoice_id ? () => setOpenId(invoice.invoice_id) : undefined} />

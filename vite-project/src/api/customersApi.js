@@ -22,6 +22,12 @@ export const customersApi = {
     return response.data;
   },
 
+  /** The ledger as a PDF (same filters as the screen, no paging). */
+  async getLedgerPdf(customerId, params = {}) {
+    const response = await axiosClient.get(`/customers/${customerId}/ledger/pdf`, { params, responseType: 'blob' });
+    return response.data;
+  },
+
   /** Admin: add a customer (name, type, MR, numbers, address, GSTIN). */
   async createCustomer(data) {
     const response = await axiosClient.post('/customers', data);

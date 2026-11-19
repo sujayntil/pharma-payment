@@ -2,11 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, NumberInput, SegmentedControl, Stack, Table, Text, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
+import { useDebouncedValue } from '@mantine/hooks';
 import { insightsApi } from '../../api/insightsApi';
+import { customersApi } from '../../api/customersApi';
+import { SearchInput } from '../filters/FilterBar';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAuth } from '../../hooks/useAppStore';
 import ContactActions from '../customers/ContactActions';
 import EditCustomerModal from '../customers/EditCustomerModal';
+import { PanelTop } from '../common/BackToTop';
 import { errorText, money, shortDate } from '../../utils/formatters';
 import InvoiceHistory from '../collections/InvoiceHistory';
 import RecordCollectionModal from '../collections/RecordCollectionModal';
@@ -55,6 +59,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         {current?.kind === 'change' && <CustomerChange key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} />}
         {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} onEdit={isAdmin ? setEditingCustomer : null} />}
         {current?.kind === 'targets' && <Targets onSaved={() => { onChanged?.(); onClose(); }} />}
+        <PanelTop />
       </Drawer>
       <InvoiceHistory invoiceId={openInvoice} onClose={() => setOpenInvoice(null)} onChanged={changed} onRecord={setRecording} refreshKey={reload} />
       <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={changed} />
@@ -290,17 +295,46 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger, onEdit
           {c.outstanding > 0 && <Button size="xs" color="green" leftSection={<IconCash size={14} />} onClick={() => onCollect({ id: c.customer_id, name: c.name })}>Collect</Button>}
         </Group>
       </Group>
+      <CustomerInvoices c={c} onInvoice={onInvoice} />
+      {isMobile && <div style={{ height: 24 }} />}
+    </Stack>
+  );
+}
+
+/** The customer's latest invoices, with a search over all of them (same
+ * search as the ledger: invoice number, mode, status, MR). */
+function CustomerInvoices({ c, onInvoice }) {
+  const [search, setSearch] = useState('');
+  const [query] = useDebouncedValue(search.trim(), 300);
+  const [found, setFound] = useState(null); // { q, rows, total } | { q, error }
+  useEffect(() => {
+    if (!query) return undefined;
+    let live = true;
+    customersApi.getCustomerLedger(c.customer_id, { search: query, limit: 30 })
+      .then((r) => live && setFound({ q: query, total: r.invoice_count, rows: r.invoices.map((i) => ({ invoice_id: i.invoice_id, invoice_number: i.invoice_number, invoice_date: i.date, total: i.amount, paid: i.paid_amount, pending: i.pending_amount, status: i.status })) }))
+      .catch((err) => live && setFound({ q: query, error: errorText(err) }));
+    return () => { live = false; };
+  }, [query, c.customer_id]);
+  const searching = Boolean(query);
+  const result = searching && found?.q === query ? found : null;
+  const rows = searching ? (result?.rows || []) : c.invoices;
+  return (
+    <>
+      {c.invoice_count > 0 && <SearchInput className="" value={search} onChange={setSearch} placeholder="Search this customer's invoices" mb={8} />}
+      {searching && !result && <Group justify="center" p="md"><Loader size="sm" /></Group>}
+      {result?.error && <Alert color="red">{result.error}</Alert>}
+      {result && !result.error && !rows.length && <Text size="sm" c="dimmed" py="sm">No invoices match “{query}”.</Text>}
       <Stack gap={0}>
-        {c.invoices.map((i) => (
+        {rows.map((i) => (
           <Group key={i.invoice_id} justify="space-between" wrap="nowrap" py={8} style={{ borderTop: '1px solid var(--app-line)', cursor: 'pointer' }} onClick={() => onInvoice(i.invoice_id)}>
             <div><Text size="sm" fw={600}>{i.invoice_number}</Text><Text size="xs" c="dimmed">{shortDate(i.invoice_date)}{i.pending > 0 && i.paid > 0 ? ` · ${money(i.pending)} pending` : ''}</Text></div>
             <Group gap={8} wrap="nowrap"><Text fw={700} size="sm" className={css.num}>{money(i.total)}</Text><StatusBadge status={i.status} /></Group>
           </Group>
         ))}
-        {c.invoice_count > c.invoices.length && <Text size="xs" c="dimmed" pt={6}>Latest {c.invoices.length} shown — open the Ledger for all.</Text>}
+        {!searching && c.invoice_count > c.invoices.length && <Text size="xs" c="dimmed" pt={6}>Latest {c.invoices.length} shown — search or open the Ledger for all.</Text>}
+        {result && result.total > rows.length && <Text size="xs" c="dimmed" pt={6}>First {rows.length} of {result.total} — open the Ledger for all.</Text>}
       </Stack>
-      {isMobile && <div style={{ height: 24 }} />}
-    </Stack>
+    </>
   );
 }
 

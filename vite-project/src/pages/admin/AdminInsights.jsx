@@ -1,3 +1,4 @@
+import SectionNav from '../../components/common/SectionNav';
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Group, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { IconChevronRight, IconMapPin, IconTarget, IconX } from '@tabler/icons-react';
@@ -19,6 +20,18 @@ const NOT_SET = '__none__';
 const initials = (name = '') => name.replace(/^Dr\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const FOLLOW_LABEL = { quiet: 'Not ordering', less: 'Buying less', late: 'Paying late' };
 const pctLabel = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v)}%`);
+
+// "Jump to section" (right-edge dots on laptop, chips on phone).
+const INSIGHT_SECTIONS = [
+  { id: 'ins-summary', label: 'Summary' },
+  { id: 'ins-trend', label: 'Sales vs collections' },
+  { id: 'ins-owed', label: 'Money owed' },
+  { id: 'ins-mr', label: 'By MR' },
+  { id: 'ins-top', label: 'Top customers' },
+  { id: 'ins-follow', label: 'Follow up' },
+  { id: 'ins-more', label: 'New & payments' },
+  { id: 'ins-area', label: 'By area' },
+];
 
 export default function AdminInsights({ onOpenCustomer }) {
   const isMobile = useIsMobile();
@@ -138,6 +151,7 @@ export default function AdminInsights({ onOpenCustomer }) {
 
   return (
     <Stack gap="md">
+      <SectionNav watch={data} sections={INSIGHT_SECTIONS} />
       <Group justify="space-between" align="center" gap="sm">
         <Title order={1}>Insights</Title>
         {isMobile ? <div style={{ width: '100%' }}>{periodPicker}</div> : periodPicker}
@@ -159,7 +173,7 @@ export default function AdminInsights({ onOpenCustomer }) {
 
       {error && <Alert color="red">{error}</Alert>}
 
-      <div className={css.kpis}>
+      <div className={css.kpis} id="ins-summary" data-section>
         {kpi('sales', 'Sales', lakh(k?.sales.value), { color: '#2f9e44', kind: 'sales' })}
         {kpi('collected', 'Collected', lakh(k?.collected.value), { color: '#1c7ed6', kind: 'collected' })}
         {kpi('outstanding', 'Owed to you today', lakh(k?.outstanding.value), { color: '#e03131', kind: 'outstanding',
@@ -169,7 +183,7 @@ export default function AdminInsights({ onOpenCustomer }) {
 
       {data && (
         <div className={css.grid} style={loading ? { opacity: 0.6, transition: 'opacity .2s' } : undefined}>
-          <Paper className={`${css.card} ${css.s8}`}>
+          <Paper className={`${css.card} ${css.s8}`} id="ins-trend" data-section>
             <div className={css.ch}>
               <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>{isMobile ? 'Tap a bar for its numbers' : 'Hover a bar for its numbers · click to open it'}</div></div>
               <Group gap={10} wrap="nowrap">
@@ -200,7 +214,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s12}`}>
+          <Paper className={`${css.card} ${css.s12}`} id="ins-owed" data-section>
             <div className={css.ch}><div><div className={css.ct}>Money owed to you</div><div className={css.cs}>As of today · by age of the bill · tap a row</div></div><div className={css.big}>{lakh(ageTotal)}</div></div>
             <div className={css.cb}>
               <div className={css.stack}>{data.ageing.map((a) => <i key={a.bucket} title={AGE_LABELS[a.bucket]} style={{ width: `${ageTotal ? (a.amount / ageTotal) * 100 : 0}%`, background: AGE_COLORS[a.bucket] }} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })} />)}</div>
@@ -215,7 +229,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s6}`}>
+          <Paper className={`${css.card} ${css.s6}`} id="ins-mr" data-section>
             <div className={css.ch}>
               <div><div className={css.ct}>By MR</div><div className={css.cs}>Tap to filter · targets for {data.by_mr.month_label}</div></div>
               <Button size="compact-sm" variant="default" leftSection={<IconTarget size={14} />} onClick={() => openFresh({ kind: 'targets' })}>Set targets</Button>
@@ -243,7 +257,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s6}`}>
+          <Paper className={`${css.card} ${css.s6}`} id="ins-top" data-section>
             <div className={css.ch}><div><div className={css.ct}>Top customers</div><div className={css.cs}>Top 10 = <b style={{ color: 'var(--app-ink)' }}>{data.top_customers.top10_share}%</b> of sales</div></div></div>
             <div className={css.cb}>
               {data.top_customers.dependence && <div className={css.warn}>⚠️ <span><b>{data.top_customers.dependence.name}</b> alone is <b>{Math.round(data.top_customers.dependence.share)}%</b> of sales — a lot riding on one customer.</span></div>}
@@ -252,7 +266,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s12}`}>
+          <Paper className={`${css.card} ${css.s12}`} id="ins-follow" data-section>
             <div className={css.ch}><div><div className={css.ct}>Customers to follow up</div><div className={css.cs}>As of today · each compared with their own usual buying · biggest money first</div></div></div>
             <div className={css.cb}>
               <div className={css.fchips}>
@@ -275,7 +289,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s4}`}>
+          <Paper className={`${css.card} ${css.s4}`} id="ins-more" data-section>
             <div className={css.ch}><div><div className={css.ct}>Buying more than usual</div><div className={css.cs}>Lately vs their usual month</div></div></div>
             <div className={css.cb}>
               <ShowMore key={listKey} items={data.growing} initial={5} render={(c) => custRow(c, <span className={css.stake}><b className={css.green}>+{lakh(c.change)}</b><small>a month</small></span>)} />
@@ -305,7 +319,7 @@ export default function AdminInsights({ onOpenCustomer }) {
           </Paper>
 
           {data.area.show ? (
-            <Paper className={`${css.card} ${css.s12}`}>
+            <Paper className={`${css.card} ${css.s12}`} id="ins-area" data-section>
               <div className={css.ch}><div><div className={css.ct}>Sales by area</div><div className={css.cs}>Tap an area to filter</div></div></div>
               <div className={css.cb}>
                 {data.area.rows.slice(0, 12).map((a) => (

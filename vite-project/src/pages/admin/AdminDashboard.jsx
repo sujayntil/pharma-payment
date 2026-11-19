@@ -13,6 +13,14 @@ import { recorderOf, useActorLabel } from '../../components/collections/collecti
 import { useCountUp } from '../../hooks/useCountUp';
 import css from './AdminDashboard.module.css';
 import { ZoneHeading } from '../../components/common/DashboardParts';
+import SectionNav from '../../components/common/SectionNav';
+
+// "Jump to section" (right-edge dots on laptop, chips on phone).
+const DASH_SECTIONS = [
+  { id: 'dash-overview', label: 'Overview' },
+  { id: 'dash-attention', label: 'Needs attention' },
+  { id: 'dash-activity', label: 'Recent collections' },
+];
 import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
@@ -182,6 +190,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
 
   return (
     <Stack gap={28}>
+      <SectionNav watch={`${Boolean(dashboard)}-${alertCount}`} sections={DASH_SECTIONS} />
       <GreetingBanner />
 
       {/* Flat filter row; Reset appears only once a filter is on. */}
@@ -193,7 +202,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
       {error && <Alert color="red">{error}</Alert>}
 
       {/* Overview: Tally sales first (top-left, where the eye lands first), then Collected and what's owed today. */}
-      <Stack gap={12}>
+      <Stack gap={12} id="dash-overview" data-section>
         <ZoneHeading icon={IconChartBar} tone="green" title="Overview" meta={zoneTitle}>
           {isMobile
             ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} onClick={exportByType}><IconDownload size={16} /></ActionIcon></Tooltip>
@@ -210,7 +219,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
       </Stack>
 
       {/* Needs attention: red only here, where action is needed. */}
-      <Stack gap={12}>
+      <Stack gap={12} id="dash-attention" data-section>
         <ZoneHeading icon={IconAlertTriangle} tone="red" title="Needs attention" />
         {/* One below the other at full width: two side by side left a big
             empty space under the shorter list. */}
@@ -246,7 +255,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
       </Stack>
 
       {/* Activity: money coming in reads as "+₹", like a bank credit. */}
-      <Stack gap={12}>
+      <Stack gap={12} id="dash-activity" data-section>
         <ZoneHeading icon={IconReceipt} tone="blue" title="Activity" />
         <Paper p="md" className={css.card}>
           <Text className={css.cardTitle} mb="sm">Recent collections</Text>

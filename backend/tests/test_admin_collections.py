@@ -12,6 +12,7 @@ from app import models
 from app.database import Base, get_db
 from app.deps import get_current_user, require_admin
 from app.routers.admin import router as admin_router
+from app.routers.customers import router as customers_router
 from app.routers.invoices import router as invoices_router
 from app.routers.mr import router as mr_router
 from app.routers.payments import router as payments_router
@@ -43,7 +44,7 @@ class AdminCollectionLedgerTests(unittest.TestCase):
         self.db.commit()
 
         app = FastAPI()
-        for router in (admin_router, invoices_router, mr_router, payments_router):
+        for router in (admin_router, invoices_router, mr_router, payments_router, customers_router):
             app.include_router(router)
 
         def db_override():
@@ -129,6 +130,20 @@ class AdminCollectionLedgerTests(unittest.TestCase):
 
         history = self.client.get(f"/invoices/{self.invoice.id}/payments").json()
         self.assertEqual(len(history["payments"]), 1)
+
+    def test_ledger_pdf_follows_access_and_filters(self):
+        self.client.post("/payments", json={"mode": "UPI", "invoice_id": self.invoice.id, "amount": 250})
+        cid = self.invoice.customer_id
+        response = self.client.get(f"/customers/{cid}/ledger/pdf")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
+        self.assertIn("attachment", response.headers["content-disposition"])
+        self.current_user = self.mr
+        self.assertEqual(self.client.get(f"/customers/{cid}/ledger/pdf", params={"status": "PARTIAL"}).status_code, 200)
+        self.assertEqual(self.client.get(f"/customers/{cid}/ledger/pdf", params={"status": "nope"}).status_code, 422)
+        self.current_user = self.other_mr
+        self.assertEqual(self.client.get(f"/customers/{cid}/ledger/pdf").status_code, 404)
 
     def test_other_mr_cannot_read_payment_history(self):
         self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 250})

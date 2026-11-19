@@ -206,7 +206,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
             />)}</CardList>
             : <Table.ScrollContainer minWidth={panelOpen ? 640 : 1000}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm">
               <Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={items} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead>
-              <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }} bg={openId === item.invoice_id ? 'green.0' : undefined} data-selected={openId === item.invoice_id || undefined}>
+              <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }} bg={openId === item.invoice_id ? 'var(--mantine-color-green-light)' : undefined} data-selected={openId === item.invoice_id || undefined}>
                 <Table.Td onClick={(e) => e.stopPropagation()}><TickCell ticks={ticks} invoice={item} /></Table.Td>
                 <Table.Td fw={600}>{item.invoice_number}</Table.Td>
                 <Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(item.invoice_date)}<InvoiceAge date={item.invoice_date} pending={item.pending_amount} customerType={item.customer_type} prefix="" size="xs" block /></Table.Td>

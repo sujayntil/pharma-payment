@@ -1,4 +1,5 @@
-import { Text } from '@mantine/core';
+import { Button, Text } from '@mantine/core';
+import { IconCash } from '@tabler/icons-react';
 import SelectMark from '../common/SelectMark';
 import classes from './InvoiceCard.module.css';
 import RowCard from '../common/RowCard';
@@ -22,11 +23,13 @@ import { useLongPress } from '../../hooks/useLongPress';
  * actions: optional buttons shown at the bottom of the card (tapping them
  *          does not open the invoice sheet).
  * afterStatus: optional small controls shown right after the status badge.
+ * onCollect: a small Collect button on the status line of a pending invoice
+ *   (in place of "No collection yet"); who recorded moves next to the badge.
  * showMr: add the invoice's MR after the customer (Admin lists).
  * onSelect / selected / selecting: press and hold a pending invoice to start
  *   selecting (customer screen); while selecting, taps tick instead of opening.
  */
-export default function InvoiceCard({ invoice, customerType, showCustomer = true, showMr = false, onOpen, actions, afterStatus, onSelect, selected = false, selecting = false, canTick }) {
+export default function InvoiceCard({ invoice, customerType, showCustomer = true, showMr = false, onOpen, actions, afterStatus, onSelect, selected = false, selecting = false, canTick, onCollect }) {
   const label = useActorLabel();
   const pending = Number(invoice.pending_amount || 0);
   const customer = invoice.customer_name ?? invoice.customer;
@@ -62,7 +65,13 @@ export default function InvoiceCard({ invoice, customerType, showCustomer = true
       badges={<>
         <StatusCell row={invoice} />
         {afterStatus}
-        {(recorder || !settled) && (
+        {onCollect && !settled ? (
+          <>
+            {recorder && <Text size="xs" c="dimmed" style={{ minWidth: 0 }} truncate>by <Text span size="xs" fw={600} c="var(--mantine-color-text)">{label(recorder)}</Text></Text>}
+            <Button size="compact-sm" variant="light" ml="auto" leftSection={<IconCash size={14} />} disabled={selecting} style={{ flexShrink: 0 }}
+              onClick={(event) => { event.stopPropagation(); onCollect(invoice); }} onPointerDown={(event) => event.stopPropagation()}>Collect</Button>
+          </>
+        ) : (recorder || !settled) && (
           <Text size="xs" c="dimmed" ta="right" ml="auto" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             {recorder ? <>Recorded by <Text span size="xs" fw={600} c="var(--mantine-color-text)">{label(recorder)}</Text></> : 'No collection yet'}
           </Text>

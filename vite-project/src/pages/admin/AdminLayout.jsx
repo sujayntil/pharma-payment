@@ -36,7 +36,7 @@ export default function AdminLayout() {
   const tabPath = (tab) => (tab === 'dashboard' ? '/admin' : `/admin/${tab}`);
   // Set when the Dashboard opens a customer; the key remounts Customers on it.
   const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
-  const choose = (tab) => { if (tab !== activeTab || openCustomer) navigate(tabPath(tab)); };
+  const choose = (tab) => { if (tab !== activeTab || openCustomer || location.state?.collectionsFilters) navigate(tabPath(tab)); };
 
   return (
     <AppFrame items={ADMIN_TABS} active={activeTab} onChange={choose}>
@@ -46,7 +46,8 @@ export default function AdminLayout() {
         {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
         {activeTab === 'invoices' && <AdminInvoices />}
         {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
-        {activeTab === 'collections' && <AdminCollections />}
+        {/* From Insights ("See in Collections"): opens already filtered. */}
+        {activeTab === 'collections' && <AdminCollections key={location.state?.collectionsFilters ? location.key : 'plain'} preset={location.state?.collectionsFilters ?? null} />}
         {activeTab === 'import' && <AdminImport />}
         {activeTab === 'performance' && <AdminPerformance />}
         {activeTab === 'users' && <AdminUsers />}

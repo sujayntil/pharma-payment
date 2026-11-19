@@ -308,12 +308,17 @@ export default function AdminInsights({ onOpenCustomer }) {
           <Paper className={`${css.card} ${css.s4}`}>
             <div className={css.ch}><div><div className={css.ct}>How customers pay</div><div className={css.cs}>Collected {allTime ? 'since the start' : `in ${periodLabel}`}</div></div></div>
             <div className={css.cb}>
-              {data.payment_modes.map((m) => (
-                <div key={m.mode} style={{ padding: '7px 0' }}>
-                  <Group justify="space-between" wrap="nowrap"><Text size="sm"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: MODE_COLORS[m.mode] || '#868e96', marginRight: 7 }} />{m.mode}</Text><Text size="sm"><b className={css.num}>{lakh(m.amount)}</b> <span className={css.sub}>{modeTotal ? Math.round((Math.max(m.amount, 0) / modeTotal) * 100) : 0}%</span></Text></Group>
-                  <div className={css.bar}><i style={{ width: `${modeTotal ? (Math.max(m.amount, 0) / modeTotal) * 100 : 0}%`, background: MODE_COLORS[m.mode] || '#868e96' }} /></div>
-                </div>
-              ))}
+              {data.payment_modes.map((m) => {
+                const share = modeTotal ? Math.round((Math.max(m.amount, 0) / modeTotal) * 100) : 0;
+                // Tap a payment type: every collection behind it (side panel).
+                return (
+                  <button type="button" key={m.mode} className={css.bucket} style={{ display: 'block', padding: '7px 6px' }} aria-label={`See ${m.mode} collections`}
+                    onClick={() => openFresh({ kind: 'mode', mode: m.mode, share, scope: [type, mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean) })}>
+                    <Group justify="space-between" wrap="nowrap"><Text size="sm"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: MODE_COLORS[m.mode] || '#868e96', marginRight: 7 }} />{m.mode}</Text><Text size="sm"><b className={css.num}>{lakh(m.amount)}</b> <span className={css.sub}>{share}%</span></Text></Group>
+                    <div className={css.bar}><i style={{ width: `${share}%`, background: MODE_COLORS[m.mode] || '#868e96' }} /></div>
+                  </button>
+                );
+              })}
               {!data.payment_modes.length && empty('No collections in this period.')}
             </div>
           </Paper>

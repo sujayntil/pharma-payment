@@ -1,8 +1,8 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from sqlalchemy import and_, func, or_
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from sqlalchemy import and_, false, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
@@ -18,6 +18,7 @@ from ..collection_info import (
     payment_row,
     reversal_fields,
     reversible_amount,
+    mode_label,
 )
 from ..audit import customer_snapshot, invoice_snapshot, user_snapshot, write_audit
 from ..database import get_db
@@ -28,6 +29,7 @@ from fastapi.responses import Response
 from ..deps import require_admin
 from ..push import send_office_payment_notification
 from ..credit import is_overdue
+from ..insights import NOT_SET, TYPE_GROUPS
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password, password_problem
 from ..utils import clean_search, compute_status, page_result, query_page, set_customer_numbers
@@ -327,14 +329,39 @@ def collections(
     search: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    customer_type: Optional[str] = None,
+    area: Optional[str] = Query(default=None, max_length=80),
+    sort: Optional[str] = None,
+    summary: bool = False,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    query, search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search)
+    """Collections ledger. Also behind Insights' "How customers pay" panel:
+    customer_type / area / mr_id=0 match Insights' filters, sort=amount lists
+    the biggest first, and summary=true adds the customer count and the
+    split by MR (the invoice's MR, as Insights counts it)."""
+    if sort not in (None, "", "date", "amount"):
+        raise HTTPException(422, "sort must be date or amount")
+    query, search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search, customer_type, area)
 
     total_count = query.with_entities(func.count(models.Payment.id)).scalar()
     total_amount = query.with_entities(func.coalesce(func.sum(models.Payment.amount), 0)).scalar()
-    ordered = query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
+    extra = {}
+    if summary:
+        extra["customer_count"] = query.with_entities(func.count(func.distinct(models.Invoice.customer_id))).scalar() or 0
+        split = (
+            query.with_entities(models.Invoice.mr_id, func.coalesce(func.sum(models.Payment.amount), 0), func.count(models.Payment.id))
+            .group_by(models.Invoice.mr_id).all()
+        )
+        names = dict(db.query(models.User.id, models.User.name).filter(models.User.id.in_([m for m, _a, _c in split if m])).all())
+        extra["by_mr"] = sorted(
+            ({"mr_id": m or 0, "name": names.get(m) if m else "No MR", "amount": float(a or 0), "count": c} for m, a, c in split),
+            key=lambda r: -r["amount"],
+        )
+    if sort == "amount":
+        ordered = query.order_by(models.Payment.amount.desc(), models.Payment.payment_date.desc(), models.Payment.id.desc())
+    else:
+        ordered = query.order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
     if search and search.strip():
         rows = ordered.all()
         page_size, page_offset = None, 0
@@ -344,6 +371,7 @@ def collections(
         rows = ordered.offset(page_offset).limit(page_size).all()
     reversed_totals = linked_reversal_totals(db, [row[0].id for row in rows])
     return {
+        **extra,
         "total_count": total_count,
         "total_amount": total_amount,
         "limit": page_size,
@@ -353,6 +381,7 @@ def collections(
                 **payment_row(payment, collector),
                 **reversal_fields(payment, reversed_totals),
                 "invoice_number": invoice.invoice_number,
+                "customer_id": customer.id if customer else None,
                 "customer_name": customer.name if customer else None,
                 "mr_name": assigned_mr.name if assigned_mr else None,
                 "invoice_amount": invoice.total_amount,
@@ -375,12 +404,14 @@ def export_collections(
     recorded_by: Optional[str] = None,
     entry_type: Optional[str] = None,
     search: Optional[str] = None,
+    customer_type: Optional[str] = None,
+    area: Optional[str] = Query(default=None, max_length=80),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     """Admin-only Excel download of the collections ledger with the same
     filters and search as GET /admin/collections (all matching rows)."""
-    query, _search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search)
+    query, _search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search, customer_type, area)
     total = query.with_entities(func.count(models.Payment.id)).scalar() or 0
     if total > EXPORT_MAX_ROWS:
         raise HTTPException(
@@ -413,7 +444,7 @@ def export_collections(
     write_audit(db, "collections_exported", user, new={"filters": dict(request.query_params)})
     db.commit()
     return workbook_response(
-        f"collections-{stamp}.xlsx", "Collections",
+        f"{mode_label(mode) + ' collections' if mode and mode.strip() else 'collections'}-{stamp}.xlsx", "Collections",
         ["Date (IST)", "Invoice", "Customer", "Assigned MR", "Entry", "Amount", "Mode", "Reference",
          "Reversal reason", "Recorded by", "Invoice status"],
         sheet_rows(), widths=[20, 16, 32, 20, 12, 14, 16, 26, 30, 24, 14],
@@ -423,7 +454,7 @@ def export_collections(
 _STATUS_WORDS = {"PAID": "Paid", "PARTIAL": "Part paid", "UNPAID": "Unpaid"}
 
 
-def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search):
+def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search, customer_type=None, area=None):
     """Validates the collections filters and returns (unordered query, cleaned
     search). One builder for the list and the Excel export, so the totals,
     the rows on screen and the exported rows always match."""
@@ -445,16 +476,39 @@ def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_t
     payment_conditions = _payment_date_range_filter(date_from, date_to)
     if payment_conditions:
         query = query.filter(and_(*payment_conditions))
-    if mr_id:
+    if mr_id == 0:
+        # From Insights: 0 = invoices with no MR.
+        query = query.filter(models.Invoice.mr_id.is_(None))
+    elif mr_id:
         query = query.filter(models.Invoice.mr_id == mr_id)
-    if mode:
-        wanted = mode.strip().lower()
+    if mode and mode.strip():
+        # Grouped exactly like Insights' "How customers pay": every spelling
+        # that mode_label() turns into the chosen name ("upi", "UPI " -> UPI;
+        # blank or none -> Other).
+        wanted = mode_label(mode).lower()
+        raws = [raw for (raw,) in db.query(models.Payment.mode).distinct().all()
+                if raw is not None and mode_label(raw).lower() == wanted]
+        condition = models.Payment.mode.in_(raws) if raws else false()
         if wanted == "other":
-            # Same as Insights: no mode recorded counts as "Other".
-            query = query.filter(or_(models.Payment.mode.is_(None), func.trim(models.Payment.mode) == "",
-                                     func.lower(models.Payment.mode) == "other"))
+            condition = or_(condition, models.Payment.mode.is_(None))
+        query = query.filter(condition)
+    if customer_type:
+        # Same groups as Insights (Distributor / Chemist / Doctor / Hospital / Other).
+        group = next((g for g in TYPE_GROUPS if g.lower() == customer_type.strip().lower()), None)
+        if group is None:
+            raise HTTPException(422, "customer_type must be Distributor, Chemist, Doctor, Hospital or Other")
+        normalized = func.lower(func.trim(func.coalesce(models.Customer.type, "")))
+        if group == "Other":
+            named = [g.lower() for g in TYPE_GROUPS if g != "Other"]
+            query = query.filter(or_(models.Customer.id.is_(None), ~normalized.in_(named)))
         else:
-            query = query.filter(func.lower(func.trim(models.Payment.mode)) == wanted)
+            query = query.filter(normalized == group.lower())
+    if area and area.strip():
+        if area.strip() == NOT_SET:
+            query = query.filter(or_(models.Customer.id.is_(None), models.Customer.area.is_(None),
+                                     func.trim(models.Customer.area) == ""))
+        else:
+            query = query.filter(func.lower(func.trim(models.Customer.area)) == area.strip().lower())
     if recorded_by:
         role = recorded_by.strip().upper()
         if role not in (models.RoleEnum.ADMIN.value, models.RoleEnum.MR.value):

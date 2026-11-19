@@ -18,6 +18,7 @@ import CustomerCollectModal from '../collections/CustomerCollectModal';
 import { StatusBadge } from '../collections/CollectionBadges';
 import { lakh, TYPE_COLORS } from './insightsFormat';
 import { MonthBars } from './charts';
+import ModePayments from './ModePayments';
 import css from '../../pages/admin/AdminInsights.module.css';
 
 const RECORD_TITLES = { sales: 'Sales', collected: 'Collected', outstanding: 'Owed to you today', active: 'Invoices of active customers' };
@@ -58,6 +59,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         {current?.kind === 'records' && <Records key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} />}
         {current?.kind === 'change' && <CustomerChange key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} />}
         {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} onEdit={isAdmin ? setEditingCustomer : null} />}
+        {current?.kind === 'mode' && <ModePayments key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} onChanged={onChanged} />}
         {current?.kind === 'targets' && <Targets onSaved={() => { onChanged?.(); onClose(); }} />}
         <PanelTop />
       </Drawer>

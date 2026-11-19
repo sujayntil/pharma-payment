@@ -41,16 +41,18 @@ function CardMeta({ row }) {
   </>;
 }
 
-const BLANK = { range: EMPTY_RANGE, mrId: '', mode: '', recordedBy: '', entryType: '' };
+const BLANK = { range: EMPTY_RANGE, mrId: '', mode: '', recordedBy: '', entryType: '', customerType: '', area: '' };
+const NO_AREA = '__none__'; // Insights: customers without an area
 const RECORDED_BY = [{ value: 'MR', label: 'By MR' }, { value: 'ADMIN', label: 'By Admin' }];
 const ENTRY_TYPES = [{ value: 'collection', label: 'Collections only' }, { value: 'reversal', label: 'Reversals only' }];
 
-export default function AdminCollections() {
+/** preset: filters to open with (from Insights' "See in Collections"). */
+export default function AdminCollections({ preset = null }) {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [rows, setRows] = useState([]); const [total, setTotal] = useState(0); const [count, setCount] = useState(0); const [mrs, setMrs] = useState([]);
-  const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
-  const [filters, setFilters] = useState(BLANK); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
+  const [search, setSearch] = useState(preset?.search || ''); const [debouncedSearch] = useDebouncedValue(search, 300);
+  const [filters, setFilters] = useState(() => ({ ...BLANK, ...(preset || {}), range: preset?.range || EMPTY_RANGE })); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const isMobile = useIsMobile();
   const [changingMode, setChangingMode] = useState(null); const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [reversingPayment, setReversingPayment] = useState(null); const [historyId, setHistoryId] = useState(null);
@@ -76,6 +78,8 @@ export default function AdminCollections() {
           ...(filters.mode && { mode: filters.mode }),
           ...(filters.recordedBy && { recorded_by: filters.recordedBy }),
           ...(filters.entryType && { entry_type: filters.entryType }),
+          ...(filters.customerType && { customer_type: filters.customerType }),
+          ...(filters.area && { area: filters.area }),
         });
         if (active) { setRows(result.rows); setTotal(result.total_amount); setCount(result.total_count); }
       } catch (err) { if (active) setError(errorText(err)); }
@@ -97,6 +101,8 @@ export default function AdminCollections() {
         ...(filters.mode && { mode: filters.mode }),
         ...(filters.recordedBy && { recorded_by: filters.recordedBy }),
         ...(filters.entryType && { entry_type: filters.entryType }),
+        ...(filters.customerType && { customer_type: filters.customerType }),
+        ...(filters.area && { area: filters.area }),
       }), 'collections.xlsx');
     } catch (err) { setError(await downloadErrorText(err)); }
     finally { setExporting(false); }
@@ -132,7 +138,10 @@ export default function AdminCollections() {
 
   const chips = [
     rangeLabel && { key: 'range', label: `Collected: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
-    filters.mrId && { key: 'mr', label: `MR: ${mrOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
+    filters.mrId && { key: 'mr', label: `MR: ${filters.mrId === '0' ? 'No MR' : (mrOptions.find((o) => o.value === filters.mrId)?.label || '—')}`, onRemove: () => update({ mrId: '' }) },
+    // Only set when opened from Insights (no picker for these here).
+    filters.customerType && { key: 'ctype', label: `Customer type: ${filters.customerType}`, onRemove: () => update({ customerType: '' }) },
+    filters.area && { key: 'area', label: `Area: ${filters.area === NO_AREA ? 'Not set' : filters.area}`, onRemove: () => update({ area: '' }) },
     filters.mode && { key: 'mode', label: `Mode: ${filters.mode}`, onRemove: () => update({ mode: '' }) },
     filters.recordedBy && { key: 'by', label: `Recorded ${RECORDED_BY.find((o) => o.value === filters.recordedBy)?.label.toLowerCase()}`, onRemove: () => update({ recordedBy: '' }) },
     filters.entryType && { key: 'type', label: ENTRY_TYPES.find((o) => o.value === filters.entryType)?.label, onRemove: () => update({ entryType: '' }) },

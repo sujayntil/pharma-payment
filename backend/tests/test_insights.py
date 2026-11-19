@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app import models, schemas
 from app.database import Base
 from app.insights import NOT_SET, Filters, customer_insights, invoice_list, previous_range, summary, today_ist
-from app.routers.admin import dashboard
+from app.routers.admin import collections, dashboard
 from app.routers.customers import update_customer
 from app.routers.insights import get_targets, insights_records, insights_summary, put_targets
 
@@ -72,6 +72,33 @@ class InsightsTests(unittest.TestCase):
 
     def S(self, **f):
         return summary(self.db, M0, TODAY, Filters(**f))
+
+    # ---------- "How customers pay" panel = Collections with the same filters ----------
+    def test_payment_mode_panel_matches_insights(self):
+        self.books()
+        self.inv(self.hosp, M0, 900, [(300, M0, "upi "), (200, M0, None), (100, M0, "")])
+        self.inv(self.doc, M0, 700, [(700, M0, "Cash")])
+        cases = [{}, {"customer_type": "Chemist"}, {"customer_type": "Hospital"}, {"customer_type": "Other"},
+                 {"mr_id": self.rahul.id}, {"mr_id": 0}, {"area": "andheri"}, {"area": NOT_SET}]
+        for f in cases:
+            modes = self.S(**f)["payment_modes"]
+            for row in modes:
+                got = collections(date_from=M0, date_to=TODAY, mr_id=f.get("mr_id"), mode=row["mode"], recorded_by=None,
+                                  entry_type=None, search=None, limit=50, offset=0, customer_type=f.get("customer_type"),
+                                  area=f.get("area"), sort=None, summary=True, db=self.db, user=self.admin)
+                self.assertAlmostEqual(got["total_amount"], row["amount"], msg=f"{f} {row['mode']}")
+        upi = collections(date_from=M0, date_to=TODAY, mr_id=None, mode="UPI", recorded_by=None, entry_type=None, search=None,
+                          limit=50, offset=0, customer_type=None, area=None, sort="amount", summary=True, db=self.db, user=self.admin)
+        self.assertEqual(upi["total_count"], 2)                      # "UPI" and "upi " together
+        self.assertEqual([r["amount"] for r in upi["rows"]], [1000, 300])
+        self.assertEqual(upi["customer_count"], 2)
+        self.assertEqual({r["name"]: r["amount"] for r in upi["by_mr"]}, {"Rahul": 1000, "No MR": 300})
+        other = collections(date_from=M0, date_to=TODAY, mr_id=None, mode="Other", recorded_by=None, entry_type=None, search=None,
+                            limit=50, offset=0, customer_type=None, area=None, sort=None, summary=False, db=self.db, user=self.admin)
+        self.assertEqual(other["total_amount"], 300)                 # no mode + blank
+        with self.assertRaises(HTTPException):
+            collections(date_from=None, date_to=None, mr_id=None, mode=None, recorded_by=None, entry_type=None, search=None,
+                        limit=50, offset=0, customer_type="Vet", area=None, sort=None, summary=False, db=self.db, user=self.admin)
 
     # ---------- headline figures ----------
     def test_kpis_and_previous_period(self):

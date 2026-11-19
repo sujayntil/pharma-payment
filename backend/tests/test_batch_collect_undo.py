@@ -71,7 +71,7 @@ class BatchCollectUndoTests(unittest.TestCase):
         self.assertIsNotNone(batch_ids.pop())
 
     def test_opened_invoice_is_filled_first(self):
-        body = schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=4000, invoice_ids=[self.a.id, self.c.id], first_invoice_id=self.c.id)
+        body = schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=4000, invoice_ids=[self.a.id, self.c.id], first_invoice_id=self.c.id, mode="Cash")
         result = add_batch_payment(body, BackgroundTasks(), self.db, self.mr)
         self.assertEqual([(item["invoice_number"], item["amount"]) for item in result["items"]], [("INV-C", 3000), ("INV-A", 1000)])
 
@@ -99,8 +99,8 @@ class BatchCollectUndoTests(unittest.TestCase):
     def test_several_customers_all_or_nothing(self):
         city, x = self.second_customer()
         body = schemas.PaymentBatchesCreate(groups=[
-            schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=5400, invoice_ids=[self.a.id]),
-            schemas.PaymentBatchCreate(customer_id=city.id, amount=9999, invoice_ids=[x.id]),  # too much
+            schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=5400, invoice_ids=[self.a.id], mode="Cash"),
+            schemas.PaymentBatchCreate(customer_id=city.id, amount=9999, invoice_ids=[x.id], mode="Cash"),  # too much
         ])
         with self.assertRaises(HTTPException):
             add_batch_payments(body, BackgroundTasks(), self.db, self.mr)
@@ -109,7 +109,7 @@ class BatchCollectUndoTests(unittest.TestCase):
 
     def test_several_customers_rejects_invoice_of_another_customer(self):
         city, x = self.second_customer()
-        body = schemas.PaymentBatchesCreate(groups=[schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=100, invoice_ids=[x.id])])
+        body = schemas.PaymentBatchesCreate(groups=[schemas.PaymentBatchCreate(customer_id=self.customer.id, amount=100, invoice_ids=[x.id], mode="Cash")])
         with self.assertRaises(HTTPException):
             add_batch_payments(body, BackgroundTasks(), self.db, self.mr)
 

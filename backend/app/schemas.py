@@ -231,11 +231,21 @@ class ExtractResult(BaseModel):
 # ---- Payments ----
 
 
+def _required_mode(value):
+    """Every new collection says how it was paid (Cash, UPI, Cheque...)."""
+    text = (value or "").strip() if isinstance(value, str) else value
+    if not text:
+        raise ValueError("Choose how the customer paid (Cash, UPI, Cheque...)")
+    return text[:40]
+
+
 class PaymentCreate(BaseModel):
     invoice_id: int
     amount: float
-    mode: Optional[str] = None
-    transaction_reference: Optional[str] = None
+    mode: str
+    transaction_reference: Optional[str] = Field(default=None, max_length=120)
+
+    _mode = field_validator("mode", mode="before")(_required_mode)
 
 
 class PaymentBatchCreate(BaseModel):
@@ -246,8 +256,18 @@ class PaymentBatchCreate(BaseModel):
     invoice_ids: list[int] = Field(min_length=1, max_length=200)
     # Collect opened from one invoice: fill that one first, then oldest first.
     first_invoice_id: Optional[int] = None
-    mode: Optional[str] = None
-    transaction_reference: Optional[str] = None
+    mode: str
+    transaction_reference: Optional[str] = Field(default=None, max_length=120)
+
+    _mode = field_validator("mode", mode="before")(_required_mode)
+
+
+class PaymentModeUpdate(BaseModel):
+    """Admin corrects how a collection was paid (amount and date stay)."""
+    mode: str
+    transaction_reference: Optional[str] = Field(default=None, max_length=120)
+
+    _mode = field_validator("mode", mode="before")(_required_mode)
 
 
 class PaymentBatchesCreate(BaseModel):

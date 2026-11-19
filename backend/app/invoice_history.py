@@ -38,6 +38,11 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
         .order_by(models.Payment.payment_date.asc(), models.Payment.id.asc())
         .all()
     )
+    # Collections whose mode an Admin corrected (shown as "mode edited").
+    edited = {
+        (row.new_value or {}).get("payment_id")
+        for row in db.query(models.AuditLog.new_value).filter(models.AuditLog.action == "payment_mode_changed").all()
+    }
     logged = (
         db.query(models.InvoiceEvent, models.User)
         .outerjoin(models.User, models.User.id == models.InvoiceEvent.actor_id)
@@ -90,6 +95,7 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "amount": abs(amount),
             "mode": payment.mode,
             "reference": payment.transaction_reference,
+            "mode_edited": payment.id in edited,
             "reason": payment.reason,
             "actor": _actor(recorder),
             "payment_id": payment.id,

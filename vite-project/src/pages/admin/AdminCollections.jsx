@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowBackUp, IconDots, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
+import { IconArrowBackUp, IconDots, IconEdit, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -17,6 +17,7 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import ReversePaymentModal from '../../components/collections/ReversePaymentModal';
+import ChangeModeModal from '../../components/collections/ChangeModeModal';
 import { PAYMENT_MODES } from '../../components/collections/collectionUtils';
 import { RecordedBy, StatusBadge } from '../../components/collections/CollectionBadges';
 import { recorderOf, useActorLabel } from '../../components/collections/collectionUtils';
@@ -52,7 +53,7 @@ export default function AdminCollections() {
   const [filters, setFilters] = useState(BLANK); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const isMobile = useIsMobile();
-  const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [reversingPayment, setReversingPayment] = useState(null); const [historyId, setHistoryId] = useState(null);
+  const [changingMode, setChangingMode] = useState(null); const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [reversingPayment, setReversingPayment] = useState(null); const [historyId, setHistoryId] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -118,6 +119,7 @@ export default function AdminCollections() {
         <Menu.Target><ActionIcon variant="subtle" color="gray" aria-label={`More actions for ${row.invoice_number}`}><IconDots size={16} /></ActionIcon></Menu.Target>
         <Menu.Dropdown>
           <Menu.Item leftSection={<IconFileInvoice size={15} />} onClick={() => setHistoryId(row.invoice_id)}>Open invoice</Menu.Item>
+          {!row.is_reversal && row.amount > 0 && !row.fully_reversed && <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => setChangingMode({ ...row, collected_by: row.recorded_by })}>Change payment mode</Menu.Item>}
           {canReverse(row) && <Menu.Item color="red" leftSection={<IconArrowBackUp size={15} />} onClick={() => setReversingPayment(row)}>Reverse payment</Menu.Item>}
         </Menu.Dropdown>
       </Menu>
@@ -184,6 +186,7 @@ export default function AdminCollections() {
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:
     <MarkUnpaidModal invoice={reversing} onClose={() => setReversing(null)} onSaved={reload} /> */}
     <ReversePaymentModal payment={reversingPayment} onClose={() => setReversingPayment(null)} onSaved={reload} />
+    <ChangeModeModal payment={changingMode} onClose={() => setChangingMode(null)} onSaved={reload} />
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} onChanged={reload} onRecord={setRecording} refreshKey={refresh} />
   </Stack>;
 }

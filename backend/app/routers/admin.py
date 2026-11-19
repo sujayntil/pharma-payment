@@ -573,6 +573,42 @@ def override_collection_status(
     }
 
 
+@router.patch("/payments/{payment_id}/mode")
+def change_payment_mode(
+    payment_id: int,
+    payload: schemas.PaymentModeUpdate,
+    db: Session = Depends(get_db),
+    admin_user: models.User = Depends(require_admin),
+):
+    """Admin only: fix how a collection was paid (Cash / UPI / Cheque... and
+    its reference). Amount, date and who collected never change here; MRs
+    can't do this (the server refuses them)."""
+    payment = db.get(models.Payment, payment_id, with_for_update=True)
+    if not payment:
+        raise HTTPException(404, "Collection not found")
+    if payment.reversal_of_id is not None or (payment.amount or 0) < 0:
+        raise HTTPException(400, "A reversal line can't be edited")
+    before = {"mode": payment.mode, "reference": payment.transaction_reference}
+    payment.mode = payload.mode
+    payment.transaction_reference = (payload.transaction_reference or "").strip() or None
+    invoice = db.get(models.Invoice, payment.invoice_id)
+    latest = (
+        db.query(models.Payment)
+        .filter(models.Payment.invoice_id == payment.invoice_id, models.Payment.amount > 0)
+        .order_by(models.Payment.payment_date.desc(), models.Payment.id.desc())
+        .first()
+    )
+    if invoice and latest and latest.id == payment.id:
+        invoice.payment_mode = payment.mode   # the invoice shows its latest payment's mode
+    write_audit(db, "payment_mode_changed", admin_user, old=before, new={
+        "payment_id": payment.id, "invoice_id": payment.invoice_id,
+        "invoice_number": invoice.invoice_number if invoice else None,
+        "amount": payment.amount, "mode": payment.mode, "reference": payment.transaction_reference,
+    })
+    db.commit()
+    return {"payment_id": payment.id, "mode": payment.mode, "transaction_reference": payment.transaction_reference}
+
+
 @router.post("/payments/{payment_id}/reverse")
 def reverse_payment(
     payment_id: int,

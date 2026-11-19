@@ -83,7 +83,7 @@ class AdminCollectionLedgerTests(unittest.TestCase):
         self.assertEqual(row["mr_name"], "Ravi MR")
 
     def test_mark_paid_creates_ledger_entry_for_remaining_balance(self):
-        self.client.post("/payments", json={"invoice_id": self.invoice.id, "amount": 300})
+        self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 300})
         response = self.client.put(
             f"/admin/invoices/{self.invoice.id}/collection-status",
             json={"status": "PAID", "mode": "Cash"},
@@ -94,7 +94,7 @@ class AdminCollectionLedgerTests(unittest.TestCase):
 
     def test_mark_unpaid_reverses_collections(self):
         self.current_user = self.mr
-        self.client.post("/payments", json={"invoice_id": self.invoice.id, "amount": 600})
+        self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 600})
         self.current_user = self.admin
         self.assertEqual(self.collected_total(), 600)
 
@@ -131,7 +131,7 @@ class AdminCollectionLedgerTests(unittest.TestCase):
         self.assertEqual(len(history["payments"]), 1)
 
     def test_other_mr_cannot_read_payment_history(self):
-        self.client.post("/payments", json={"invoice_id": self.invoice.id, "amount": 250})
+        self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 250})
         self.current_user = self.other_mr
         self.assertEqual(self.client.get(f"/invoices/{self.invoice.id}/payments").status_code, 403)
 
@@ -168,9 +168,9 @@ class AdminCollectionLedgerTests(unittest.TestCase):
 
     def test_recorded_by_filter(self):
         self.current_user = self.mr
-        self.client.post("/payments", json={"invoice_id": self.invoice.id, "amount": 100})
+        self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 100})
         self.current_user = self.admin
-        self.client.post("/payments", json={"invoice_id": self.invoice.id, "amount": 200})
+        self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 200})
         self.assertEqual(self.client.get("/admin/collections", params={"recorded_by": "ADMIN"}).json()["total_amount"], 200)
         self.assertEqual(self.client.get("/admin/collections", params={"recorded_by": "MR"}).json()["total_amount"], 100)
 

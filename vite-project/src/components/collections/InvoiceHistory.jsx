@@ -13,6 +13,7 @@ import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { PAYMENT_MODES, useActorLabel } from './collectionUtils';
 import { deleteWithUndo } from './deleteWithUndo';
 import ReversePaymentModal from './ReversePaymentModal';
+import ChangeModeModal from './ChangeModeModal';
 import ContactActions from '../customers/ContactActions';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 
@@ -157,6 +158,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [reversing, setReversing] = useState(null);
+  const [changingMode, setChangingMode] = useState(null);
   const who = useActorLabel();
   const isAdmin = useAuth().role === 'ADMIN';
   const isMobile = useIsMobile();
@@ -177,6 +179,18 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   // Nothing can be reversed once the invoice holds no collected amount (e.g.
   // an older invoice-level "Mark unpaid"), so the option is hidden then too.
   const canReverse = (event) => isAdmin && event.type === 'COLLECTED' && event.payment_id && !event.fully_reversed && Number(invoice.paid_amount) > 0;
+  // Admin can correct the mode of any collection still standing (not reversed out).
+  const canChangeMode = (event) => isAdmin && event.type === 'COLLECTED' && event.payment_id && !event.fully_reversed;
+  const paymentOf = (event) => ({
+    payment_id: event.payment_id,
+    amount: event.amount,
+    mode: event.mode,
+    payment_date: event.at,
+    transaction_reference: event.reference,
+    invoice_number: invoice.invoice_number,
+    customer_name: invoice.customer_name,
+    collected_by: event.actor?.name,
+  });
 
   return (
     <Stack gap="md">
@@ -241,21 +255,14 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
                     {reversedOut && <Badge size="xs" variant="light" color="orange">Reversed</Badge>}
                     {undone && <Badge size="xs" variant="light" color="gray">Undone</Badge>}
                   </Group>
-                  {canReverse(event) && (
+                  {(canReverse(event) || canChangeMode(event)) && (
                     <Menu position="bottom-end" shadow="md" withinPortal>
                       <Menu.Target>
                         <ActionIcon variant="subtle" color="gray" size="md" aria-label={`Payment actions for ${money(event.amount)}`}><IconDots size={16} /></ActionIcon>
                       </Menu.Target>
                       <Menu.Dropdown>
-                        <Menu.Item color="red" leftSection={<IconArrowBackUp size={15} />} onClick={() => setReversing({
-                          payment_id: event.payment_id,
-                          amount: event.amount,
-                          mode: event.mode,
-                          payment_date: event.at,
-                          transaction_reference: event.reference,
-                          invoice_number: invoice.invoice_number,
-                          customer_name: invoice.customer_name,
-                        })}>Reverse payment</Menu.Item>
+                        {canChangeMode(event) && <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => setChangingMode(paymentOf(event))}>Change payment mode</Menu.Item>}
+                        {canReverse(event) && <Menu.Item color="red" leftSection={<IconArrowBackUp size={15} />} onClick={() => setReversing(paymentOf(event))}>Reverse payment</Menu.Item>}
                       </Menu.Dropdown>
                     </Menu>
                   )}
@@ -269,6 +276,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
                     {isReversal ? '−' : ''}{money(event.amount)}
                   </Text>
                   {event.mode && <Badge size="sm" variant="light" color={isReversal ? 'orange' : 'gray'}>{event.mode}</Badge>}
+                  {event.mode_edited && <Text span size="xs" c="dimmed" fs="italic">mode edited</Text>}
                 </Group>
               )}
               {event.actor && <Meta>{who(event.actor)}</Meta>}
@@ -286,6 +294,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
         </Timeline.Item>
       </Timeline>
       {isAdmin && <ReversePaymentModal payment={reversing} onClose={() => setReversing(null)} onSaved={onReversed} />}
+      {isAdmin && <ChangeModeModal payment={changingMode} onClose={() => setChangingMode(null)} onSaved={onReversed} />}
     </Stack>
   );
 }

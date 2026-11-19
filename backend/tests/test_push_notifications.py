@@ -69,7 +69,7 @@ class PushNotificationTests(unittest.TestCase):
         background = BackgroundTasks()
         invoice = self.db.get(models.Invoice, self.invoice.id)
         add_payment(
-            schemas.PaymentCreate(invoice_id=invoice.id, amount=40),
+            schemas.PaymentCreate(invoice_id=invoice.id, amount=40, mode="Cash"),
             background,
             self.db,
             self.admin,

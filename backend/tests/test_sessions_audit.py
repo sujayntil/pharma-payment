@@ -88,6 +88,29 @@ class SessionsAuditUploadsTests(unittest.TestCase):
             return [(row.user_id, row.old_value, row.new_value)
                     for row in db.query(models.AuditLog).filter_by(action=action).order_by(models.AuditLog.id)]
 
+    # ---- payment mode ----
+
+    def test_mode_is_required_and_only_admin_can_change_it(self):
+        rahul = self.auth("MR001", "rahul-pass")
+        with self.Session() as db:
+            invoice_id = db.query(models.Invoice).first().id
+        missing = self.client.post("/payments", json={"invoice_id": invoice_id, "amount": 100}, headers=rahul)
+        self.assertEqual(missing.status_code, 422)
+        blank = self.client.post("/payments", json={"invoice_id": invoice_id, "amount": 100, "mode": "  "}, headers=rahul)
+        self.assertEqual(blank.status_code, 422)
+        saved = self.client.post("/payments", json={"invoice_id": invoice_id, "amount": 100, "mode": "UPI"}, headers=rahul)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        payment_id = saved.json()["payment_id"]
+        # The MR can't change it, even by calling the server directly.
+        self.assertEqual(self.client.patch(f"/admin/payments/{payment_id}/mode", json={"mode": "Cash"}, headers=rahul).status_code, 403)
+        admin = self.auth("ADMIN01", "admin-pass")
+        changed = self.client.patch(f"/admin/payments/{payment_id}/mode", json={"mode": "Cash"}, headers=admin)
+        self.assertEqual((changed.status_code, changed.json()["mode"]), (200, "Cash"))
+        history = self.client.get(f"/invoices/{invoice_id}/history", headers=admin).json()
+        line = next(e for e in history["events"] if e.get("payment_id") == payment_id)
+        self.assertEqual((line["mode"], line["mode_edited"]), ("Cash", True))
+        self.assertEqual(self.audit("payment_mode_changed")[0][1], {"mode": "UPI", "reference": None})
+
     # ---- easy-to-guess passwords ----
 
     def test_default_password_must_be_changed_before_anything_else(self):

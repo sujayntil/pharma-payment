@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Anchor, Chip, Menu, SimpleGrid, TextInput, UnstyledButton } from '@mantine/core';
+import { Anchor, Chip, Menu, SimpleGrid, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconChevronDown } from '@tabler/icons-react';
 import { MORE_MODES, REFERENCE_LABEL } from './paymentModes';
 
@@ -7,6 +7,7 @@ import { MORE_MODES, REFERENCE_LABEL } from './paymentModes';
  * Payment mode as one-tap chips: Cash · UPI · Cheque · More ▾ (Bank
  * Transfer, NEFT, RTGS, Other). Under it, "+ Add cheque number" or
  * "+ Add UTR / reference" (nothing for Cash) opens the optional box.
+ * Required: nothing is picked at first, so the mode is always a real choice.
  */
 // Compact chips so all four fit on one row, even on small phones.
 const CHIP_STYLES = { root: { width: '100%' }, label: { width: '100%', justifyContent: 'center', paddingInline: 6 }, iconWrapper: { marginRight: 4 } };
@@ -17,7 +18,11 @@ export default function PaymentModeField({ mode, onMode, reference, onReference 
   const label = REFERENCE_LABEL[mode];
   return (
     <div>
-      <SimpleGrid cols={4} spacing={6} role="radiogroup" aria-label="Payment mode">
+      <Text size="sm" fw={500} mb={6}>
+        Payment mode <Text span c="red.6" aria-hidden>*</Text>
+        {!mode && <Text span size="xs" c="dimmed" fw={400}> · tap how they paid</Text>}
+      </Text>
+      <SimpleGrid cols={4} spacing={6} role="radiogroup" aria-label="Payment mode" aria-required="true">
         {['Cash', 'UPI', 'Cheque'].map((item) => (
           <Chip key={item} checked={mode === item} onChange={() => onMode(item)} color="green" variant="light" radius="xl" size="sm" type="radio" styles={CHIP_STYLES}>{item}</Chip>
         ))}

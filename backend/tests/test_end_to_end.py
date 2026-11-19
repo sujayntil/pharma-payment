@@ -206,10 +206,10 @@ class EndToEndFlow(unittest.TestCase):
 
     def test_04_mr_records_collections_with_validation(self):
         t100 = self.invoice_id("T100")
-        self.call(self.rahul, "POST", "/payments", expect=400, json={"invoice_id": t100, "amount": 0})
-        self.call(self.rahul, "POST", "/payments", expect=400, json={"invoice_id": t100, "amount": 10000.5})
-        self.call(self.rahul, "POST", "/payments", expect=403, json={"invoice_id": self.invoice_id("S200"), "amount": 100})
-        self.call(self.rahul, "POST", "/payments", expect=404, json={"invoice_id": 999999, "amount": 100})
+        self.call(self.rahul, "POST", "/payments", expect=400, json={"mode": "Cash", "invoice_id": t100, "amount": 0})
+        self.call(self.rahul, "POST", "/payments", expect=400, json={"mode": "Cash", "invoice_id": t100, "amount": 10000.5})
+        self.call(self.rahul, "POST", "/payments", expect=403, json={"mode": "Cash", "invoice_id": self.invoice_id("S200"), "amount": 100})
+        self.call(self.rahul, "POST", "/payments", expect=404, json={"mode": "Cash", "invoice_id": 999999, "amount": 100})
         result = self.call(self.rahul, "POST", "/payments", json={"invoice_id": t100, "amount": 4000, "mode": "UPI", "transaction_reference": "UTR1"})
         self.assertEqual((result["status"], result["pending_amount"]), ("PARTIAL", 6000))
         self.assert_ledger_consistent()

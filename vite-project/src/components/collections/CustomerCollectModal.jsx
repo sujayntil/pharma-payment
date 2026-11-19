@@ -11,7 +11,7 @@ import { errorText, money } from '../../utils/formatters';
 import CollectionCelebration from './CollectionCelebration';
 import PaymentModeField from './PaymentModeField';
 import { pickHeadline } from './celebrationText';
-import { lastPaymentMode, referenceFor, rememberPaymentMode } from './paymentModes';
+import { referenceFor, rememberPaymentMode } from './paymentModes';
 import { showUndoBar } from './undoBar';
 import { announceMonthsCleared } from './monthCleared';
 
@@ -66,7 +66,8 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [amount, setAmount] = useState('');
-  const [mode, setMode] = useState(lastPaymentMode);
+  // No mode picked at first: the person must choose how they were paid.
+  const [mode, setMode] = useState(null);
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -101,7 +102,8 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
   const problem = !selectedCount ? 'Nothing pending.'
     : !entered ? 'Enter the amount received.'
       : tooMuch ? `Max ${money(plan.selectedPending)}`
-        : '';
+        : !mode ? 'Choose the payment mode.'
+          : '';
 
   const submit = async (event) => {
     event.preventDefault();
@@ -197,7 +199,7 @@ function CollectForm({ customer, invoice, onClose, onSaved, onCelebrate }) {
           style={{ position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--mantine-color-body)', borderTop: '1px solid var(--app-line)' }}
         >
           <Button variant="default" type="button" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={busy} disabled={Boolean(problem)}>{entered && !tooMuch ? `Save ${money(value)}` : 'Save'}</Button>
+          <Button type="submit" loading={busy} disabled={Boolean(problem)}>{entered && !tooMuch && !mode ? 'Choose payment mode' : entered && !tooMuch ? `Save ${money(value)}` : 'Save'}</Button>
         </Group>
       </Stack>
     </form>

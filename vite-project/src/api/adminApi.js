@@ -92,6 +92,11 @@ export const adminApi = {
    * @param {number} paymentId
    * @param {{ reason: string, amount?: number }} payload
    */
+  /** Admin only: change how a collection was paid (mode + reference). */
+  async changePaymentMode(paymentId, payload) {
+    const response = await axiosClient.patch(`/admin/payments/${paymentId}/mode`, payload);
+    return response.data;
+  },
   async reversePayment(paymentId, payload) {
     const response = await axiosClient.post(`/admin/payments/${paymentId}/reverse`, payload);
     return response.data;

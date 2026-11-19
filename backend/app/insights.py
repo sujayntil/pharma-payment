@@ -28,6 +28,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models
+from .collection_info import mode_label
 from .credit import credit_days, days_past_credit, is_overdue
 from .customer_health import _hundreds, follow_ups, profile
 
@@ -167,7 +168,8 @@ class Book:
                           models.Payment.mode, models.Payment.reversal_of_id).all():
             inv = self.invoices.get(p.invoice_id)
             if inv is not None:
-                inv.payments.append((ist_date(p.payment_date), float(p.amount or 0), p.mode or "Other",
+                # Reversals keep their own "Reversal" line (shown only when there is one).
+                inv.payments.append((ist_date(p.payment_date), float(p.amount or 0), mode_label(p.mode),
                                      p.reversal_of_id is not None))
         self.mr_names = {u.id: u.name for u in db.query(models.User.id, models.User.name)
                          .filter(models.User.role == models.RoleEnum.MR.value).all()}
@@ -378,7 +380,7 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
     for i in invs:
         for d, amount, mode, _rev in i.payments:
             if within(d, start, end):
-                modes[(mode or "Other").strip().title() or "Other"] += amount
+                modes[mode] += amount
     mode_rows = sorted(({"mode": k, "amount": round(v, 2)} for k, v in modes.items() if abs(v) > OPEN), key=lambda x: -x["amount"])
 
     with_area = [c for c in book.customers.values() if c.area]
@@ -546,7 +548,7 @@ def customer_insights(db: Session, customer_id: int) -> dict | None:
             if rev:
                 reversals += 1
             elif amount > 0:
-                modes[(mode or "Other").strip().title()] += 1
+                modes[mode] += 1
     usual = round(sum(gaps) / len(gaps)) if gaps else None
     since = (today - dates[-1]).days if dates else None
     habit = profile(invs, c.group, today)

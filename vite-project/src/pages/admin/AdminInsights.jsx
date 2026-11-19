@@ -296,7 +296,7 @@ export default function AdminInsights({ onOpenCustomer }) {
             <div className={css.cb}>
               {data.payment_modes.map((m) => (
                 <div key={m.mode} style={{ padding: '7px 0' }}>
-                  <Group justify="space-between" wrap="nowrap"><Text size="sm"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: MODE_COLORS[m.mode] || '#868e96', marginRight: 7 }} />{m.mode === 'Upi' ? 'UPI' : m.mode}</Text><Text size="sm"><b className={css.num}>{lakh(m.amount)}</b> <span className={css.sub}>{modeTotal ? Math.round((Math.max(m.amount, 0) / modeTotal) * 100) : 0}%</span></Text></Group>
+                  <Group justify="space-between" wrap="nowrap"><Text size="sm"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: MODE_COLORS[m.mode] || '#868e96', marginRight: 7 }} />{m.mode}</Text><Text size="sm"><b className={css.num}>{lakh(m.amount)}</b> <span className={css.sub}>{modeTotal ? Math.round((Math.max(m.amount, 0) / modeTotal) * 100) : 0}%</span></Text></Group>
                   <div className={css.bar}><i style={{ width: `${modeTotal ? (Math.max(m.amount, 0) / modeTotal) * 100 : 0}%`, background: MODE_COLORS[m.mode] || '#868e96' }} /></div>
                 </div>
               ))}

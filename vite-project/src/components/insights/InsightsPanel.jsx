@@ -275,7 +275,7 @@ function CustomerInsights({ id, isMobile, onInvoice, onCollect, onLedger, onEdit
         {habit ? stat('Usually orders', habit) : stat('Usually orders', 'Not enough history yet')}
         {c.next_expected && !c.not_ordering && stat('Next order expected', `~${new Date(`${c.next_expected}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`)}
         {c.usual_month ? stat('Usual month', lakh(c.usual_month)) : null}
-        {c.usual_mode && stat('Usually pays by', c.usual_mode === 'Upi' ? 'UPI' : c.usual_mode)}
+        {c.usual_mode && stat('Usually pays by', c.usual_mode)}
         {stat('Reversed payments', c.reversals, c.reversals ? '#e03131' : null)}
         {stat('Customer since', c.customer_since ? new Date(c.customer_since).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—')}
       </div>

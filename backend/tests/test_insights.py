@@ -287,6 +287,10 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(change["stopped"][0]["previous_sales"], 300)
         self.assertEqual([r["customer_id"] for r in change["active"]], [self.dist.id])
 
+    def test_payment_modes_match_the_collections_filter(self):
+        from app.collection_info import mode_label
+        self.assertEqual([mode_label(m) for m in (None, "  ", "neft", "Upi", "other", "Card")], ["Other", "Other", "NEFT", "UPI", "Other", "Card"])
+
     def test_all_time_has_no_comparison(self):
         self.inv(self.doc, TODAY - timedelta(days=900), 100)
         self.inv(self.doc, TODAY - timedelta(days=5), 200)
@@ -303,7 +307,7 @@ class InsightsTests(unittest.TestCase):
     def test_payment_modes_and_trend(self):
         self.books()
         modes = {m["mode"]: m["amount"] for m in self.S()["payment_modes"]}
-        self.assertEqual(modes, {"Upi": 1000, "Cash": 1000, "Cheque": 400})
+        self.assertEqual(modes, {"UPI": 1000, "Cash": 1000, "Cheque": 400})
         trend = self.S()["trend"]["points"]
         self.assertEqual(len(trend), 12)
         self.assertEqual(trend[-1]["sales"], 4500)

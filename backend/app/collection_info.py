@@ -16,6 +16,19 @@ from .utils import compute_status
 
 REVERSAL_MODE = "Reversal"
 
+# Payment modes as people say them; anything blank counts as "Other".
+_MODE_NAMES = {"cash": "Cash", "upi": "UPI", "cheque": "Cheque", "check": "Cheque", "neft": "NEFT",
+               "rtgs": "RTGS", "imps": "IMPS", "bank transfer": "Bank Transfer", "other": "Other"}
+
+
+def mode_label(raw) -> str:
+    """One name per payment mode ("neft" / "Neft" -> "NEFT"; blank -> "Other"),
+    so Insights and the Collections filter group the same way."""
+    value = (raw or "").strip()
+    if not value:
+        return "Other"
+    return _MODE_NAMES.get(value.lower(), value[:1].upper() + value[1:])
+
 # Who entered a ledger row. Older rows have no recorded_by, so the MR they
 # were collected under is treated as the recorder (they display as before).
 RECORDER_ID = func.coalesce(models.Payment.recorded_by, models.Payment.collected_by)

@@ -448,7 +448,13 @@ def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_t
     if mr_id:
         query = query.filter(models.Invoice.mr_id == mr_id)
     if mode:
-        query = query.filter(func.lower(models.Payment.mode) == mode.strip().lower())
+        wanted = mode.strip().lower()
+        if wanted == "other":
+            # Same as Insights: no mode recorded counts as "Other".
+            query = query.filter(or_(models.Payment.mode.is_(None), func.trim(models.Payment.mode) == "",
+                                     func.lower(models.Payment.mode) == "other"))
+        else:
+            query = query.filter(func.lower(func.trim(models.Payment.mode)) == wanted)
     if recorded_by:
         role = recorded_by.strip().upper()
         if role not in (models.RoleEnum.ADMIN.value, models.RoleEnum.MR.value):

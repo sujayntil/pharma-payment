@@ -39,6 +39,7 @@ import PullToRefresh from './PullToRefresh';
 import RefreshButton from './RefreshButton';
 import NotificationBell from './NotificationBell';
 import BackToTop from './BackToTop';
+import backToTopClasses from './SectionNav.module.css';
 import MrNotificationBell from './MrNotificationBell';
 import { notificationsApi } from '../../api/notificationsApi';
 import { BELL_REFRESH_EVENT } from '../../utils/appEvents';
@@ -334,6 +335,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
       <BackToTop aboveBottomNav={useBottomNav} />
       <AppShell.Main>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>{children}</div>
+        <div className={backToTopClasses.endSpace} aria-hidden />
       </AppShell.Main>
     </AppShell>
     {/* First open of the day: a short welcome, then the app. */}

@@ -30,13 +30,21 @@
   opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity 180ms ease, transform 180ms ease;
 }
 .top[data-shown] { opacity: 1; transform: none; pointer-events: auto; }
+/* Phone: slightly see-through, so what's under it stays readable. */
+@media (max-width: 47.99em) {
+  .top { background: color-mix(in srgb, var(--mantine-color-body) 82%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .top[data-shown] { opacity: 0.92; }
+}
+/* Room at the end of long pages, so the last card and page numbers never sit under the ↑. */
+.endSpace { height: 0; }
+@media (max-width: 47.99em) { .endSpace { height: 56px; } }
 /* MR phone: above the bottom tab bar. */
 .top[data-above-nav] { bottom: calc(64px + 16px + env(safe-area-inset-bottom, 0px)); }
 /* Laptop: in the right margin (under the section rail, where there is one). */
 @media (min-width: 48em) { .top { right: 9px; bottom: 24px; } }
 
 /* Inside a side panel: sticks to the bottom-right of the panel, takes no space. */
-.panelTop { position: sticky; bottom: 16px; height: 0; display: flex; justify-content: flex-end; pointer-events: none; z-index: 5; }
+.panelTop { position: sticky; bottom: 16px; height: 0; margin-top: 48px; display: flex; justify-content: flex-end; pointer-events: none; z-index: 5; }
 .panelTopButton { transform: translateY(-100%) translateY(12px); opacity: 0; transition: opacity 180ms ease, transform 180ms ease; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15); }
 .panelTopButton[data-shown] { opacity: 1; transform: translateY(-100%); pointer-events: auto; }
 

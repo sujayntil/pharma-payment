@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,8 @@ from .. import models, schemas
 from ..collection_info import last_collection_fields, latest_collections
 from ..audit import customer_snapshot, write_audit
 from ..database import get_db
-from ..ledger_pdf import build_ledger_pdf, nice_date
+from ..ledger_pdf import IST, build_ledger_pdf, nice_date
+from ..ledger_xlsx import build_ledger_xlsx
 from ..deps import get_current_user, require_admin
 from ..utils import clean_search, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone, set_customer_numbers
 
@@ -369,18 +370,9 @@ def customer_ledger(
     return result
 
 
-@router.get("/{customer_id}/ledger/pdf")
-def customer_ledger_pdf(
-    customer_id: int,
-    search: str | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
-    status: str | None = None,
-    db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
-):
-    """The ledger as a PDF to share: the same filters and order as the screen,
-    every matching invoice (no paging), each with its payments under it."""
+def _ledger_export(db, user, customer_id, search, date_from, date_to, status):
+    """Everything the PDF and Excel need: same filters and order as the
+    screen, every matching invoice (no paging), each with its payments."""
     customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status)
     totals = invoice_query.with_entities(
         func.coalesce(func.sum(models.Invoice.total_amount), 0),
@@ -398,7 +390,6 @@ def customer_ledger_pdf(
         by_invoice.setdefault(p.invoice_id, []).append(p)
     ids = {p.collected_by for p in payments if p.collected_by}
     collectors = dict(db.query(models.User.id, models.User.name).filter(models.User.id.in_(ids)).all()) if ids else {}
-
     scope = []
     if date_from or date_to:
         scope.append(f"{nice_date(date_from) if date_from else 'Start'} – {nice_date(date_to) if date_to else 'today'}")
@@ -406,10 +397,49 @@ def customer_ledger_pdf(
         scope.append({"PAID": "Paid only", "PARTIAL": "Part paid only", "UNPAID": "Unpaid only"}[status.upper()])
     if search and search.strip():
         scope.append(f"Search: “{search.strip()}”")
-    pdf = build_ledger_pdf(customer, customer.mr.name if customer.mr else None, invoices, by_invoice, collectors, totals, scope)
     safe = "".join(ch for ch in customer.name if ch.isalnum() or ch in " .-_").strip() or "Customer"
-    filename = f"Ledger - {safe}.pdf"
+    mr_name = customer.mr.name if customer.mr else None
+    return customer, mr_name, invoices, by_invoice, collectors, totals, scope, safe
+
+
+@router.get("/{customer_id}/ledger/pdf")
+def customer_ledger_pdf(
+    customer_id: int,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """The ledger as a PDF to share (Admin and the customer's MR)."""
+    customer, mr_name, invoices, by_invoice, collectors, totals, scope, safe = _ledger_export(
+        db, user, customer_id, search, date_from, date_to, status)
+    pdf = build_ledger_pdf(customer, mr_name, invoices, by_invoice, collectors, totals, scope)
     return Response(pdf, media_type="application/pdf", headers={
-        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Disposition": f'attachment; filename="Ledger - {safe}.pdf"',
+        "Cache-Control": "no-store",
+    })
+
+
+@router.get("/{customer_id}/ledger/xlsx")
+def customer_ledger_xlsx(
+    request: Request,
+    customer_id: int,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Admin: the ledger as Excel (Invoices and Payments sheets)."""
+    customer, mr_name, invoices, by_invoice, collectors, totals, scope, safe = _ledger_export(
+        db, user, customer_id, search, date_from, date_to, status)
+    content = build_ledger_xlsx(customer, mr_name, invoices, by_invoice, collectors, totals, scope, datetime.now(IST).date())
+    write_audit(db, "ledger_exported", user, new={"customer": customer.name, "invoices": len(invoices), "filters": dict(request.query_params)})
+    db.commit()
+    return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
+        "Content-Disposition": f'attachment; filename="Ledger - {safe}.xlsx"',
         "Cache-Control": "no-store",
     })

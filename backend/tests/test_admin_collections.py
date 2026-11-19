@@ -145,6 +145,21 @@ class AdminCollectionLedgerTests(unittest.TestCase):
         self.current_user = self.other_mr
         self.assertEqual(self.client.get(f"/customers/{cid}/ledger/pdf").status_code, 404)
 
+    def test_ledger_excel_is_admin_only(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        self.client.post("/payments", json={"mode": "UPI", "invoice_id": self.invoice.id, "amount": 250})
+        cid = self.invoice.customer_id
+        response = self.client.get(f"/customers/{cid}/ledger/xlsx")
+        self.assertEqual(response.status_code, 200)
+        wb = load_workbook(BytesIO(response.content))
+        self.assertEqual(wb.sheetnames, ["Invoices", "Payments"])
+        self.assertEqual(wb["Invoices"]["A1"].value, "Tulsi Pharmacy")
+        self.assertEqual(wb["Invoices"]["A9"].value, "A100")
+        self.assertEqual(wb["Payments"]["C9"].value, 250)
+        self.current_user = self.mr
+        self.assertEqual(self.client.get(f"/customers/{cid}/ledger/xlsx").status_code, 403)
+
     def test_other_mr_cannot_read_payment_history(self):
         self.client.post("/payments", json={"mode": "Cash", "invoice_id": self.invoice.id, "amount": 250})
         self.current_user = self.other_mr

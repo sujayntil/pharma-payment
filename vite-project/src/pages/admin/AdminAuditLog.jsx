@@ -222,6 +222,7 @@ function Sentence({ item, invoiceLink, customerLink }) {
     case 'invoices_imported': return <>imported <b>{item.info.file || 'a sales book'}</b></>;
     case 'invoices_exported': return <>downloaded invoices (Excel){item.info.rows != null && `${sep}${item.info.rows} rows`}</>;
     case 'collections_exported': return <>downloaded collections (Excel)</>;
+    case 'ledger_exported': return <>downloaded the ledger of {item.info.customer || 'a customer'} (Excel){item.info.invoices != null && `${sep}${item.info.invoices} invoices`}</>;
     case 'customers_exported': return <>downloaded customers by type (Excel){item.info.customers != null && `${sep}${item.info.customers} customers`}</>;
     default: return <>{item.action.replace(/_/g, ' ')}</>;
   }
@@ -283,5 +284,6 @@ const LOOK = {
   invoices_exported: { icon: IconFileDownload, color: 'teal' },
   collections_exported: { icon: IconFileDownload, color: 'teal' },
   customers_exported: { icon: IconFileDownload, color: 'teal' },
+  ledger_exported: { icon: IconFileDownload, color: 'teal' },
   default: { icon: IconShieldCheck, color: 'gray' },
 };

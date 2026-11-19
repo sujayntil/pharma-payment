@@ -28,6 +28,12 @@ export const customersApi = {
     return response.data;
   },
 
+  /** Admin: the ledger as Excel (same filters as the screen). */
+  async getLedgerXlsx(customerId, params = {}) {
+    const response = await axiosClient.get(`/customers/${customerId}/ledger/xlsx`, { params, responseType: 'blob' });
+    return response.data;
+  },
+
   /** Admin: add a customer (name, type, MR, numbers, address, GSTIN). */
   async createCustomer(data) {
     const response = await axiosClient.post('/customers', data);

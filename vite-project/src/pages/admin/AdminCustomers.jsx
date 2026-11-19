@@ -247,14 +247,14 @@ export default function AdminCustomers({ openCustomer = null }) {
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <TickedBar ticks={customerTicks} invoices={shownCustomers} showTotal={false} onDelete={deleteManyCustomers} deleteLabel="Delete customers" />
-    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" styles={{ title: { flex: 1, minWidth: 0, marginRight: 8 } }} title={<Group gap="xs" wrap="nowrap" align="flex-start" style={{ flex: 1 }}>
+    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" styles={{ title: { flex: 1, minWidth: 0, marginRight: 8 } }} title={<Group gap="xs" wrap="nowrap" align="center" style={{ flex: 1 }}>
       <div style={{ minWidth: 0 }}>
         <Text fw={700} style={{ overflowWrap: 'anywhere' }}>{ledger?.customer?.name || selected?.name || ''}</Text>
         {/* "Chemist · Andheri West · MR: Neha": what to fix shows at a glance. */}
         <Text size="sm" c="dimmed">{[ledger?.customer?.type || selected?.type, ledger?.customer?.area, `MR: ${ledger?.customer?.mr_name || selected?.mr_name || 'Unassigned'}`].filter(Boolean).join(' · ')}</Text>
       </div>
       {/* Ledger as a PDF: Share on phones, Download on laptops. */}
-      <div style={{ marginLeft: 'auto' }}>{selected && <LedgerShareButton customerId={selected.id} customerName={ledger?.customer?.name || selected.name} params={ledgerPdfParams} disabled={!ledger || !ledger.invoice_count} />}</div>
+      <div style={{ marginLeft: 'auto' }}>{selected && <LedgerShareButton customerId={selected.id} customerName={ledger?.customer?.name || selected.name} params={ledgerPdfParams} disabled={!ledger || !ledger.invoice_count} excel />}</div>
     </Group>}>
       <Stack gap="md">
         {/* Numbers with call / WhatsApp, Edit, or "+ Add phone" (same as the MR screen). */}

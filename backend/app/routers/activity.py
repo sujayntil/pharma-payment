@@ -30,7 +30,7 @@ AUDIT_TYPES = {
     "customers": ["customer_created", "customer_updated", "customer_deleted", "customer_mr_changed", "customer_contact_updated"],
     "users": ["user_created", "user_updated", "user_deleted"],
     "sign_ins": ["signed_in", "sign_in_failed", "signed_out"],
-    "files": ["invoices_imported", "invoices_exported", "collections_exported", "customers_exported"],
+    "files": ["invoices_imported", "invoices_exported", "collections_exported", "customers_exported", "ledger_exported"],
 }
 # Filter "Type" -> invoice_events types it covers.
 EVENT_TYPES = {
@@ -167,7 +167,7 @@ def _audit_item(row: models.AuditLog, actor, names: dict) -> dict:
         item["mode"] = parts[0].get("mode") if parts else None
     elif row.action in ("signed_in", "sign_in_failed", "signed_out"):
         item["info"] = {key: new.get(key) for key in ("employee_code", "address") if new.get(key)}
-    elif row.action in ("invoices_imported", "invoices_exported", "collections_exported", "customers_exported"):
+    elif row.action in ("invoices_imported", "invoices_exported", "collections_exported", "customers_exported", "ledger_exported"):
         item["info"] = {key: value for key, value in new.items() if value not in (None, "", {}, [])}
 
     if old and new and row.action.endswith(("_updated", "_changed")):

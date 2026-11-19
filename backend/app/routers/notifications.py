@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+from .deletions import restored_deletion_ids
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import String, and_, func, or_
 from sqlalchemy.orm import Session, aliased
@@ -317,7 +318,10 @@ def _removed_invoices(db: Session, user: models.User) -> list[dict]:
     seen = user.notifications_seen_audit_id
     cutoff = _last_day_cutoff()
     groups: dict = {}
+    restored = restored_deletion_ids(db)  # put back from Deleted: no longer "removed"
     for entry, by_name in rows:
+        if entry.id in restored:
+            continue
         old = entry.old_value or {}
         if old.get("mr_id") != user.id or entry.user_id == user.id:
             continue

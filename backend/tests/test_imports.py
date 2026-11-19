@@ -398,7 +398,7 @@ class ImportInvoicesTests(unittest.TestCase):
         self.assertEqual(updated.json()["pending_amount"], 85)
         self.assertEqual(updated.json()["status"], "PARTIAL")
 
-        self.assertEqual(self.client.delete(f"/invoices/{invoice.id}").status_code, 204)
+        self.assertEqual(self.client.delete(f"/invoices/{invoice.id}", params={"reason": "Duplicate"}).status_code, 204)
         self.assertEqual(self.db.query(models.Invoice).count(), 0)
         self.assertEqual(self.db.query(models.Payment).count(), 0)
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Anchor, Badge, Box, Collapse, Group, Loader, Paper, Stack, Text, ThemeIcon, Title, UnstyledButton } from '@mantine/core';
+import { Alert, Anchor, Badge, Box, Collapse, Group, Loader, Paper, SegmentedControl, Stack, Text, ThemeIcon, Title, UnstyledButton } from '@mantine/core';
+import DeletedItems from '../../components/audit/DeletedItems';
 import { useDebouncedValue } from '@mantine/hooks';
 import {
   IconArrowBackUp, IconCash, IconChevronDown, IconFileDownload, IconFileUpload, IconLogin, IconLogout,
@@ -27,6 +28,24 @@ const TYPES = [
   { value: 'sign_ins', label: 'Sign-ins' },
   { value: 'files', label: 'Imports and exports' },
 ];
+/**
+ * Audit log page: "All activity" (everything everyone did) and "Deleted"
+ * (what was removed, why, and Restore). initialView: 'deleted' when opened
+ * from the Dashboard's deletions note.
+ */
+export default function AdminAuditLog({ initialView = 'all', deletedPreset = null }) {
+  const [view, setView] = useState(initialView === 'deleted' ? 'deleted' : 'all');
+  return (
+    <Stack gap="md">
+      <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+        <Title order={1}>Audit log</Title>
+        <SegmentedControl value={view} onChange={setView} data={[{ value: 'all', label: 'All activity' }, { value: 'deleted', label: 'Deleted' }]} />
+      </Group>
+      {view === 'deleted' ? <DeletedItems preset={deletedPreset} /> : <ActivityLog />}
+    </Stack>
+  );
+}
+
 const ROLES = [{ value: 'ADMIN', label: 'Admins' }, { value: 'MR', label: 'MRs' }];
 const BLANK = { userId: '', role: '', type: '', range: EMPTY_RANGE };
 
@@ -37,7 +56,7 @@ const BLANK = { userId: '', role: '', type: '', range: EMPTY_RANGE };
  * Edits have "Details" with before → after. Invoice numbers open the
  * invoice; customer names open the customer.
  */
-export default function AdminAuditLog() {
+function ActivityLog() {
   const isMobile = useIsMobile();
   const appRefresh = useAppRefresh();
   const navigate = useNavigate();
@@ -104,9 +123,6 @@ export default function AdminAuditLog() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="center" wrap="nowrap">
-        <Group gap="sm" wrap="nowrap"><Title order={1}>Audit log</Title><Badge variant="light" size="lg">{data.total}</Badge></Group>
-      </Group>
       <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, person" chips={chips} onReset={reset} activeOutline>
         <FilterSelect placeholder="Everyone" icon={<IconUser size={16} />} data={people} value={filters.userId} onChange={(userId) => update({ userId: userId || '' })} />
         <FilterSelect placeholder="All roles" icon={<IconUsers size={16} />} data={ROLES} value={filters.role} onChange={(role) => update({ role: role || '' })} />
@@ -207,6 +223,9 @@ function Sentence({ item, invoiceLink, customerLink }) {
     case 'customer_created': return <>added customer {customerLink}</>;
     case 'customer_updated': return <>edited customer {customerLink}</>;
     case 'customer_deleted': return <>deleted customer {customerLink}</>;
+    case 'customer_restored': return <>restored customer {customerLink}</>;
+    case 'invoice_restored': return <>restored invoice {invoiceLink}{customerLink && <>{sep}{customerLink}</>}{amount && `${sep}${amount}`}</>;
+    case 'deletions_exported': return <>downloaded the deleted items list (Excel){item.info.rows != null && `${sep}${item.info.rows} rows`}</>;
     case 'customer_mr_changed': {
       const change = item.changes.find((c) => c.field === 'mr');
       return <>changed {customerLink}’s MR{change && <>{sep}{change.old || 'None'} → <b>{change.new || 'None'}</b></>}</>;
@@ -271,6 +290,9 @@ const LOOK = {
   customer_created: { icon: IconUsers, color: 'blue' },
   customer_updated: { icon: IconUsers, color: 'blue' },
   customer_deleted: { icon: IconUsers, color: 'red' },
+  customer_restored: { icon: IconArrowBackUp, color: 'green' },
+  invoice_restored: { icon: IconArrowBackUp, color: 'green' },
+  deletions_exported: { icon: IconFileDownload, color: 'teal' },
   customer_mr_changed: { icon: IconUsers, color: 'blue' },
   customer_contact_updated: { icon: IconUsers, color: 'blue' },
   user_created: { icon: IconUserCog, color: 'grape' },

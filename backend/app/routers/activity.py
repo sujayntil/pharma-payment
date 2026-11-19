@@ -26,11 +26,11 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 # Filter "Type" -> audit_log actions it covers.
 AUDIT_TYPES = {
     "reversals": ["payment_undone"],
-    "invoices": ["invoice_created", "invoice_updated", "invoice_deleted"],
-    "customers": ["customer_created", "customer_updated", "customer_deleted", "customer_mr_changed", "customer_contact_updated"],
+    "invoices": ["invoice_created", "invoice_updated", "invoice_deleted", "invoice_restored"],
+    "customers": ["customer_created", "customer_updated", "customer_deleted", "customer_restored", "customer_mr_changed", "customer_contact_updated"],
     "users": ["user_created", "user_updated", "user_deleted"],
     "sign_ins": ["signed_in", "sign_in_failed", "signed_out"],
-    "files": ["invoices_imported", "invoices_exported", "collections_exported", "customers_exported", "ledger_exported"],
+    "files": ["invoices_imported", "invoices_exported", "collections_exported", "customers_exported", "ledger_exported", "deletions_exported"],
 }
 # Filter "Type" -> invoice_events types it covers.
 EVENT_TYPES = {
@@ -156,6 +156,8 @@ def _audit_item(row: models.AuditLog, actor, names: dict) -> dict:
         item["invoice"] = {"id": both.get("invoice_id") if row.action != "invoice_deleted" else None, "number": both.get("invoice_number")}
         item["customer"] = {"id": both.get("customer_id"), "name": both.get("customer_name")} if both.get("customer_name") else None
         item["amount"] = both.get("total_amount")
+        if row.action == "invoice_deleted":
+            item["reason"] = (row.new_value or {}).get("reason")
     elif row.action.startswith("user_"):
         item["subject"] = {"name": both.get("name"), "role": both.get("role"), "employee_code": both.get("employee_code")}
     elif row.action == "payment_undone":
@@ -167,7 +169,7 @@ def _audit_item(row: models.AuditLog, actor, names: dict) -> dict:
         item["mode"] = parts[0].get("mode") if parts else None
     elif row.action in ("signed_in", "sign_in_failed", "signed_out"):
         item["info"] = {key: new.get(key) for key in ("employee_code", "address") if new.get(key)}
-    elif row.action in ("invoices_imported", "invoices_exported", "collections_exported", "customers_exported", "ledger_exported"):
+    elif row.action in ("invoices_imported", "invoices_exported", "collections_exported", "customers_exported", "ledger_exported", "deletions_exported"):
         item["info"] = {key: value for key, value in new.items() if value not in (None, "", {}, [])}
 
     if old and new and row.action.endswith(("_updated", "_changed")):

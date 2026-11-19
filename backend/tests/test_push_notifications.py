@@ -108,7 +108,7 @@ class PushNotificationTests(unittest.TestCase):
         third = models.Invoice(invoice_number="A00003", customer_id=self.invoice.customer_id, mr_id=self.mr.id,
                                total_amount=25, paid_amount=0, pending_amount=25, status="UNPAID")
         self.db.add_all([second, third]); self.db.commit()
-        delete_invoice(self.invoice.id, self.db, self.admin)
+        delete_invoice(self.invoice.id, reason="Duplicate", db=self.db, user=self.admin)
         delete_invoices(schemas.BulkDelete(ids=[second.id, third.id]), self.db, self.admin)
         bell = my_updates(10, self.db, self.mr)
         removed = [item for item in bell["items"] if item["kind"] == "removed"]

@@ -142,5 +142,26 @@ export const adminApi = {
     const response = await axiosClient.delete(`/admin/users/${userId}`);
     return response.data;
   },
+
+  /** Deleted items (invoices, customers, users, undone collections). */
+  async getDeletions(params = {}) {
+    const response = await axiosClient.get('/admin/deletions', { params });
+    return response.data;
+  },
+  async getDeletionsSummary(params = {}) {
+    const response = await axiosClient.get('/admin/deletions/summary', { params });
+    return response.data;
+  },
+  async getDeletion(id) {
+    const response = await axiosClient.get(`/admin/deletions/${id}`);
+    return response.data;
+  },
+  async restoreDeletion(id) {
+    const response = await axiosClient.post(`/admin/deletions/${id}/restore`);
+    return response.data;
+  },
+  async exportDeletions(params = {}) {
+    return axiosClient.get('/admin/deletions/export', { params, responseType: 'blob' });
+  },
 };
 

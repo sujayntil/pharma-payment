@@ -73,3 +73,8 @@
 .owedBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--app-line); }
 .owedBar i { display: block; height: 100%; transition: width 600ms ease; }
 .keyDot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+
+/* "3 invoices deleted in the last 7 days": one quiet line, not a card. */
+.deletedNote { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--app-faint, var(--mantine-color-gray-4)); color: var(--mantine-color-dimmed); }
+.deletedNote:hover { background: var(--app-soft); }
+.deletedNote b { color: var(--mantine-color-red-7); }

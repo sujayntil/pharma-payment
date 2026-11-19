@@ -49,6 +49,22 @@ def invoice_snapshot(invoice: models.Invoice, with_payments: bool = False) -> di
         "remarks": invoice.remarks,
     }
     if with_payments:
+        # Everything needed to restore it exactly (Deleted › Restore).
+        data.update({
+            "external_key": invoice.external_key,
+            "taxable_amount": invoice.taxable_amount,
+            "tax_amount": invoice.tax_amount,
+            "image_path": invoice.image_path,
+            "created_at": invoice.created_at,
+            "events": [
+                {
+                    "event_type": e.event_type, "payment_id": e.payment_id, "amount": e.amount, "mode": e.mode,
+                    "reference": e.reference, "reason": e.reason, "actor_id": e.actor_id, "actor_role": e.actor_role,
+                    "created_at": e.created_at,
+                }
+                for e in sorted(invoice.events, key=lambda e: e.id)
+            ],
+        })
         # Kept in full so a deleted invoice's money history is never lost.
         data["payments"] = [
             {
@@ -61,6 +77,7 @@ def invoice_snapshot(invoice: models.Invoice, with_payments: bool = False) -> di
                 "recorded_by": payment.recorded_by,
                 "reversal_of_id": payment.reversal_of_id,
                 "reason": payment.reason,
+                "batch_id": payment.batch_id,
             }
             for payment in sorted(invoice.payments, key=lambda p: p.id)
         ]
@@ -79,6 +96,7 @@ def customer_snapshot(customer: models.Customer) -> dict:
         "area": customer.area,
         "gstin": customer.gstin,
         "mr_id": customer.mr_id,
+        "created_at": customer.created_at,
     }
 
 

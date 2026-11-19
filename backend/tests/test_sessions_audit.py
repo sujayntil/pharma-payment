@@ -195,9 +195,9 @@ class SessionsAuditUploadsTests(unittest.TestCase):
         (_user, old, new), = self.audit("invoice_updated")
         self.assertEqual((old["total_amount"], new["total_amount"], new["remarks"], old["invoice_date"]), (1000, 1200, "fixed", "2026-10-01"))
 
-        self.assertEqual(self.client.delete(f"/invoices/{self.invoice_id}", headers=admin_headers).status_code, 204)
+        self.assertEqual(self.client.delete(f"/invoices/{self.invoice_id}", params={"reason": "Duplicate"}, headers=admin_headers).status_code, 204)
         (_user, old, new), = self.audit("invoice_deleted")
-        self.assertIsNone(new)
+        self.assertEqual(new, {"reason": "Duplicate"})
         self.assertEqual((old["invoice_number"], old["paid_amount"]), ("A100", 400))
         self.assertEqual([(p["amount"], p["mode"], p["collected_by"]) for p in old["payments"]], [(400, "UPI", self.rahul_id)])
         self.assertEqual(self.client.get(f"/invoices/{self.invoice_id}", headers=admin_headers).status_code, 404)

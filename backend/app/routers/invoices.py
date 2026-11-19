@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -472,6 +472,16 @@ def update_invoice(
     return _to_out(invoice)
 
 
+def _delete_reason(invoices, reason):
+    """A reason is required when money was collected on any of them (that
+    money drops out of the totals); otherwise it is optional."""
+    reason = (reason or "").strip() or None
+    collected = round(sum(max(i.paid_amount or 0, 0) for i in invoices), 2)
+    if collected > 0 and not reason:
+        raise HTTPException(422, f"Give a reason: ₹{collected:,.0f} has been collected on {'this invoice' if len(invoices) == 1 else 'these invoices'}.")
+    return reason
+
+
 @router.post("/bulk-delete", status_code=204)
 def delete_invoices(
     payload: schemas.BulkDelete,
@@ -484,9 +494,11 @@ def delete_invoices(
     invoices = db.query(models.Invoice).filter(models.Invoice.id.in_(ids)).all()
     if len(invoices) != len(ids):
         raise HTTPException(404, "Some of these invoices no longer exist. Refresh and try again.")
+    reason = _delete_reason(invoices, payload.reason)
     bulk_id = str(uuid.uuid4())  # one "3 invoices removed" line in the MR's bell
     for invoice in invoices:
-        write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True), new={"bulk_id": bulk_id})
+        write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True),
+                    new={"bulk_id": bulk_id, **({"reason": reason} if reason else {})})
         db.delete(invoice)
     db.commit()
     return None
@@ -495,6 +507,7 @@ def delete_invoices(
 @router.delete("/{invoice_id}", status_code=204)
 def delete_invoice(
     invoice_id: int,
+    reason: Optional[str] = Query(default=None, max_length=300),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
@@ -512,7 +525,9 @@ def delete_invoice(
 
     # The invoice and its full payment history are copied to the audit log
     # first, so deleting never erases the record of what was collected.
-    write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True))
+    reason = _delete_reason([invoice], reason)
+    write_audit(db, "invoice_deleted", user, old=invoice_snapshot(invoice, with_payments=True),
+                new={"reason": reason} if reason else None)
     db.delete(invoice)
     db.commit()
     return None

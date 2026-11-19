@@ -276,8 +276,10 @@ class PaymentBatchesCreate(BaseModel):
 
 
 class BulkDelete(BaseModel):
-    """Admin multi-delete: at most 20 at a time, as a safety net."""
+    """Admin multi-delete: at most 20 at a time, as a safety net. reason: why
+    (required when an invoice has money collected on it)."""
     ids: list[int] = Field(min_length=1, max_length=20)
+    reason: Optional[str] = Field(default=None, max_length=300)
 
 
 class PaymentReversalCreate(BaseModel):

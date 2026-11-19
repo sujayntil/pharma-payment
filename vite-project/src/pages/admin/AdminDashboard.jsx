@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Avatar, Badge, Button, Group, Loader, Paper, Popover, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
-import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconInfoCircle, IconReceipt } from '@tabler/icons-react';
+import { ActionIcon, Alert, Avatar, Badge, Button, Group, Loader, Paper, Popover, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconInfoCircle, IconReceipt, IconTrash } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import GreetingBanner from '../../components/common/GreetingBanner';
@@ -112,7 +112,36 @@ const CUSTOMER_TYPES = [
 ];
 
 /** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
-export default function AdminDashboard({ onOpenCustomer }) {
+/** One quiet line under "Needs attention" when something was deleted in
+ * the last 7 days (restored ones don't count); opens Audit log › Deleted. */
+function DeletionsNote({ onOpen }) {
+  const appRefresh = useAppRefresh();
+  const [summary, setSummary] = useState(null);
+  useEffect(() => {
+    let live = true;
+    adminApi.getDeletionsSummary({ days: 7 }).then((s) => live && setSummary(s)).catch(() => {});
+    return () => { live = false; };
+  }, [appRefresh]);
+  if (!summary) return null;
+  const parts = [
+    summary.invoices && `${summary.invoices} ${summary.invoices === 1 ? 'invoice' : 'invoices'}`,
+    summary.customers && `${summary.customers} ${summary.customers === 1 ? 'customer' : 'customers'}`,
+    summary.users && `${summary.users} ${summary.users === 1 ? 'user' : 'users'}`,
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return (
+    <UnstyledButton onClick={onOpen} className={css.deletedNote} aria-label="See what was deleted">
+      <IconTrash size={16} style={{ flexShrink: 0 }} />
+      <Text size="sm" style={{ flex: 1, minWidth: 0 }}>
+        {parts.join(', ')} deleted in the last 7 days
+        {summary.collections_removed > 0 && <> · <b>{money(summary.collections_removed)}</b> collections removed</>}
+      </Text>
+      <Text size="sm" fw={600} c="green.8" style={{ whiteSpace: 'nowrap' }}>View →</Text>
+    </UnstyledButton>
+  );
+}
+
+export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const dispatch = useAppDispatch();
   const { dashboard, alerts, alertCount, alertsLoading, dashFilters, error: statsError } = useAppSelector((state) => state.admin);
@@ -221,6 +250,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
       {/* Needs attention: red only here, where action is needed. */}
       <Stack gap={12} id="dash-attention" data-section>
         <ZoneHeading icon={IconAlertTriangle} tone="red" title="Needs attention" />
+        {onOpenDeleted && <DeletionsNote onOpen={onOpenDeleted} />}
         {/* One below the other at full width: two side by side left a big
             empty space under the shorter list. */}
         <SimpleGrid cols={1} spacing="sm">

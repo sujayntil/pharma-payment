@@ -12,6 +12,7 @@ import { ReversedBadge, StatusBadge } from './CollectionBadges';
 import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { PAYMENT_MODES, useActorLabel } from './collectionUtils';
 import { deleteWithUndo } from './deleteWithUndo';
+import DeleteInvoicesModal from './DeleteInvoicesModal';
 import ReversePaymentModal from './ReversePaymentModal';
 import ChangeModeModal from './ChangeModeModal';
 import ContactActions from '../customers/ContactActions';
@@ -65,11 +66,11 @@ export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord
     { label: 'Edit invoice', icon: <IconEdit size={15} />, onClick: setEditing },
     { label: 'Delete invoice', icon: <IconTrash size={15} />, color: 'red', onClick: setDeleting },
   ] : undefined);
-  const remove = () => {
+  const remove = (reason) => {
     const invoice = deleting;
     setDeleting(null);
     onClose();
-    deleteWithUndo({ path: `/invoices/${invoice.id}`, message: `${invoice.invoice_number} deleted`, onHide: () => {}, onRestore: () => {}, onDone: () => onChanged?.() });
+    deleteWithUndo({ path: `/invoices/${invoice.id}${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`, message: `${invoice.invoice_number} deleted`, onHide: () => {}, onRestore: () => {}, onDone: () => onChanged?.() });
   };
   useBackClose(!!invoiceId, onClose);
   useSwipeDownToClose(!!invoiceId && isMobile, onClose);
@@ -92,12 +93,7 @@ export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord
     {!actions && isAdmin && (
       <>
         <InvoiceEditModal invoice={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setEdits((value) => value + 1); onChanged?.(); }} />
-        <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete invoice" centered zIndex={250}>
-          <Stack>
-            <Alert color="red">Delete invoice {deleting?.invoice_number}? Its collection history will also be removed and balances will recalculate.</Alert>
-            <Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" onClick={remove}>Delete invoice</Button></Group>
-          </Stack>
-        </Modal>
+        <DeleteInvoicesModal invoices={deleting ? [deleting] : null} onClose={() => setDeleting(null)} onConfirm={remove} />
       </>
     )}
     </>

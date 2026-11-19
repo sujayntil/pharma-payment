@@ -14,6 +14,13 @@ const AdminCollections = lazy(() => import('./AdminCollections'));
 const AdminImport = lazy(() => import('./AdminImport'));
 const AdminAuditLog = lazy(() => import('./AdminAuditLog'));
 
+// "Last 7 days" for the Dashboard's deletions note (India dates).
+const lastDays = (n) => {
+  const day = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const now = new Date();
+  return { from: day(new Date(now.getTime() - (n - 1) * 86400000)), to: day(now) };
+};
+
 const ADMIN_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: IconChartBar },
   { id: 'insights', label: 'Insights', icon: IconChartPie },
@@ -36,22 +43,22 @@ export default function AdminLayout() {
   const tabPath = (tab) => (tab === 'dashboard' ? '/admin' : `/admin/${tab}`);
   // Set when the Dashboard opens a customer; the key remounts Customers on it.
   const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
-  const choose = (tab) => { if (tab !== activeTab || openCustomer || location.state?.collectionsFilters) navigate(tabPath(tab)); };
+  const choose = (tab) => { if (tab !== activeTab || openCustomer || location.state?.collectionsFilters || location.state?.auditView) navigate(tabPath(tab)); };
 
   return (
     <AppFrame items={ADMIN_TABS} active={activeTab} onChange={choose}>
       <main>
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
-        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
+        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
         {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
         {activeTab === 'invoices' && <AdminInvoices />}
         {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
         {/* From Insights ("See in Collections"): opens already filtered. */}
-        {activeTab === 'collections' && <AdminCollections key={location.state?.collectionsFilters ? location.key : 'plain'} preset={location.state?.collectionsFilters ?? null} />}
+        {activeTab === 'collections' && <AdminCollections key={location.state?.collectionsFilters ? JSON.stringify(location.state.collectionsFilters) : 'plain'} preset={location.state?.collectionsFilters ?? null} />}
         {activeTab === 'import' && <AdminImport />}
         {activeTab === 'performance' && <AdminPerformance />}
         {activeTab === 'users' && <AdminUsers />}
-        {activeTab === 'audit' && <AdminAuditLog />}
+        {activeTab === 'audit' && <AdminAuditLog key={location.state?.auditView || 'plain'} initialView={location.state?.auditView} deletedPreset={location.state?.auditView === 'deleted' ? { range: lastDays(7) } : null} />}
         </Suspense>
       </main>
     </AppFrame>

@@ -21,6 +21,7 @@ import RecordCollectionModal from '../../components/collections/RecordCollection
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InvoiceCard from '../../components/collections/InvoiceCard';
 import { deleteWithUndo } from '../../components/collections/deleteWithUndo';
+import DeleteInvoicesModal from '../../components/collections/DeleteInvoicesModal';
 import CustomerCollectModal from '../../components/collections/CustomerCollectModal';
 import MultiCollectModal from '../../components/collections/MultiCollectModal';
 import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
@@ -208,13 +209,14 @@ export default function AdminInvoices() {
   // Deleted invoices leave the list at once; the server delete waits for the Undo bar.
   const [hiddenIds, setHiddenIds] = useState(() => new Set());
   const setHidden = (id, hidden) => setHiddenIds((current) => { const next = new Set(current); if (hidden) next.add(id); else next.delete(id); return next; });
-  const remove = () => {
+  const reasonQuery = (reason) => (reason ? `?reason=${encodeURIComponent(reason)}` : '');
+  const remove = (reason) => {
     const invoice = deleting;
     setDeleting(null);
     if (historyId === invoice.id) setHistoryId(null);
     if (ticks.isTicked(invoice)) ticks.toggle(invoice);
     deleteWithUndo({
-      path: `/invoices/${invoice.id}`,
+      path: `/invoices/${invoice.id}${reasonQuery(reason)}`,
       message: `${invoice.invoice_number} deleted`,
       onHide: () => setHidden(invoice.id, true),
       onRestore: () => setHidden(invoice.id, false),
@@ -223,7 +225,7 @@ export default function AdminInvoices() {
   };
   // Several at once (up to 20): same confirm box, then the Undo bar.
   const [bulkDeleting, setBulkDeleting] = useState(null);
-  const removeMany = () => {
+  const removeMany = (reason) => {
     const list = bulkDeleting;
     setBulkDeleting(null);
     const ids = list.map((invoice) => invoice.id);
@@ -232,7 +234,7 @@ export default function AdminInvoices() {
     deleteWithUndo({
       path: '/invoices/bulk-delete',
       method: 'POST',
-      body: { ids },
+      body: { ids, ...(reason && { reason }) },
       message: `${ids.length} invoices deleted`,
       onHide: () => ids.forEach((id) => setHidden(id, true)),
       onRestore: () => ids.forEach((id) => setHidden(id, false)),
@@ -308,14 +310,8 @@ export default function AdminInvoices() {
     <MarkUnpaidModal invoice={reversing} onClose={() => setReversing(null)} onSaved={reload} /> */}
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} onChanged={reload} onRecord={setRecording} refreshKey={historyKey} actions={panelActions} />
     <Modal opened={!!editing} onClose={() => setEditing(null)} title={`Edit invoice ${editing?.invoice_number || ''}`} centered zIndex={250}><form onSubmit={save}><Stack><TextInput required label="Invoice number" value={form?.invoice_number || ''} onChange={(event) => setForm({ ...form, invoice_number: event.currentTarget.value })} /><TextInput required type="date" label="Invoice date" value={form?.invoice_date || ''} onChange={(event) => setForm({ ...form, invoice_date: event.currentTarget.value })} /><TextInput required label="Customer" value={form?.customer_name || ''} onChange={(event) => setForm({ ...form, customer_name: event.currentTarget.value })} /><NumberInput required min={0.01} decimalScale={2} label="Bill amount (₹)" value={form?.total_amount || ''} onChange={(value) => setForm({ ...form, total_amount: value })} /><Select label="Payment mode" clearable data={PAYMENT_MODES} value={form?.payment_mode || null} onChange={(value) => setForm({ ...form, payment_mode: value || '' })} /><TextInput label="Remarks" value={form?.remarks || ''} onChange={(event) => setForm({ ...form, remarks: event.currentTarget.value })} /><Button type="submit" loading={busy}>Save changes</Button></Stack></form></Modal>
-    <Modal opened={!!bulkDeleting} onClose={() => setBulkDeleting(null)} title={`Delete ${bulkDeleting?.length || ''} invoices`} centered zIndex={250}>
-      <Stack>
-        <Alert color="red">
-          Delete {(bulkDeleting || []).slice(0, 3).map((invoice) => invoice.invoice_number).join(', ')}{(bulkDeleting?.length || 0) > 3 ? ` and ${bulkDeleting.length - 3} more` : ''}? Their collection history is removed too.
-        </Alert>
-        <Group justify="end"><Button variant="default" onClick={() => setBulkDeleting(null)}>Cancel</Button><Button color="red" onClick={removeMany}>Delete {bulkDeleting?.length || ''} invoices</Button></Group>
-      </Stack>
-    </Modal>
-    <Modal opened={!!deleting} onClose={() => setDeleting(null)} title="Delete invoice" centered zIndex={250}><Stack><Alert color="red">Delete invoice {deleting?.invoice_number}? Its collection history will also be removed and balances will recalculate.</Alert><Group justify="end"><Button variant="default" onClick={() => setDeleting(null)}>Cancel</Button><Button color="red" loading={busy} onClick={remove}>Delete invoice</Button></Group></Stack></Modal>
+    {/* Reason needed when money was collected on them; restorable for 30 days. */}
+    <DeleteInvoicesModal invoices={bulkDeleting} onClose={() => setBulkDeleting(null)} onConfirm={removeMany} />
+    <DeleteInvoicesModal invoices={deleting ? [deleting] : null} onClose={() => setDeleting(null)} onConfirm={remove} />
   </Stack>;
 }

@@ -72,3 +72,4 @@
 .overdue { color: var(--mantine-color-red-7) !important; }
 .owedBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--app-line); }
 .owedBar i { display: block; height: 100%; transition: width 600ms ease; }
+.keyDot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }

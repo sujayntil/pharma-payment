@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Avatar, Badge, Button, Group, Loader, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
-import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconReceipt } from '@tabler/icons-react';
+import { ActionIcon, Alert, Avatar, Badge, Button, Group, Loader, Paper, Popover, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
+import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconInfoCircle, IconReceipt } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import GreetingBanner from '../../components/common/GreetingBanner';
@@ -67,7 +67,20 @@ function OwedBar({ d, loading }) {
       <div className={css.owedBar} aria-label={`${pct}% of outstanding is overdue`}>
         {owed > 0 && <><i style={{ width: `${100 - pct}%`, background: 'var(--mantine-color-green-6)' }} /><i style={{ width: `${pct}%`, background: 'var(--mantine-color-red-6)' }} /></>}
       </div>
-      <Text fz={12} c="dimmed" mt={8}>Overdue = unpaid after 40 days of credit (60 for distributors)</Text>
+      {/* Key: which colour is which. */}
+      {owed > 0 && (
+        <Group gap={14} mt={8} wrap="wrap">
+          <Text fz={12} c="dimmed"><span className={css.keyDot} style={{ background: 'var(--mantine-color-green-6)' }} />Not yet due <b className={css.num} style={{ color: 'var(--mantine-color-text)' }}>{money(owed - late)}</b></Text>
+          <Group gap={4} wrap="nowrap">
+            <Text fz={12} c="dimmed"><span className={css.keyDot} style={{ background: 'var(--mantine-color-red-6)' }} />Overdue <b className={css.num} style={{ color: 'var(--mantine-color-red-7)' }}>{money(late)}</b></Text>
+            {/* The credit rule, on hover or tap. */}
+            <Popover withArrow position="top" shadow="md" width={230}>
+              <Popover.Target><ActionIcon variant="subtle" color="gray" size={18} radius="xl" aria-label="What counts as overdue"><IconInfoCircle size={14} /></ActionIcon></Popover.Target>
+              <Popover.Dropdown><Text fz={12}>Overdue = unpaid after 40 days of credit (60 for distributors).</Text></Popover.Dropdown>
+            </Popover>
+          </Group>
+        </Group>
+      )}
     </Paper>
   );
 }

@@ -210,12 +210,24 @@ def mark_seen(db: Session = Depends(get_db), user: models.User = Depends(require
 # ---- MR bell: what the office did on my invoices ----
 
 def _office_entries(user: models.User):
-    """Collections and reversals someone else (the office) entered for this MR."""
+    """Collections and reversals someone else (the office) entered for this MR,
+    after the last "Clear all"."""
     return and_(
         models.Payment.collected_by == user.id,
         models.Payment.recorded_by.isnot(None),
         models.Payment.recorded_by != user.id,
+        models.Payment.id > (user.notifications_cleared_payment_id or 0),
     )
+
+
+def clear_bell(db: Session, user: models.User) -> None:
+    """Empty a person's "Updates from office" list (new updates still come)."""
+    newest_payment = db.query(func.max(models.Payment.id)).scalar() or 0
+    newest_audit = db.query(func.max(models.AuditLog.id)).scalar() or 0
+    user.notifications_cleared_payment_id = newest_payment
+    user.notifications_cleared_audit_id = newest_audit
+    user.notifications_seen_payment_id = max(user.notifications_seen_payment_id or 0, newest_payment)
+    user.notifications_seen_audit_id = max(user.notifications_seen_audit_id or 0, newest_audit)
 
 
 @router.get("/mine")
@@ -296,7 +308,8 @@ def _removed_invoices(db: Session, user: models.User) -> list[dict]:
     rows = (
         db.query(models.AuditLog, models.User.name)
         .outerjoin(models.User, models.User.id == models.AuditLog.user_id)
-        .filter(models.AuditLog.action == "invoice_deleted", models.AuditLog.timestamp >= since)
+        .filter(models.AuditLog.action == "invoice_deleted", models.AuditLog.timestamp >= since,
+                models.AuditLog.id > (user.notifications_cleared_audit_id or 0))
         .order_by(models.AuditLog.id.desc())
         .limit(500)
         .all()
@@ -329,6 +342,14 @@ def _removed_invoices(db: Session, user: models.User) -> list[dict]:
             "is_new": newest > seen if seen is not None else entry.timestamp >= cutoff,
         })
     return items
+
+
+@router.post("/mine/clear", status_code=204)
+def clear_mine(db: Session = Depends(get_db), user: models.User = Depends(get_current_user)):
+    """The bell's "Clear all"."""
+    clear_bell(db, user)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/mine/seen", status_code=204)

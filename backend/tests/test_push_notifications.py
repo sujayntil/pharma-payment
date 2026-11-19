@@ -122,6 +122,20 @@ class PushNotificationTests(unittest.TestCase):
         self.db.add(other); self.db.commit()
         self.assertEqual(my_updates(10, self.db, other)["items"], [])
 
+    def test_clear_all_empties_the_bell_and_new_updates_still_come(self):
+        from app.routers.admin import clear_mr_bells
+        from app.routers.notifications import clear_mine
+        self.pay(self.admin, 30)
+        self.assertEqual(len(my_updates(10, self.db, self.mr)["items"]), 1)
+        clear_mine(self.db, self.mr)
+        bell = my_updates(10, self.db, self.mr)
+        self.assertEqual((bell["items"], bell["unread"]), ([], 0))
+        self.pay(self.admin, 20)
+        bell = my_updates(10, self.db, self.mr)
+        self.assertEqual((len(bell["items"]), bell["unread"]), (1, 1))
+        self.assertEqual(clear_mr_bells(None, self.db, self.admin), {"cleared": 1})
+        self.assertEqual(my_updates(10, self.db, self.mr)["items"], [])
+
     def test_undone_office_entry_sends_nothing(self):
         self.pay(self.admin, 30)
         office = self.db.query(models.Payment).one()

@@ -66,6 +66,11 @@ export default function MrNotificationBell({ size = 36 }) {
       .catch(() => {});
   };
   const toggle = () => (opened ? close() : open());
+  // "Clear all": empties the list (new updates still come).
+  const clearAll = () => {
+    setData({ items: [], unread: 0 });
+    notificationsApi.clearMine().catch(() => setTick((value) => value + 1));
+  };
   const go = (invoiceId) => {
     close();
     setTimeout(() => navigate(`/mr/invoices?invoice=${invoiceId}`), isMobile ? 120 : 0);
@@ -112,7 +117,7 @@ export default function MrNotificationBell({ size = 36 }) {
           position="bottom"
           radius="lg"
           size="auto"
-          title={<Text fw={700}>Updates from office</Text>}
+          title={<Group gap="sm"><Text fw={700}>Updates from office</Text>{data.items.length > 0 && <UnstyledButton onClick={clearAll}><Text size="sm" fw={600} c="dimmed">Clear all</Text></UnstyledButton>}</Group>}
           classNames={{ content: SWIPE_SHEET_CLASS }}
           styles={{ content: { maxHeight: '80dvh' }, body: { padding: 0 } }}
         >
@@ -128,7 +133,7 @@ export default function MrNotificationBell({ size = 36 }) {
       <Popover.Dropdown p={0}>
         <Group justify="space-between" px="md" py={10} style={{ borderBottom: '1px solid var(--app-line)' }}>
           <Text fw={700} size="sm">Updates from office</Text>
-          {loading && <Loader size={14} />}
+          {loading ? <Loader size={14} /> : data.items.length > 0 && <UnstyledButton onClick={clearAll}><Text size="xs" fw={600} c="dimmed">Clear all</Text></UnstyledButton>}
         </Group>
         {alertsRow}
         <ScrollArea.Autosize mah={420} type="auto">{list}</ScrollArea.Autosize>

@@ -128,6 +128,11 @@ export const adminApi = {
    * Delete user.
    * @param {number|string} userId
    */
+  /** Empty MRs' "Updates from office" bells: one MR, or all (no id). */
+  async clearMrBells(userId) {
+    const response = await axiosClient.post('/admin/users/clear-bells', null, { params: userId ? { user_id: userId } : {} });
+    return response.data;
+  },
   async deleteUser(userId) {
     const response = await axiosClient.delete(`/admin/users/${userId}`);
     return response.data;

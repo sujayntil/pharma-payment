@@ -215,6 +215,7 @@ function Sentence({ item, invoiceLink, customerLink }) {
     case 'user_created': return <>added user <b>{subject?.name}</b>{subject?.role && ` (${subject.role === 'ADMIN' ? 'Admin' : 'MR'}${subject.employee_code ? ` · ${subject.employee_code}` : ''})`}</>;
     case 'user_updated': return <>edited user <b>{subject?.name}</b></>;
     case 'user_deleted': return <>deleted user <b>{subject?.name}</b></>;
+    case 'mr_bells_cleared': return <>cleared the "Updates from office" bell{(item.new_value?.mrs || []).length === 1 ? <> of <b>{item.new_value.mrs[0]}</b></> : ' of all MRs'}</>;
     case 'signed_in': return <>signed in</>;
     case 'signed_out': return <>signed out</>;
     case 'sign_in_failed': return <Text span c="red.7" fw={600}>failed to sign in{item.info.employee_code ? ` as ${item.info.employee_code}` : ''}</Text>;
@@ -274,6 +275,7 @@ const LOOK = {
   user_created: { icon: IconUserCog, color: 'grape' },
   user_updated: { icon: IconUserCog, color: 'grape' },
   user_deleted: { icon: IconUserCog, color: 'red' },
+  mr_bells_cleared: { icon: IconUserCog, color: 'gray' },
   signed_in: { icon: IconLogin, color: 'gray' },
   signed_out: { icon: IconLogout, color: 'gray' },
   sign_in_failed: { icon: IconShieldX, color: 'red' },

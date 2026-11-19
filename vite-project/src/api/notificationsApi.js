@@ -22,6 +22,9 @@ export const notificationsApi = {
     const { data } = await axiosClient.get('/notifications/mine', { params: { limit } });
     return data;
   },
+  async clearMine() {
+    await axiosClient.post('/notifications/mine/clear');
+  },
   async markMineSeen() {
     await axiosClient.post('/notifications/mine/seen');
   },

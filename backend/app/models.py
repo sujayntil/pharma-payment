@@ -49,6 +49,9 @@ class User(Base):
     notifications_seen_payment_id = Column(Integer, nullable=True)
     notifications_seen_month_id = Column(Integer, nullable=True)  # bell: newest "month cleared" seen
     notifications_seen_audit_id = Column(Integer, nullable=True)  # MR bell: newest "invoice removed" seen
+    # MR bell "Clear all": entries up to these ids are no longer listed.
+    notifications_cleared_payment_id = Column(Integer, nullable=True)
+    notifications_cleared_audit_id = Column(Integer, nullable=True)
     # "KING" (👑) or "QUEEN" (👸) on Home, the morning welcome and the MR
     # celebration. NULL means King.
     title = Column(String(8), nullable=True)

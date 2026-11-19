@@ -849,6 +849,23 @@ def _clean_title(title) -> str:
     return "QUEEN" if str(title or "").upper() == "QUEEN" else "KING"
 
 
+@router.post("/users/clear-bells")
+def clear_mr_bells(user_id: Optional[int] = None, db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
+    """Empty MRs' "Updates from office" bells: one MR (user_id) or all of them."""
+    from .notifications import clear_bell
+    query = db.query(models.User).filter(models.User.role == models.RoleEnum.MR.value)
+    if user_id is not None:
+        query = query.filter(models.User.id == user_id)
+    mrs = query.all()
+    if user_id is not None and not mrs:
+        raise HTTPException(404, "MR not found")
+    for mr in mrs:
+        clear_bell(db, mr)
+    write_audit(db, "mr_bells_cleared", user, new={"mrs": [mr.employee_code for mr in mrs]})
+    db.commit()
+    return {"cleared": len(mrs)}
+
+
 @router.delete("/users/{user_id}", status_code=204)
 def delete_user(
     user_id: int,

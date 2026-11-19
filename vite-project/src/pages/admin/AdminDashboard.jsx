@@ -171,7 +171,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
   };
 
   const filtersOn = chips.some(Boolean);
-  const showHigh = alertsLoading || alertCount > 0;
+  const showHigh = (alertsLoading && !alerts.length) || alertCount > 0;
   const zoneTitle = `${rangeLabel || 'All time'}${appliedCustomerType ? ` · ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}` : ''}`;
   const th = { className: css.th };
   const signed = (item) => (
@@ -219,7 +219,7 @@ export default function AdminDashboard({ onOpenCustomer }) {
                 <div><Text className={css.cardTitle}>Pending above ₹50,000</Text><Text size="sm" c="dimmed">May need follow up</Text></div>
                 <Badge color="red" variant="light">{alertCount}</Badge>
               </Group>
-              {alertsLoading ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : (
+              {/* Spinner only on the first load; the 20 s quiet refresh swaps rows in place. */}{alertsLoading && !alerts.length ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : (
                 isMobile ? <Stack gap={0}>{alerts.map((item, index) => (
                   <Group key={`${item.invoice_number}-${index}`} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: item.invoice_id ? 'pointer' : undefined }} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined}>
                     <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Timeline } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Timeline } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowBackUp, IconCash, IconDots, IconEdit, IconFileInvoice, IconFlag, IconTrash } from '@tabler/icons-react';
 import { invoicesApi } from '../../api/invoicesApi';
@@ -13,6 +13,7 @@ import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { PAYMENT_MODES, useActorLabel } from './collectionUtils';
 import { deleteWithUndo } from './deleteWithUndo';
 import DeleteInvoicesModal from './DeleteInvoicesModal';
+import SidePanel from '../common/SidePanel';
 import ReversePaymentModal from './ReversePaymentModal';
 import ChangeModeModal from './ChangeModeModal';
 import ContactActions from '../customers/ContactActions';
@@ -77,19 +78,19 @@ export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord
   const panelWidth = useSidePanelWidth();
   return (
     <>
-    <Drawer
+    {/* Laptop: a "peek" panel beside the list (page stays usable); phone: bottom sheet. */}
+    <SidePanel
       opened={!!invoiceId}
       onClose={onClose}
-      position={isMobile ? 'bottom' : 'right'}
-      size={isMobile ? '88dvh' : `min(${panelWidth}px, 100%)`}
-      radius={isMobile ? 'lg' : 0}
+      modal={false}
+      width={`min(${panelWidth}px, 100%)`}
       title={<Text fw={700}>Invoice details</Text>}
       closeButtonProps={{ 'aria-label': 'Close invoice details' }}
-      classNames={isMobile ? { content: SWIPE_SHEET_CLASS } : undefined}
-      {...(!isMobile && { withOverlay: false, trapFocus: false, lockScroll: false, closeOnClickOutside: false, shadow: 'xl', styles: { inner: { top: 64, height: 'calc(100% - 64px)' } } })}
+      mobileProps={{ size: '88dvh', classNames: { content: SWIPE_SHEET_CLASS } }}
+      styles={isMobile ? undefined : { inner: { top: 64, height: 'calc(100% - 64px)' } }}
     >
       {invoiceId && <HistoryBody key={invoiceId} invoiceId={invoiceId} onChanged={onChanged} onRecord={onRecord} refreshKey={`${refreshKey}-${edits}`} actions={menu} />}
-    </Drawer>
+    </SidePanel>
     {!actions && isAdmin && (
       <>
         <InvoiceEditModal invoice={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setEdits((value) => value + 1); onChanged?.(); }} />

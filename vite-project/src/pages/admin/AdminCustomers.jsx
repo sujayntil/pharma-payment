@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Tooltip, Alert, Badge, Button, Drawer, Group, Loader, Menu, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { ActionIcon, Tooltip, Alert, Badge, Button, Group, Loader, Menu, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconArrowsSort, IconBook, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
@@ -24,6 +24,7 @@ import CustomerCollectModal from '../../components/collections/CustomerCollectMo
 // import MarkUnpaidModal from '../../components/collections/MarkUnpaidModal';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import { PanelTop } from '../../components/common/BackToTop';
+import SidePanel from '../../components/common/SidePanel';
 import LedgerShareButton from '../../components/customers/LedgerShareButton';
 import InvoiceCard from '../../components/collections/InvoiceCard';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
@@ -247,7 +248,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <TickedBar ticks={customerTicks} invoices={shownCustomers} showTotal={false} onDelete={deleteManyCustomers} deleteLabel="Delete customers" />
-    <Drawer opened={!!selected} onClose={() => setSelected(null)} position="right" size="min(820px, 100%)" styles={{ title: { flex: 1, minWidth: 0, marginRight: 8 } }} title={<Group gap="xs" wrap="nowrap" align="center" style={{ flex: 1 }}>
+    <SidePanel opened={!!selected} onClose={() => setSelected(null)} width={840} mobileProps={{ position: 'right', size: '100%', radius: 0 }} styles={{ title: { flex: 1, minWidth: 0, marginRight: 8 } }} title={<Group gap="xs" wrap="nowrap" align="center" style={{ flex: 1 }}>
       <div style={{ minWidth: 0 }}>
         <Text fw={700} style={{ overflowWrap: 'anywhere' }}>{ledger?.customer?.name || selected?.name || ''}</Text>
         {/* "Chemist · Andheri West · MR: Neha": what to fix shows at a glance. */}
@@ -317,7 +318,7 @@ export default function AdminCustomers({ openCustomer = null }) {
       </Stack>
       {/* Long ledger: ↑ back to the totals and filters. */}
       <PanelTop hidden={ticks.count > 0} />
-    </Drawer>
+    </SidePanel>
     <CustomerCollectModal customer={collectingCustomer} onClose={() => setCollectingCustomer(null)} onSaved={() => { setRefresh((value) => value + 1); reloadLedger(); ticks.clearSoon(); }} />
     <RecordCollectionModal invoice={recording && { ...recording, customer_name: selected?.name }} onClose={() => setRecording(null)} onSaved={() => { reloadLedger(); ticks.clearSoon(); }} />
     {/* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed:

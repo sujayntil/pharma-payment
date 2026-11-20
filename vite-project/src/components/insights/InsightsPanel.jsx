@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Drawer, Group, Loader, Menu, NumberInput, SegmentedControl, Stack, Table, Text, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, NumberInput, SegmentedControl, Select, Stack, Table, Text, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -11,6 +11,7 @@ import { useAuth } from '../../hooks/useAppStore';
 import ContactActions from '../customers/ContactActions';
 import EditCustomerModal from '../customers/EditCustomerModal';
 import { PanelTop } from '../common/BackToTop';
+import SidePanel from '../common/SidePanel';
 import { errorText, money, shortDate } from '../../utils/formatters';
 import InvoiceHistory from '../collections/InvoiceHistory';
 import RecordCollectionModal from '../collections/RecordCollectionModal';
@@ -20,6 +21,28 @@ import { lakh, TYPE_COLORS } from './insightsFormat';
 import { MonthBars } from './charts';
 import ModePayments from './ModePayments';
 import css from '../../pages/admin/AdminInsights.module.css';
+
+const STATUS_LABEL = { UNPAID: 'Unpaid', PARTIAL: 'Part paid', PAID: 'Paid' };
+
+/** Search + up to two small dropdowns at the top of a panel list. */
+function PanelFilters({ isMobile, search, onSearch, placeholder, selects, right }) {
+  const list = selects.filter(Boolean);
+  const dropdowns = list.map((f) => (
+    <Select key={f.key} size="xs" placeholder={f.placeholder} data={f.data} value={f.value} onChange={f.onChange} clearable
+      comboboxProps={{ withinPortal: true, zIndex: 400 }} w={isMobile ? undefined : 150} style={isMobile ? { flex: 1 } : undefined} aria-label={f.placeholder} />
+  ));
+  return isMobile ? (
+    <Stack gap={6}>
+      <SearchInput className="" value={search} onChange={onSearch} placeholder={placeholder} />
+      <Group gap={6} wrap="nowrap">{dropdowns}{right}</Group>
+    </Stack>
+  ) : (
+    <Group gap={8} wrap="nowrap">
+      <SearchInput className="" style={{ flex: 1 }} value={search} onChange={onSearch} placeholder={placeholder} />
+      {dropdowns}{right}
+    </Group>
+  );
+}
 
 const RECORD_TITLES = { sales: 'Sales', collected: 'Collected', outstanding: 'Owed to you today', active: 'Invoices of active customers' };
 // "12 days overdue" / "due in 8 days": days past the customer's credit period.
@@ -43,14 +66,14 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
 
   return (
     <>
-      <Drawer
+      <SidePanel
         opened={Boolean(current)}
         onClose={onClose}
         // Esc closes only the window on top (invoice history / collect), not this panel too.
         closeOnEscape={!openInvoice && !recording && !collecting && !editingCustomer}
-        position={isMobile ? 'bottom' : 'right'}
-        size={isMobile ? '92%' : 600}
-        radius={isMobile ? 'lg' : 0}
+        edgeClose={!openInvoice && !recording && !collecting && !editingCustomer}
+        width={840}
+        mobileProps={{ size: '92%' }}
         padding={0}
         withCloseButton
         title={stack.length > 1 ? <Button variant="subtle" size="compact-sm" color="green" leftSection={<IconArrowLeft size={14} />} onClick={onBack}>Back</Button> : null}
@@ -62,7 +85,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         {current?.kind === 'mode' && <ModePayments key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} onChanged={onChanged} />}
         {current?.kind === 'targets' && <Targets onSaved={() => { onChanged?.(); onClose(); }} />}
         <PanelTop />
-      </Drawer>
+      </SidePanel>
       <InvoiceHistory invoiceId={openInvoice} onClose={() => setOpenInvoice(null)} onChanged={changed} onRecord={setRecording} refreshKey={reload} />
       <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={changed} />
       <CustomerCollectModal customer={collecting} onClose={() => setCollecting(null)} onSaved={changed} />
@@ -107,7 +130,16 @@ function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
   const params = { ...filters };
   const { loading, data, error } = useLoad(() => insightsApi.customerChange(params), JSON.stringify(params));
   const compared = data ? shortSpan(data.range.previous_from, data.range.previous_to) : '';
-  const rows = data ? data[tab] : [];
+  const [q, setQ] = useState('');
+  const [typePick, setTypePick] = useState(null);
+  const [mrPick, setMrPick] = useState(null);
+  const all = data ? data[tab] : [];
+  const term = q.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || [r.name, r.mr, r.type].some((v) => String(v || '').toLowerCase().includes(term)))
+    && (!typePick || r.type === typePick) && (!mrPick || (r.mr || 'No MR') === mrPick));
+  const pool = data ? [...data.active, ...data.started, ...data.stopped] : [];
+  const typeOptions = [...new Set(pool.map((r) => r.type).filter(Boolean))].sort();
+  const mrOptions = [...new Set(pool.map((r) => r.mr || 'No MR'))].sort();
   const tabs = [
     { value: 'active', label: `Active ${data ? data.active.length : ''}` },
     ...(data?.range.previous_from ? [
@@ -124,10 +156,18 @@ function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
         <Text size="sm" c="dimmed">{sub}</Text>
       </div>
       {tabs.length > 1 && <SegmentedControl fullWidth size="sm" value={tab} onChange={setTab} data={tabs} />}
+      {data && (
+        <PanelFilters isMobile={isMobile} search={q} onSearch={setQ} placeholder="Customer, MR, type"
+          selects={[
+            !filters.customer_type && { key: 'type', placeholder: 'All types', data: typeOptions, value: typePick, onChange: setTypePick },
+            (filters.mr_id === undefined || filters.mr_id === null) && { key: 'mr', placeholder: 'All MRs', data: mrOptions, value: mrPick, onChange: setMrPick },
+          ]}
+          right={rows.length !== all.length ? <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{rows.length} of {all.length}</Text> : null} />
+      )}
       {error && <Alert color="red">{error}</Alert>}
       {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : (
         <Stack gap={0}>
-          {!rows.length && <Text c="dimmed" size="sm" py="sm">{tab === 'stopped' ? 'No one stopped buying. 👍' : 'Nobody here.'}</Text>}
+          {!rows.length && <Text c="dimmed" size="sm" py="sm">{all.length ? 'Nobody matches.' : tab === 'stopped' ? 'No one stopped buying. 👍' : 'Nobody here.'}</Text>}
           {rows.map((r) => {
             const amount = tab === 'stopped' ? r.previous_sales : r.sales;
             const last = r.last_order ? new Date(`${r.last_order}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
@@ -165,7 +205,20 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const collected = item.records === 'collected';
   const age = item.records === 'age' || item.records === 'outstanding';
   const title = item.title || RECORD_TITLES[item.records];
-  const items = data?.items || [];
+  const allItems = data?.items || [];
+  // In-panel search and filters (on the loaded rows; totals follow them).
+  const [q, setQ] = useState('');
+  const [pick, setPick] = useState(null);      // status (invoices) or mode (collections)
+  const [typePick, setTypePick] = useState(null);
+  const typeFixed = Boolean(filters.customer_type || item.customerType);
+  const term = q.trim().toLowerCase();
+  const items = allItems.filter((r) => (!term || [r.customer, r.invoice_number, r.mr, r.mode].some((v) => String(v || '').toLowerCase().includes(term)))
+    && (!pick || (collected ? (pick === 'Reversal' ? r.amount < 0 : r.mode === pick && r.amount >= 0) : r.status === pick))
+    && (!typePick || r.type === typePick));
+  const narrowed = items.length !== allItems.length;
+  const shownTotal = items.reduce((sum, r) => sum + (collected ? r.amount : (age ? r.pending : r.total)), 0);
+  const modeOptions = [...new Set(allItems.map((r) => (r.amount < 0 ? 'Reversal' : r.mode)).filter(Boolean))].sort();
+  const typeOptions = [...new Set(allItems.map((r) => r.type).filter(Boolean))].sort();
 
   const exportCsv = () => {
     const head = collected ? ['Payment date', 'Invoice', 'Customer', 'MR', 'Mode', 'Amount'] : ['Invoice', 'Invoice date', 'Customer', 'MR', 'Total', 'Paid', 'Pending', 'Status'];
@@ -182,13 +235,20 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
     <Stack gap="sm">
       <div>
         <Text fw={700} fz={18}>{title}</Text>
-        <Text size="sm" c="dimmed">{age ? 'As of today, oldest first' : periodLabel}{data ? ` · ${data.count} ${collected ? 'payments' : 'invoices'} · ${money(data.total)}` : ''}</Text>
+        <Text size="sm" c="dimmed">{age ? 'As of today, oldest first' : periodLabel}{data ? ` · ${narrowed ? items.length : data.count} ${collected ? 'payments' : 'invoices'} · ${money(narrowed ? shownTotal : data.total)}` : ''}{narrowed && data ? <Text span c="dimmed"> (of {data.count})</Text> : null}</Text>
       </div>
       {error && <Alert color="red">{error}</Alert>}
       {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : data && (
         <>
-          <Group justify="flex-end"><Button size="xs" variant="default" leftSection={<IconDownload size={14} />} disabled={!items.length} onClick={exportCsv}>Export</Button></Group>
-          {!items.length && <Text c="dimmed" size="sm">Nothing here.</Text>}
+          <PanelFilters isMobile={isMobile} search={q} onSearch={setQ} placeholder={collected ? 'Customer, invoice, MR, mode' : 'Customer, invoice, MR'}
+            selects={[
+              collected
+                ? { key: 'mode', placeholder: 'All modes', data: modeOptions, value: pick, onChange: setPick }
+                : { key: 'status', placeholder: 'All statuses', data: (age ? ['UNPAID', 'PARTIAL'] : ['UNPAID', 'PARTIAL', 'PAID']).map((v) => ({ value: v, label: STATUS_LABEL[v] })), value: pick, onChange: setPick },
+              !typeFixed && { key: 'type', placeholder: 'All types', data: typeOptions, value: typePick, onChange: setTypePick },
+            ]}
+            right={<Button size="xs" variant="default" leftSection={<IconDownload size={14} />} disabled={!items.length} onClick={exportCsv}>Export</Button>} />
+          {!items.length && <Text c="dimmed" size="sm">{narrowed ? 'Nothing matches.' : 'Nothing here.'}</Text>}
           {isMobile ? (
             <Stack gap={0}>
               {items.map((r, index) => (
@@ -208,7 +268,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
           ) : (
             <Table highlightOnHover verticalSpacing="xs" fz="sm">
               <Table.Thead><Table.Tr>
-                <Table.Th>{collected ? 'Paid on' : 'Invoice'}</Table.Th><Table.Th>{collected ? 'Invoice' : 'Date'}</Table.Th><Table.Th>Customer</Table.Th>
+                <Table.Th>{collected ? 'Paid on' : 'Invoice'}</Table.Th><Table.Th>{collected ? 'Invoice' : 'Date'}</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>
                 <Table.Th ta="right">{collected ? 'Amount' : (item.records === 'outstanding' || age ? 'Pending' : 'Amount')}</Table.Th><Table.Th>{collected ? 'Mode' : 'Status'}</Table.Th>
               </Table.Tr></Table.Thead>
               <Table.Tbody>
@@ -217,6 +277,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
                     <Table.Td fw={600}>{collected ? shortDate(r.payment_date) : r.invoice_number}</Table.Td>
                     <Table.Td c="dimmed">{collected ? r.invoice_number : shortDate(r.invoice_date)}{age && <Text size="xs" fw={600} c={r.days_late >= 0 ? 'red.7' : 'dimmed'}>{dueText(r.days_late)}</Text>}</Table.Td>
                     <Table.Td><Text size="sm" c="green.8" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onCustomer({ id: r.customer_id, name: r.customer }); }}>{r.customer}</Text></Table.Td>
+                    <Table.Td c="dimmed">{r.mr || '—'}</Table.Td>
                     <Table.Td ta="right" fw={700} className={css.num} c={collected && r.amount < 0 ? 'orange.8' : undefined}>{money(collected ? r.amount : (item.records === 'outstanding' || age ? r.pending : r.total))}</Table.Td>
                     <Table.Td>{collected ? r.mode : <StatusBadge status={r.status} />}</Table.Td>
                   </Table.Tr>
@@ -224,7 +285,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
               </Table.Tbody>
             </Table>
           )}
-          {data?.truncated && <Text size="xs" c="dimmed">Showing the first {items.length}. Export has the same rows; narrow the dates to see more.</Text>}
+          {data?.truncated && <Text size="xs" c="dimmed">Showing the first {allItems.length}. Export has the same rows; narrow the dates to see more.</Text>}
         </>
       )}
     </Stack>

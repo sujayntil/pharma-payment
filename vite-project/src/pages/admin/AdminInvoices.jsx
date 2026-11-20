@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Button, Group, Loader, Menu, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCircleCheck, IconDots, IconDownload, IconEdit, IconEye, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
+import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCategory, IconCircleCheck, IconDots, IconDownload, IconEdit, IconEye, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { invoicesApi } from '../../api/invoicesApi';
 import { adminApi } from '../../api/adminApi';
@@ -10,6 +10,7 @@ import { CardList } from '../../components/common/RowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
+import { CUSTOMER_TYPES } from '../../utils/customerTypes';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 // Replaced by the Pending / Paid / All tabs + "Show only" below:
@@ -53,7 +54,9 @@ const ONLY_PLACEHOLDER = { pending: 'All pending', paid: 'All paid', all: 'All i
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
 // sort '' = the tab's default: Pending oldest first, Paid / All newest first.
 const ANY = () => true;
-const BLANK = { mrId: '', only: '', range: EMPTY_RANGE, sort: '' };
+const BLANK = { mrId: '', customerType: '', only: '', range: EMPTY_RANGE, sort: '' };
+// Same groups as Insights and the Dashboard.
+const TYPE_OPTIONS = [...CUSTOMER_TYPES, 'Other'].map((t) => ({ value: t, label: t }));
 
 function tabParams(tab, only) {
   if (tab === 'paid') return { status: 'PAID' };
@@ -113,6 +116,8 @@ export default function AdminInvoices() {
           sort_order: sort,
           ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }),
           ...(filters.mrId && { mr_id: filters.mrId }),
+        ...(filters.customerType && { customer_type: filters.customerType }),
+          ...(filters.customerType && { customer_type: filters.customerType }),
           ...(filters.range.from && { date_from: filters.range.from }),
           ...(filters.range.to && { date_to: filters.range.to }),
         });
@@ -198,6 +203,7 @@ export default function AdminInvoices() {
   */
   const chips = [
     filters.only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === filters.only)?.label}`, onRemove: () => update({ only: '' }) },
+    filters.customerType && { key: 'ctype', label: `Type: ${filters.customerType}`, onRemove: () => update({ customerType: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
     filters.sort && { key: 'sort', label: SORTS.find((s) => s.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },
@@ -271,6 +277,7 @@ export default function AdminInvoices() {
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}>
       {/* Replaced by the tabs above + "Show only": <StatusTabs value={filters.status} onChange={(status) => update({ status })} /> */}
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}
+      <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_OPTIONS} value={filters.customerType} onChange={(customerType) => update({ customerType: customerType || '' })} />
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />

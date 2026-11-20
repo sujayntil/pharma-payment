@@ -1,0 +1,24 @@
+/* Laptop side panel: floats above the page with a soft shadow on its left edge. */
+.content {
+  box-shadow: -18px 0 48px rgba(15, 23, 42, 0.16), -2px 0 6px rgba(15, 23, 42, 0.06);
+  border-left: 1px solid var(--app-line, var(--mantine-color-gray-3));
+}
+:global([data-mantine-color-scheme='dark']) .content {
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.55), -2px 0 6px rgba(0, 0, 0, 0.35);
+}
+
+/* The round → sitting half over the panel's left edge, halfway down. */
+.edge {
+  position: fixed;
+  top: 50%;
+  transform: translate(50%, -50%);
+}
+.edgeButton {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+  background: var(--mantine-color-body);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.edgeButton:hover {
+  transform: translateX(2px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.24);
+}

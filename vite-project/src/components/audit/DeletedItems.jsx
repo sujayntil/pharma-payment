@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Drawer, Group, Loader, Paper, SimpleGrid, Stack, Table, Text } from '@mantine/core';
+import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Stack, Table, Text } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconArrowBackUp, IconDownload, IconFileInvoice, IconUser, IconUsers, IconCashOff } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import EmptyResults from '../common/EmptyResults';
+import SidePanel from '../common/SidePanel';
 import ListPagination, { PAGE_SIZE } from '../common/ListPagination';
 import { listPaperProps, reloadingStyle } from '../common/listPaper';
 import StatCard from '../common/StatCard';
@@ -189,12 +190,11 @@ export default function DeletedItems({ preset }) {
 
 /** One deleted item as it was, with Restore when possible. */
 function DeletedDetail({ id, onClose, onRestored }) {
-  const isMobile = useIsMobile();
   useBackClose(Boolean(id), onClose);
   return (
-    <Drawer opened={Boolean(id)} onClose={onClose} position={isMobile ? 'bottom' : 'right'} size={isMobile ? '88%' : 520} radius={isMobile ? 'lg' : 0} title={<Text fw={700}>Deleted item</Text>} zIndex={220}>
+    <SidePanel opened={Boolean(id)} onClose={onClose} width={600} mobileProps={{ size: '88%' }} title={<Text fw={700}>Deleted item</Text>} zIndex={220}>
       {id && <DetailBody key={id} id={id} onRestored={onRestored} />}
-    </Drawer>
+    </SidePanel>
   );
 }
 

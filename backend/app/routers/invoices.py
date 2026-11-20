@@ -12,6 +12,7 @@ from ..collection_info import RECORDER_ID, last_collection_fields, latest_collec
 from ..ai.extractor import extract_invoice_from_image  # noqa: F401  (used by the disabled extract route)
 from ..invoice_history import build_invoice_history
 from ..audit import invoice_snapshot, write_audit
+from ..customer_groups import invoice_type_filter
 from ..database import get_db
 from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import get_current_user, require_admin
@@ -204,11 +205,12 @@ def list_invoices(
     # Additive, all optional (calls without them behave exactly as before):
     pending_only: bool = False,          # "Pending" tab: invoices with a balance
     sort_order: Optional[str] = None,    # newest (default) | oldest | amount
+    customer_type: Optional[str] = None,  # Distributor / Chemist / Doctor / Hospital / Other
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     q, search = _admin_invoice_query(
-        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order
+        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type
     )
     # Pending total for exactly this filtered set (paged responses only).
     filtered_outstanding = q.with_entities(
@@ -222,7 +224,7 @@ def list_invoices(
     return {**page_result(items, total, page_size, page_offset), "filtered_outstanding": filtered_outstanding}
 
 
-def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order):
+def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type=None):
     """Validates the Admin invoice filters and returns (unordered query,
     cleaned search). One builder for the list and the Excel export, so both
     always cover exactly the same rows."""
@@ -248,6 +250,8 @@ def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, sea
         q = q.filter(models.Invoice.status == status.upper())
     if customer_id:
         q = q.filter(models.Invoice.customer_id == customer_id)
+    if customer_type and customer_type.strip():
+        q = q.filter(invoice_type_filter(db, customer_type))
     if date_from:
         q = q.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
@@ -286,13 +290,14 @@ def export_invoices(
     search: Optional[str] = None,
     pending_only: bool = False,
     sort_order: Optional[str] = None,
+    customer_type: Optional[str] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     """Admin-only Excel download of the invoice list with the same filters,
     search and sort as GET /invoices (all matching rows, not just one page)."""
     q, _search = _admin_invoice_query(
-        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order
+        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type
     )
     total = q.order_by(None).count()
     if total > EXPORT_MAX_ROWS:

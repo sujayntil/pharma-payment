@@ -491,7 +491,7 @@ def customer_change(db: Session, start: date, end: date, filters: Filters, all_t
     return out
 
 def invoice_list(db: Session, kind: str, start: date, end: date, filters: Filters, bucket: str | None = None,
-                 limit: int = 500) -> dict:
+                 limit: int = 3000) -> dict:
     """The records behind a number: sales / outstanding / active (invoices
     dated in the period), collected (payments in the period), age (pending
     today in an age bucket)."""
@@ -503,7 +503,7 @@ def invoice_list(db: Session, kind: str, start: date, end: date, filters: Filter
         c = book.customers.get(i.customer_id)
         return {"invoice_id": i.id, "invoice_number": i.number, "invoice_date": i.date.isoformat() if i.date else None,
                 "customer_id": i.customer_id, "customer": c.name if c else "—", "mr": book.mr_names.get(i.mr_id),
-                "total": round(i.total, 2), "paid": round(i.paid, 2), "pending": round(i.pending, 2),
+                "type": book.group_of(i), "total": round(i.total, 2), "paid": round(i.paid, 2), "pending": round(i.pending, 2),
                 "status": i.status, **extra}
 
     if kind == "collected":

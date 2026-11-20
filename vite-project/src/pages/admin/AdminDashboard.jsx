@@ -5,7 +5,9 @@ import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import GreetingBanner from '../../components/common/GreetingBanner';
 import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../../store/slices/adminSlice';
-import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
+import { PAGE_SIZE } from '../../components/common/ListPagination';
+import { useShowMore } from '../../components/insights/useShowMore';
+import { useNavigate } from 'react-router-dom';
 import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import { datePresets, describeRange } from '../../components/filters/dateRanges';
@@ -18,14 +20,24 @@ import SectionNav from '../../components/common/SectionNav';
 // "Jump to section" (right-edge dots on laptop, chips on phone).
 const DASH_SECTIONS = [
   { id: 'dash-overview', label: 'Overview' },
-  { id: 'dash-attention', label: 'Needs attention' },
   { id: 'dash-activity', label: 'Recent collections' },
+  { id: 'dash-attention', label: 'Needs attention' },
 ];
 import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { dateTime, downloadErrorText, money, saveDownload } from '../../utils/formatters';
+import { dateTime, downloadErrorText, money, saveDownload, timeOf } from '../../utils/formatters';
+
+// "Today" / "Yesterday" / "18 Nov" in India time, for the phone's day headings.
+function istDayLabel(value) {
+  const key = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const day = key(new Date(value));
+  const now = new Date();
+  if (day === key(now)) return 'Today';
+  if (day === key(new Date(now.getTime() - 86400000))) return 'Yesterday';
+  return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+}
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 
 /** ₹ smaller and lighter than the digits; counts up when the figure arrives. */
@@ -149,7 +161,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
   // zeros that have no invoice count); later reloads keep the numbers on screen.
   const statsPending = dashboard?.total_invoices === undefined && !statsError;
   const isMobile = useIsMobile();
-  const [alertPage, setAlertPage] = useState(1);
+  const alertPage = 1; // first 50 load; the card shows 5 at a time and links to Invoices for the rest
   const [appliedCustomerType, setAppliedCustomerType] = useState('');
   const [recent, setRecent] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -211,6 +223,20 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
   const showHigh = (alertsLoading && !alerts.length) || alertCount > 0;
   const zoneTitle = `${rangeLabel || 'All time'}${appliedCustomerType ? ` · ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}` : ''}`;
   const th = { className: css.th };
+  // Each list: first 5, then "Show 5 more"; a "See all" link for the full page.
+  const navigate = useNavigate();
+  const seeAll = (label, path) => <UnstyledButton className={css.seeAll} onClick={() => navigate(path)}>{label} →</UnstyledButton>;
+  const recentMore = useShowMore(recent, 5, 5, recent.length ? seeAll('See all in Collections', '/admin/collections') : null);
+  const alertsMore = useShowMore(alerts, 5, 5, alertCount ? seeAll('See all in Invoices', '/admin/invoices') : null);
+  const recorderLabel = useActorLabel();
+  // Phone: collections grouped under small day headings (Today, Yesterday, 18 Nov).
+  const recentByDay = [];
+  recentMore.visible.forEach((item) => {
+    const day = istDayLabel(item.payment_date);
+    const group = recentByDay[recentByDay.length - 1];
+    if (group && group.day === day) group.items.push(item); else recentByDay.push({ day, items: [item] });
+  });
+
   const signed = (item) => (
     <Text span fw={700} className={css.num} c={item.is_reversal ? 'orange.8' : 'green.8'} style={{ whiteSpace: 'nowrap' }}>
       {item.is_reversal ? '−' : '+'}{money(Math.abs(item.amount))}
@@ -247,6 +273,47 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
         <OwedBar loading={statsPending} d={dashboard} />
       </Stack>
 
+      {/* Activity: money coming in reads as "+₹", like a bank credit. */}
+      <Stack gap={12} id="dash-activity" data-section>
+        <ZoneHeading icon={IconReceipt} tone="blue" title="Activity" />
+        <Paper p="md" className={css.card}>
+          <Text className={css.cardTitle} mb="sm">Recent collections</Text>
+          {recentMore.anchor}
+          {recentLoading && !recent.length ? (
+            <Stack gap={10}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={22} radius="sm" />)}</Stack>
+          ) : recent.length && isMobile ? (
+            <Stack gap={0}>{recentByDay.map((group) => (
+              <div key={group.day}>
+                <Text fz={12} c="dimmed" pt={8} pb={2}>{group.day}</Text>
+                {group.items.map((item) => (
+                  <Group key={item.payment_id} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: 'pointer' }} onClick={() => setOpenId(item.invoice_id)}>
+                    {/* No avatar on phones: the second line (invoice · who · mode · time) needs the room. */}
+                    <div style={{ minWidth: 0 }}>
+                      <Text size="sm" fw={600} truncate>{item.customer_name || '—'}</Text>
+                      <Text size="xs" c="dimmed" truncate>{[item.invoice_number, recorderLabel(recorderOf(item)), item.is_reversal ? 'Reversal' : (item.mode || 'Other'), timeOf(item.payment_date)].filter(Boolean).join(' · ')}</Text>
+                    </div>
+                    {signed(item)}
+                  </Group>
+                ))}
+              </div>
+            ))}</Stack>
+          ) : recent.length ? (
+            <Table.ScrollContainer minWidth={600}>
+              <Table highlightOnHover verticalSpacing="xs">
+                <Table.Thead><Table.Tr><Table.Th {...th}>When</Table.Th><Table.Th {...th}>Customer</Table.Th><Table.Th {...th}>Invoice</Table.Th><Table.Th {...th}>Recorded by</Table.Th><Table.Th {...th}>Mode</Table.Th><Table.Th {...th} ta="right">Amount</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>{recentMore.visible.map((item) => (
+                  <Table.Tr key={item.payment_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }}>
+                    <Table.Td c="dimmed" style={{ whiteSpace: 'nowrap' }}>{dateTime(item.payment_date)}</Table.Td>
+                    <Table.Td>{item.customer_name || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td><Recorder row={item} /></Table.Td><Table.Td c="dimmed">{item.is_reversal ? 'Reversal' : (item.mode || 'Other')}</Table.Td><Table.Td ta="right">{signed(item)}</Table.Td>
+                  </Table.Tr>
+                ))}</Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          ) : <Text c="dimmed" py="md">No collections recorded yet.</Text>}
+          {recent.length > 0 && recentMore.footer}
+        </Paper>
+      </Stack>
+
       {/* Needs attention: red only here, where action is needed. */}
       <Stack gap={12} id="dash-attention" data-section>
         <ZoneHeading icon={IconAlertTriangle} tone="red" title="Needs attention" />
@@ -254,14 +321,16 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
         {/* One below the other at full width: two side by side left a big
             empty space under the shorter list. */}
         <SimpleGrid cols={1} spacing="sm">
+          <OverdueCustomersPanel refined cardClass={css.card} headerClass={css.th} load={adminApi.getOverdueAlerts} showMr onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} tableMinWidth={540} initial={5} />
           {showHigh && (
             <Paper p="md" className={css.card}>
               <Group justify="space-between" mb="sm" wrap="nowrap">
                 <div><Text className={css.cardTitle}>Pending above ₹50,000</Text><Text size="sm" c="dimmed">May need follow up</Text></div>
                 <Badge color="red" variant="light">{alertCount}</Badge>
               </Group>
+              {alertsMore.anchor}
               {/* Spinner only on the first load; the 20 s quiet refresh swaps rows in place. */}{alertsLoading && !alerts.length ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : (
-                isMobile ? <Stack gap={0}>{alerts.map((item, index) => (
+                isMobile ? <Stack gap={0}>{alertsMore.visible.map((item, index) => (
                   <Group key={`${item.invoice_number}-${index}`} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: item.invoice_id ? 'pointer' : undefined }} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined}>
                     <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>
                     <Text fw={700} c="red.7" className={css.num} style={{ whiteSpace: 'nowrap' }}>{money(item.pending_amount)}</Text>
@@ -269,7 +338,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
                 ))}</Stack> : <Table.ScrollContainer minWidth={480}>
                   <Table highlightOnHover verticalSpacing="xs">
                     <Table.Thead><Table.Tr><Table.Th {...th}>Customer</Table.Th><Table.Th {...th}>Invoice</Table.Th><Table.Th {...th}>MR</Table.Th><Table.Th {...th} ta="right">Pending</Table.Th></Table.Tr></Table.Thead>
-                    <Table.Tbody>{alerts.map((item, index) => (
+                    <Table.Tbody>{alertsMore.visible.map((item, index) => (
                       <Table.Tr key={`${item.invoice_number}-${index}`} onClick={item.invoice_id ? () => setOpenId(item.invoice_id) : undefined} style={item.invoice_id ? { cursor: 'pointer' } : undefined}>
                         <Table.Td fw={600}>{item.customer || '—'}</Table.Td><Table.Td c="dimmed">{item.invoice_number}</Table.Td><Table.Td>{item.mr || '—'}</Table.Td><Table.Td ta="right" fw={700} c="red.7" className={css.num}>{money(item.pending_amount)}</Table.Td>
                       </Table.Tr>
@@ -277,48 +346,12 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
                   </Table>
                 </Table.ScrollContainer>
               )}
-              <ListPagination total={alertCount} page={alertPage} onChange={setAlertPage} label="invoices" />
+              {!(alertsLoading && !alerts.length) && alertsMore.footer}
             </Paper>
           )}
-          <OverdueCustomersPanel refined cardClass={css.card} headerClass={css.th} load={adminApi.getOverdueAlerts} showMr onSelect={onOpenCustomer ? (row) => onOpenCustomer({ id: row.customer_id, name: row.customer }) : undefined} tableMinWidth={540} />
         </SimpleGrid>
       </Stack>
 
-      {/* Activity: money coming in reads as "+₹", like a bank credit. */}
-      <Stack gap={12} id="dash-activity" data-section>
-        <ZoneHeading icon={IconReceipt} tone="blue" title="Activity" />
-        <Paper p="md" className={css.card}>
-          <Text className={css.cardTitle} mb="sm">Recent collections</Text>
-          {recentLoading && !recent.length ? (
-            <Stack gap={10}>{[0, 1, 2, 3].map((i) => <Skeleton key={i} height={22} radius="sm" />)}</Stack>
-          ) : recent.length && isMobile ? (
-            <Stack gap={0}>{recent.map((item) => (
-              <Group key={item.payment_id} justify="space-between" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: 'pointer' }} onClick={() => setOpenId(item.invoice_id)}>
-                <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-                  <Avatar size={30} radius="xl" name={item.customer_name || '?'} color="initials" />
-                  <div style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={600} truncate>{item.customer_name || '—'}</Text>
-                    <Text size="xs" c="dimmed" truncate>{item.invoice_number} · {dateTime(item.payment_date)}</Text>
-                  </div>
-                </Group>
-                {signed(item)}
-              </Group>
-            ))}</Stack>
-          ) : recent.length ? (
-            <Table.ScrollContainer minWidth={600}>
-              <Table highlightOnHover verticalSpacing="xs">
-                <Table.Thead><Table.Tr><Table.Th {...th}>When</Table.Th><Table.Th {...th}>Customer</Table.Th><Table.Th {...th}>Invoice</Table.Th><Table.Th {...th}>Recorded by</Table.Th><Table.Th {...th} ta="right">Amount</Table.Th></Table.Tr></Table.Thead>
-                <Table.Tbody>{recent.map((item) => (
-                  <Table.Tr key={item.payment_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }}>
-                    <Table.Td c="dimmed" style={{ whiteSpace: 'nowrap' }}>{dateTime(item.payment_date)}</Table.Td>
-                    <Table.Td>{item.customer_name || '—'}</Table.Td><Table.Td fw={600}>{item.invoice_number}</Table.Td><Table.Td><Recorder row={item} /></Table.Td><Table.Td ta="right">{signed(item)}</Table.Td>
-                  </Table.Tr>
-                ))}</Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          ) : <Text c="dimmed" py="md">No collections recorded yet.</Text>}
-        </Paper>
-      </Stack>
       <InvoiceHistory invoiceId={openId} onClose={() => setOpenId(null)} onChanged={() => setRefreshKey((v) => v + 1)} onRecord={setRecording} refreshKey={refreshKey} />
       <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={() => setRefreshKey((v) => v + 1)} />
     </Stack>

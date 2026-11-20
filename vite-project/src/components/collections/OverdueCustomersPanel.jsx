@@ -1,3 +1,4 @@
+import { useShowMore } from '../insights/useShowMore';
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text, ThemeIcon, Title, UnstyledButton } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
@@ -22,7 +23,7 @@ const ageBadge = (days, credit = 40) => {
   const late = days - credit;
   return late >= 50 ? { color: 'red', variant: 'filled' } : late >= 10 ? { color: 'red', variant: 'light' } : { color: 'orange', variant: 'light' };
 };
-export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No overdue bills. Nothing is unpaid past 40 days (60 for distributors).', onSelect, tableMinWidth, refined = false, headerClass, cardClass }) {
+export default function OverdueCustomersPanel({ load, showMr = false, description, emptyText = 'No overdue bills. Nothing is unpaid past 40 days (60 for distributors).', onSelect, tableMinWidth, refined = false, headerClass, cardClass, initial = 0 }) {
   const isMobile = useIsMobile();
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this
   const [rows, setRows] = useState([]);
@@ -39,6 +40,8 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
   }, [load, appRefresh]);
 
   const total = rows.reduce((sum, item) => sum + Number(item.overdue_amount || 0), 0);
+  // Dashboard: first `initial` customers, then "Show 5 more".
+  const more = useShowMore(rows, initial || rows.length || 1, 5);
   const badgeFor = (days, credit) => (refined ? ageBadge(days, credit) : { color: 'red', variant: 'light' });
   const th = refined ? { className: headerClass } : {};
 
@@ -63,9 +66,10 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
           {rows.length > 0 && <Text size="sm" c="dimmed" style={{ whiteSpace: 'nowrap' }}><Text span fw={700} c="red.7" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(total)}</Text> · {count}</Text>}
         </Group>
         {error && <Alert color="red" mt="sm">{error}</Alert>}
+        {more.anchor}
         {loading ? <Group justify="center" p="md"><Loader size="sm" /></Group> : !rows.length ? null : isMobile ? (
           <Stack gap={0}>
-            {rows.map((item) => (
+            {more.visible.map((item) => (
               <Group key={item.customer_id} justify="space-between" align="flex-start" wrap="nowrap" gap="sm" py="xs" style={{ borderTop: '1px solid var(--app-line)', cursor: onSelect ? 'pointer' : undefined }} {...(onSelect && { component: UnstyledButton, onClick: () => onSelect(item), w: '100%', 'aria-label': `Open ${item.customer}` })}>
                 <div style={{ minWidth: 0 }}>
                   <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer}</Text>
@@ -86,7 +90,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
                 <Table.Th {...th} w="38%">Customer</Table.Th><Table.Th {...th} w="27%">Oldest invoice</Table.Th><Table.Th {...th} w="15%">Bill age</Table.Th><Table.Th {...th} ta="right">Balance</Table.Th>
               </Table.Tr>
             </Table.Thead>
-            <Table.Tbody>{rows.map((item) => (
+            <Table.Tbody>{more.visible.map((item) => (
               <Table.Tr key={item.customer_id} onClick={onSelect ? () => onSelect(item) : undefined} style={onSelect ? { cursor: 'pointer' } : undefined}>
                 <Table.Td>
                   <Text size="sm" fw={600} truncate title={item.customer}>{item.customer}</Text>
@@ -102,6 +106,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
             ))}</Table.Tbody>
           </Table>
         )}
+        {!loading && more.footer}
       </Paper>
     );
   }

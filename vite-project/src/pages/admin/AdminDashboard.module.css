@@ -78,3 +78,7 @@
 .deletedNote { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--app-faint, var(--mantine-color-gray-4)); color: var(--mantine-color-dimmed); }
 .deletedNote:hover { background: var(--app-soft); }
 .deletedNote b { color: var(--mantine-color-red-7); }
+
+/* "See all in Collections →" under a list. */
+.seeAll { font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); white-space: nowrap; }
+.seeAll:hover { text-decoration: underline; }

@@ -19,7 +19,6 @@ const LINES = [
   'Consistency beats luck.',
   'Aap pe bharosa hai.',
   'Today is a fresh start.',
-  'Thoda aur, bas thoda aur.',
   'Great teams start with you.',
   'Josh high rakho!',
   'Doctors remember good people.',

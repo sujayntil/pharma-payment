@@ -164,3 +164,20 @@ table tbody tr[data-selected] td:first-child {
 /* Stop the phone browser's own pull-to-refresh (it would reload the whole
    app and log nothing); the MR app does its own, which keeps filters. */
 html, body { overscroll-behavior-y: contain; }
+
+/* Column headers stay visible while a long list scrolls: under the top bar
+   on pages (--sticky-top), under the panel's own header in side panels. */
+:root { --sticky-base: 64px; --sticky-top: 64px; }
+@media (max-width: 47.99em) { :root { --sticky-base: 52px; --sticky-top: 52px; } }
+.mantine-Table-thead {
+  position: sticky;
+  top: var(--sticky-top, 0px);
+  z-index: 3;
+  background: var(--sticky-bg, var(--mantine-color-body));
+}
+.mantine-Table-thead::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  border-bottom: 1px solid var(--app-line, var(--mantine-color-gray-3));
+}

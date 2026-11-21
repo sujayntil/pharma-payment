@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Tooltip, Alert, Badge, Button, Group, Loader, Menu, Paper, ScrollArea, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { ActionIcon, Tooltip, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconArrowsSort, IconBook, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
@@ -37,6 +37,9 @@ import { CUSTOMER_TYPES } from '../../utils/customerTypes';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
+import TableScroll from '../../components/common/TableScroll';
+import StickyFilters from '../../components/common/StickyFilters';
+import TitleBar, { MiniStat } from '../../components/common/TitleBar';
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
@@ -55,7 +58,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
-  const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
+  const [search, setSearch] = useState(() => window.history.state?.usr?.search || ''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState({ mrId: '', type: '', sort: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState(openCustomer); const [collectingCustomer, setCollectingCustomer] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
@@ -209,13 +212,18 @@ export default function AdminCustomers({ openCustomer = null }) {
   };
 
   const shownCustomers = customers.filter((customer) => !hiddenIds.has(customer.id));
-  return <Stack gap="md"><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group>
+  return <Stack gap="md">
+    {isMobile && <><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group></>}
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
+    {/* Laptop: title, count, search and filters stay pinned while the rows scroll. */}
+    <StickyFilters enabled={!isMobile}><Stack gap="sm">
+    {!isMobile && <TitleBar title="Customers"><MiniStat label="Customers" value={total} /></TitleBar>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'pending' ? '' : next })} />
     </FilterBar>
+    </Stack></StickyFilters>
     <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && customers.length > 0)}>{loading && !customers.length ? <Group justify="center" p="xl"><Loader /></Group> : !shownCustomers.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="customers" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No customers yet.</Text>) : isMobile ? <CardList>{shownCustomers.map((customer) => (
       <SelectableRowCard
         key={customer.id}
@@ -244,7 +252,7 @@ export default function AdminCustomers({ openCustomer = null }) {
           </Group>
         )}
       />
-    ))}</CardList> : <ScrollArea><Table miw={900} highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={customerTicks} invoices={shownCustomers} /></Table.Th><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownCustomers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={customerTicks} invoice={customer} label={customer.name} /></Table.Td><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{displayPhone(customer.phone) || '—'}{customer.whatsapp_on === 'main' && <IconBrandWhatsapp size={14} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}{customer.alternate_phone && <Text size="xs" c="dimmed">Alt {displayPhone(customer.alternate_phone)}{customer.whatsapp_on === 'alternate' && <IconBrandWhatsapp size={13} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}</Text>}</Table.Td><Table.Td>{customer.mr_name || <Badge color="gray" variant="light">Unassigned</Badge>}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right" fw={700} c={Number(customer.pending_amount) > 0 ? 'red' : 'dimmed'} style={{ whiteSpace: 'nowrap' }}>{money(customer.pending_amount)}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{customer.latest_invoice_date ? shortDate(customer.latest_invoice_date) : '—'}</Table.Td><Table.Td>{customerActions(customer)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}
+    ))}</CardList> : <TableScroll minWidth={900}><Table miw={900} highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={customerTicks} invoices={shownCustomers} /></Table.Th><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Phone</Table.Th><Table.Th>MR</Table.Th><Table.Th>Invoices</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Last invoice</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownCustomers.map((customer) => <Table.Tr key={customer.id} onClick={() => openLedger(customer)} style={{ cursor: 'pointer' }}><Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={customerTicks} invoice={customer} label={customer.name} /></Table.Td><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{displayPhone(customer.phone) || '—'}{customer.whatsapp_on === 'main' && <IconBrandWhatsapp size={14} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}{customer.alternate_phone && <Text size="xs" c="dimmed">Alt {displayPhone(customer.alternate_phone)}{customer.whatsapp_on === 'alternate' && <IconBrandWhatsapp size={13} color="#25D366" style={{ marginLeft: 4, verticalAlign: -2 }} aria-label="WhatsApp" />}</Text>}</Table.Td><Table.Td>{customer.mr_name || <Badge color="gray" variant="light">Unassigned</Badge>}</Table.Td><Table.Td>{customer.invoice_count}</Table.Td><Table.Td ta="right" fw={700} c={Number(customer.pending_amount) > 0 ? 'red' : 'dimmed'} style={{ whiteSpace: 'nowrap' }}>{money(customer.pending_amount)}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{customer.latest_invoice_date ? shortDate(customer.latest_invoice_date) : '—'}</Table.Td><Table.Td>{customerActions(customer)}</Table.Td></Table.Tr>)}</Table.Tbody></Table></TableScroll>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="customers" />
     </Paper>
     <TickedBar ticks={customerTicks} invoices={shownCustomers} showTotal={false} onDelete={deleteManyCustomers} deleteLabel="Delete customers" />
@@ -301,19 +309,22 @@ export default function AdminCustomers({ openCustomer = null }) {
             </Paper>
           )
           : <SimpleGrid cols={3} spacing="xs"><StatCard size="md" label="Invoiced" value={money(ledger.total_invoiced)} /><StatCard size="md" label="Collected" color="green" value={money(ledger.total_paid)} /><StatCard size="md" label="Pending" color="red" value={money(ledger.outstanding)} /></SimpleGrid>)}
+        {/* Laptop: search and filters stay pinned while the rows scroll. */}
+        <StickyFilters enabled={!isMobile}>
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>
           <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} months firstDate={firstDate} quick={[]} />
         </FilterBar>
+        </StickyFilters>
         {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? (ledgerChips.some(Boolean) ? <EmptyResults search={ledgerSearch} noun="invoices" onClear={resetLedger} /> : <Text ta="center" c="dimmed" py="xl">No invoices for this customer yet.</Text>) : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (
           <InvoiceCard key={invoice.invoice_id} invoice={invoice} customerType={ledger.customer?.type ?? selected?.type} showCustomer={false} onOpen={() => setHistoryId(invoice.invoice_id)} onCollect={setRecording} onSelect={ticks.toggle} selected={ticks.isTicked(invoice)} selecting={ticks.count > 0} />
-        ))}</CardList> : <ScrollArea><Table miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}>{ledger && <TickAllCell ticks={ticks} invoices={ledger.invoices} />}</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th>{/* Disabled: MR is shown once in the header. Re-enable if needed. <Table.Th>MR</Table.Th> */}<Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}>
+        ))}</CardList> : <TableScroll minWidth={680}><Table miw={680} verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}>{ledger && <TickAllCell ticks={ticks} invoices={ledger.invoices} />}</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th>{/* Disabled: MR is shown once in the header. Re-enable if needed. <Table.Th>MR</Table.Th> */}<Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{ledger.invoices.map((invoice) => <Table.Tr key={invoice.invoice_id} onClick={() => setHistoryId(invoice.invoice_id)} style={{ cursor: 'pointer' }}>
           <Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td>
           <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}{invoice.mr && invoice.mr !== ledger.customer?.mr_name && <Text size="xs" c="dimmed" fw={400}>MR {invoice.mr}</Text>}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.date)}</Table.Td>{/* <Table.Td>{invoice.mr || '—'}</Table.Td> */}<Table.Td ta="right">{money(invoice.amount)}</Table.Td><Table.Td ta="right" c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
           <Table.Td><StatusCell row={invoice} /></Table.Td>
           <Table.Td maw={180}><RecordedBy row={invoice} /></Table.Td>
           <Table.Td>{ledgerActions(invoice)}</Table.Td>
-        </Table.Tr>)}</Table.Tbody></Table></ScrollArea>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
+        </Table.Tr>)}</Table.Tbody></Table></TableScroll>}<ListPagination total={ledger.invoice_count} page={ledgerPage} onChange={setLedgerPage} searchActive={Boolean(debouncedLedgerSearch.trim())} label="invoices" /></>}</div>}
         <TickedBar ticks={ticks} invoices={ledger?.invoices} onCollect={() => setCollectingCustomer({ id: selected.id, name: selected.name, invoiceIds: ticks.ids() })} />
       </Stack>
       {/* Long ledger: ↑ back to the totals and filters. */}

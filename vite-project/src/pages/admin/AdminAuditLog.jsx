@@ -18,6 +18,7 @@ import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { dayOf, displayPhone, errorText, money, timeOf } from '../../utils/formatters';
+import StickyFilters from '../../components/common/StickyFilters';
 
 const TYPES = [
   { value: 'collections', label: 'Collections' },
@@ -123,12 +124,15 @@ function ActivityLog() {
 
   return (
     <Stack gap="md">
+      {/* Laptop: search and filters stay pinned while the rows scroll. */}
+      <StickyFilters enabled={!isMobile}>
       <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, person" chips={chips} onReset={reset} activeOutline>
         <FilterSelect placeholder="Everyone" icon={<IconUser size={16} />} data={people} value={filters.userId} onChange={(userId) => update({ userId: userId || '' })} />
         <FilterSelect placeholder="All roles" icon={<IconUsers size={16} />} data={ROLES} value={filters.role} onChange={(role) => update({ role: role || '' })} />
         <FilterSelect placeholder="All actions" icon={<IconShieldCheck size={16} />} data={TYPES} value={filters.type} onChange={(type) => update({ type: type || '' })} />
         <DateRangeFilter label="Date" value={filters.range} onChange={(value) => update({ range: value })} />
       </FilterBar>
+      </StickyFilters>
       {error && <Alert color="red" variant="light">{error}</Alert>}
       <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && data.items.length > 0)}>
         {loading && !data.items.length ? <Group justify="center" p="xl"><Loader /></Group>

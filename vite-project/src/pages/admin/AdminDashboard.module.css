@@ -82,3 +82,13 @@
 /* "See all in Collections →" under a list. */
 .seeAll { font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); white-space: nowrap; }
 .seeAll:hover { text-decoration: underline; }
+
+/* Number cards you can tap: a small › and a soft lift on hover. */
+.tappable { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: left; cursor: pointer; transition: border-color 150ms ease, box-shadow 150ms ease; }
+.tappable:hover { border-color: var(--mantine-color-green-4); box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06); }
+.chev { margin-left: auto; margin-top: 2px; color: var(--app-muted, var(--mantine-color-dimmed)); flex-shrink: 0; }
+.label:has(.chev) { display: flex; align-items: flex-start; gap: 7px; }
+.label:has(.chev) .dot { margin-top: 5px; }
+.label:has(.chev) .dot { margin-right: 0; }
+.keyLink { border-radius: 4px; }
+.keyLink:hover b { text-decoration: underline; }

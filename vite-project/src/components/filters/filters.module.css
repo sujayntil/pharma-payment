@@ -155,3 +155,6 @@
 .inlinePanel { margin-top: 8px; padding: 12px; border: 1px solid var(--app-line-2); border-radius: 12px; background: var(--app-surface); }
 .clearX { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: var(--app-muted); cursor: pointer; pointer-events: auto; }
 .clearX:hover { background: var(--app-soft-2); color: var(--mantine-color-red-7); }
+
+/* Laptop "More" popover: one filter per line, full width. */
+.moreFields .select { flex: none; width: 100%; min-width: 0; }

@@ -1,0 +1,4 @@
+.input :global(.mantine-Input-input) { background: var(--mantine-color-body); }
+.dropdown { padding: 6px; }
+.option { border-radius: 8px; padding: 8px 10px; }
+.seeAll { font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); padding: 6px 10px; }

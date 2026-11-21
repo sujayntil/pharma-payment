@@ -1,0 +1,10 @@
+.bar {
+  position: sticky;
+  top: var(--sticky-base, 0px);
+  z-index: 4;
+  background: var(--sticky-bg, var(--app-page));  /* page colour; a panel sets its own */
+  margin-inline: -4px;
+  padding: 6px 4px 8px;
+  transition: box-shadow 150ms ease;
+}
+.bar[data-stuck] { box-shadow: 0 8px 12px -10px rgba(15, 23, 42, 0.25); }

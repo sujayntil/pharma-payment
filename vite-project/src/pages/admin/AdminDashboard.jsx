@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActionIcon, Alert, Avatar, Badge, Button, Group, Loader, Paper, Popover, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip, UnstyledButton } from '@mantine/core';
-import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconInfoCircle, IconReceipt, IconTrash } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconInfoCircle, IconChevronRight, IconReceipt, IconTrash } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import GreetingBanner from '../../components/common/GreetingBanner';
@@ -25,6 +25,8 @@ const DASH_SECTIONS = [
 ];
 import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
+import InsightsPanel from '../../components/insights/InsightsPanel';
+import DashboardSearch from '../../components/common/DashboardSearch';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { dateTime, downloadErrorText, money, saveDownload, timeOf } from '../../utils/formatters';
@@ -39,6 +41,7 @@ function istDayLabel(value) {
   return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
 }
 import { useAppRefresh } from '../../hooks/useAppRefresh';
+import TableScroll from '../../components/common/TableScroll';
 
 /** ₹ smaller and lighter than the digits; counts up when the figure arrives. */
 function Amount({ value, size = 26, color, animate = true }) {
@@ -56,9 +59,11 @@ function Amount({ value, size = 26, color, animate = true }) {
 // Money cards: the same figure size on all three. Tally sales sits on a soft
 // green card; Collected in green, Pending in red.
 const SALES_CARD = { background: 'var(--app-sales-bg)', borderColor: 'var(--app-sales-line)' };
-const Stat = ({ label, value, dot, color, sales = false, loading = false, note }) => (
-  <Paper p="md" className={css.card} h="100%" style={sales ? SALES_CARD : undefined}>
-    <div className={css.label} style={sales ? { color: 'var(--app-sales-label)', fontWeight: 500 } : undefined}>{dot && <span className={css.dot} style={{ background: dot }} />}{label}</div>
+// onOpen: tap the card for the list behind the number (side panel).
+const Stat = ({ label, value, dot, color, sales = false, loading = false, note, onOpen }) => (
+  <Paper p="md" className={`${css.card} ${onOpen ? css.tappable : ''}`} h="100%" style={sales ? SALES_CARD : undefined}
+    {...(onOpen && { component: UnstyledButton, onClick: onOpen, 'aria-label': `See the list behind ${label}`, w: '100%' })}>
+    <div className={css.label} style={sales ? { color: 'var(--app-sales-label)', fontWeight: 500 } : undefined}>{dot && <span className={css.dot} style={{ background: dot }} />}{label}{onOpen && <IconChevronRight size={15} className={css.chev} />}</div>
     {loading ? <Skeleton height={32} width={150} mt={8} mb={4} radius="sm" /> : <Amount value={value} size={30} color={color} />}
     {!loading && note}
   </Paper>
@@ -73,7 +78,7 @@ const owedSplit = (d) => (d && d.owed !== undefined ? (
 ) : null);
 
 /** One bar for what's owed today: green = not yet due, red = overdue. */
-function OwedBar({ d, loading }) {
+function OwedBar({ d, loading, onOpen }) {
   const owed = Number(d?.owed || 0);
   const late = Number(d?.owed_overdue || 0);
   const pct = owed > 0 ? Math.round((late / owed) * 100) : 0;
@@ -90,9 +95,9 @@ function OwedBar({ d, loading }) {
       {/* Key: which colour is which. */}
       {owed > 0 && (
         <Group gap={14} mt={8} wrap="wrap">
-          <Text fz={12} c="dimmed"><span className={css.keyDot} style={{ background: 'var(--mantine-color-green-6)' }} />Not yet due <b className={css.num} style={{ color: 'var(--mantine-color-text)' }}>{money(owed - late)}</b></Text>
+          <UnstyledButton className={css.keyLink} onClick={() => onOpen?.('notdue')} aria-label="See bills not yet due"><Text fz={12} c="dimmed"><span className={css.keyDot} style={{ background: 'var(--mantine-color-green-6)' }} />Not yet due <b className={css.num} style={{ color: 'var(--mantine-color-text)' }}>{money(owed - late)}</b></Text></UnstyledButton>
           <Group gap={4} wrap="nowrap">
-            <Text fz={12} c="dimmed"><span className={css.keyDot} style={{ background: 'var(--mantine-color-red-6)' }} />Overdue <b className={css.num} style={{ color: 'var(--mantine-color-red-7)' }}>{money(late)}</b></Text>
+            <UnstyledButton className={css.keyLink} onClick={() => onOpen?.('overdue')} aria-label="See overdue bills"><Text fz={12} c="dimmed"><span className={css.keyDot} style={{ background: 'var(--mantine-color-red-6)' }} />Overdue <b className={css.num} style={{ color: 'var(--mantine-color-red-7)' }}>{money(late)}</b></Text></UnstyledButton>
             {/* The credit rule, on hover or tap. */}
             <Popover withArrow position="top" shadow="md" width={230}>
               <Popover.Target><ActionIcon variant="subtle" color="gray" size={18} radius="xl" aria-label="What counts as overdue"><IconInfoCircle size={14} /></ActionIcon></Popover.Target>
@@ -223,6 +228,21 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
   const showHigh = (alertsLoading && !alerts.length) || alertCount > 0;
   const zoneTitle = `${rangeLabel || 'All time'}${appliedCustomerType ? ` · ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}` : ''}`;
   const th = { className: css.th };
+  // Tap a number: the list behind it, in the same side panel as Insights,
+  // with the Dashboard's dates and customer type.
+  const [panel, setPanel] = useState([]);
+  const DASH_TYPE = { distributor: ['Distributor'], chemist: ['Chemist'], doctor: ['Doctor'], other: ['Hospital', 'Other'] };
+  const panelTypes = appliedCustomerType ? DASH_TYPE[appliedCustomerType] : null;
+  const panelFilters = {
+    ...(rangeFrom || rangeTo ? { ...(rangeFrom && { date_from: rangeFrom }), ...(rangeTo && { date_to: rangeTo }) } : { all_time: true }),
+    ...(panelTypes?.length === 1 && { customer_type: panelTypes[0] }),
+  };
+  const LIST_TITLES = { sales: 'Tally sales', collected: 'Collected', outstanding: 'Outstanding today' };
+  const openList = (records, due) => setPanel([{
+    kind: 'records', records, ...(due && { due }), ...(panelTypes?.length > 1 && { types: panelTypes }),
+    title: due === 'overdue' ? 'Overdue bills' : due === 'notdue' ? 'Not yet due' : LIST_TITLES[records],
+  }]);
+
   // Each list: first 5, then "Show 5 more"; a "See all" link for the full page.
   const navigate = useNavigate();
   const seeAll = (label, path) => <UnstyledButton className={css.seeAll} onClick={() => navigate(path)}>{label} →</UnstyledButton>;
@@ -247,6 +267,8 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
     <Stack gap={28}>
       <SectionNav watch={`${Boolean(dashboard)}-${alertCount}`} sections={DASH_SECTIONS} />
       <GreetingBanner />
+      {/* Find a customer or invoice from here: ledger or invoice details open straight away. */}
+      <DashboardSearch onCustomer={(c) => onOpenCustomer?.(c)} onInvoice={setOpenId} />
 
       {/* Flat filter row; Reset appears only once a filter is on. */}
       <FilterBar compact chips={chips} onReset={filtersOn ? reset : undefined}>
@@ -265,12 +287,12 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
         </ZoneHeading>
         <SimpleGrid cols={{ base: 2, md: 3 }} spacing="sm">
           <div style={{ gridColumn: isMobile ? 'span 2' : undefined }}>
-            <Stat sales loading={statsPending} label="Tally sales" color="var(--app-sales-value)" value={dashboard?.total_sales} />
+            <Stat sales loading={statsPending} label="Tally sales" color="var(--app-sales-value)" value={dashboard?.total_sales} onOpen={() => openList('sales')} />
           </div>
-          <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} />
-          <Stat loading={statsPending} label="Outstanding today" dot="var(--mantine-color-red-6)" color="red.7" value={dashboard?.owed} note={owedSplit(dashboard)} />
+          <Stat loading={statsPending} label="Collected" dot="var(--mantine-color-green-7)" color="green.8" value={dashboard?.collected} onOpen={() => openList('collected')} />
+          <Stat loading={statsPending} label="Outstanding today" dot="var(--mantine-color-red-6)" color="red.7" value={dashboard?.owed} note={owedSplit(dashboard)} onOpen={() => openList('outstanding')} />
         </SimpleGrid>
-        <OwedBar loading={statsPending} d={dashboard} />
+        <OwedBar loading={statsPending} d={dashboard} onOpen={(due) => openList('outstanding', due)} />
       </Stack>
 
       {/* Activity: money coming in reads as "+₹", like a bank credit. */}
@@ -298,7 +320,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
               </div>
             ))}</Stack>
           ) : recent.length ? (
-            <Table.ScrollContainer minWidth={600}>
+            <TableScroll minWidth={600}>
               <Table highlightOnHover verticalSpacing="xs">
                 <Table.Thead><Table.Tr><Table.Th {...th}>When</Table.Th><Table.Th {...th}>Customer</Table.Th><Table.Th {...th}>Invoice</Table.Th><Table.Th {...th}>Recorded by</Table.Th><Table.Th {...th}>Mode</Table.Th><Table.Th {...th} ta="right">Amount</Table.Th></Table.Tr></Table.Thead>
                 <Table.Tbody>{recentMore.visible.map((item) => (
@@ -308,7 +330,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
                   </Table.Tr>
                 ))}</Table.Tbody>
               </Table>
-            </Table.ScrollContainer>
+            </TableScroll>
           ) : <Text c="dimmed" py="md">No collections recorded yet.</Text>}
           {recent.length > 0 && recentMore.footer}
         </Paper>
@@ -335,7 +357,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
                     <div style={{ minWidth: 0 }}><Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{item.customer || '—'}</Text><Text size="xs" c="dimmed">{item.invoice_number} · {item.mr || 'Unassigned'}</Text></div>
                     <Text fw={700} c="red.7" className={css.num} style={{ whiteSpace: 'nowrap' }}>{money(item.pending_amount)}</Text>
                   </Group>
-                ))}</Stack> : <Table.ScrollContainer minWidth={480}>
+                ))}</Stack> : <TableScroll minWidth={480}>
                   <Table highlightOnHover verticalSpacing="xs">
                     <Table.Thead><Table.Tr><Table.Th {...th}>Customer</Table.Th><Table.Th {...th}>Invoice</Table.Th><Table.Th {...th}>MR</Table.Th><Table.Th {...th} ta="right">Pending</Table.Th></Table.Tr></Table.Thead>
                     <Table.Tbody>{alertsMore.visible.map((item, index) => (
@@ -344,7 +366,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
                       </Table.Tr>
                     ))}</Table.Tbody>
                   </Table>
-                </Table.ScrollContainer>
+                </TableScroll>
               )}
               {!(alertsLoading && !alerts.length) && alertsMore.footer}
             </Paper>
@@ -352,6 +374,10 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
         </SimpleGrid>
       </Stack>
 
+      <InsightsPanel stack={panel} filters={panelFilters} periodLabel={rangeLabel || 'All time'}
+        onPush={(next) => setPanel((stack) => [...stack, next])} onBack={() => setPanel((stack) => stack.slice(0, -1))}
+        onClose={() => setPanel([])} onChanged={() => setRefreshKey((v) => v + 1)}
+        onOpenLedger={onOpenCustomer ? (c) => { setPanel([]); onOpenCustomer(c); } : undefined} />
       <InvoiceHistory invoiceId={openId} onClose={() => setOpenId(null)} onChanged={() => setRefreshKey((v) => v + 1)} onRecord={setRecording} refreshKey={refreshKey} />
       <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={() => setRefreshKey((v) => v + 1)} />
     </Stack>

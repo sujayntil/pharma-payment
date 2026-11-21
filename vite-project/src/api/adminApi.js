@@ -163,5 +163,11 @@ export const adminApi = {
   async exportDeletions(params = {}) {
     return axiosClient.get('/admin/deletions/export', { params, responseType: 'blob' });
   },
+
+  /** Dashboard search: a few customers and invoices matching the text. */
+  async quickSearch(q) {
+    const response = await axiosClient.get('/admin/search', { params: { q } });
+    return response.data;
+  },
 };
 

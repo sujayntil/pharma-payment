@@ -5,6 +5,7 @@ import { IconCheck } from '@tabler/icons-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { errorText, money, shortDate } from '../../utils/formatters';
+import TableScroll from '../common/TableScroll';
 
 /**
  * "Overdue" panel (unpaid past 40 days' credit; 60 for distributors) shared by the Admin dashboard (all
@@ -140,7 +141,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
           ))}
         </Stack>
       ) : (
-        <Table.ScrollContainer minWidth={tableMinWidth ?? (showMr ? 760 : 640)}>
+        <TableScroll minWidth={tableMinWidth ?? (showMr ? 760 : 640)}>
           <Table striped={!refined} highlightOnHover verticalSpacing={refined ? 'xs' : 'sm'}>
             <Table.Thead>
               <Table.Tr>
@@ -160,7 +161,7 @@ export default function OverdueCustomersPanel({ load, showMr = false, descriptio
               </Table.Tr>
             ))}</Table.Tbody>
           </Table>
-        </Table.ScrollContainer>
+        </TableScroll>
       )}
     </Paper>
   );

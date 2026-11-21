@@ -43,7 +43,7 @@ export default function AdminLayout() {
   const tabPath = (tab) => (tab === 'dashboard' ? '/admin' : `/admin/${tab}`);
   // Set when the Dashboard opens a customer; the key remounts Customers on it.
   const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
-  const choose = (tab) => { if (tab !== activeTab || openCustomer || location.state?.collectionsFilters || location.state?.auditView) navigate(tabPath(tab)); };
+  const choose = (tab) => { if (tab !== activeTab || openCustomer || location.state?.collectionsFilters || location.state?.auditView || location.state?.search) navigate(tabPath(tab)); };
 
   return (
     <AppFrame items={ADMIN_TABS} active={activeTab} onChange={choose}>
@@ -51,8 +51,8 @@ export default function AdminLayout() {
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
         {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
         {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
-        {activeTab === 'invoices' && <AdminInvoices />}
-        {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
+        {activeTab === 'invoices' && <AdminInvoices key={location.state?.search ? `q:${location.state.search}` : 'plain'} />}
+        {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? (location.state?.search ? `q:${location.state.search}` : 'list')} openCustomer={openCustomer} />}
         {/* From Insights ("See in Collections"): opens already filtered. */}
         {activeTab === 'collections' && <AdminCollections key={location.state?.collectionsFilters ? JSON.stringify(location.state.collectionsFilters) : 'plain'} preset={location.state?.collectionsFilters ?? null} />}
         {activeTab === 'import' && <AdminImport />}

@@ -12,3 +12,7 @@ export const useInFilterSheet = () => useContext(FilterSheetContext);
 
 /** Popover/Combobox props for dropdowns opened from inside the sheet. */
 export const SHEET_DROPDOWN_PROPS = { hideDetached: false, floatingStrategy: 'fixed' };
+
+/** True for filters inside the laptop "More" popover: dropdowns open inside it
+ * (not in a portal), so picking an option doesn't close the popover. */
+export const MoreFiltersContext = createContext(false);

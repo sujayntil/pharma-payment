@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Group, Loader, Paper, ScrollArea, Stack, Table, Text, Title } from '@mantine/core';
+import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text, Title } from '@mantine/core';
 import { adminApi } from '../../api/adminApi';
 import FilterBar from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
@@ -10,6 +10,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { errorText, money } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
+import TableScroll from '../../components/common/TableScroll';
 
 // No sales yet means there is no rate to judge, so show a dash, not a red 0%.
 const rateOf = (row) => (Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : null);
@@ -52,6 +53,6 @@ export default function AdminPerformance() {
         badges={<RateBadge rate={rateOf(row)} />}
         details={[{ label: 'Sales', value: money(row.sales) }, { label: 'Pending', value: <Text span c="red" size="sm">{money(row.pending)}</Text> }]}
       />
-    ))}</CardList> : <ScrollArea><Table miw={640} striped verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Medical representative</Table.Th><Table.Th ta="right">Sales</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Collection rate</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.mr_id}><Table.Td fw={600}>{row.name} <span title="Months fully cleared" style={{ fontSize: 13, color: 'var(--app-sales-label)' }}>🏆 {row.trophies ?? 0}</span></Table.Td><Table.Td ta="right">{money(row.sales)}</Table.Td><Table.Td ta="right" c="green" fw={700}>{money(row.collected)}</Table.Td><Table.Td ta="right" c="red">{money(row.pending)}</Table.Td><Table.Td><RateBadge rate={rateOf(row)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></ScrollArea>}</Paper>
+    ))}</CardList> : <TableScroll minWidth={640}><Table miw={640} striped verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Medical representative</Table.Th><Table.Th ta="right">Sales</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Collection rate</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.mr_id}><Table.Td fw={600}>{row.name} <span title="Months fully cleared" style={{ fontSize: 13, color: 'var(--app-sales-label)' }}>🏆 {row.trophies ?? 0}</span></Table.Td><Table.Td ta="right">{money(row.sales)}</Table.Td><Table.Td ta="right" c="green" fw={700}>{money(row.collected)}</Table.Td><Table.Td ta="right" c="red">{money(row.pending)}</Table.Td><Table.Td><RateBadge rate={rateOf(row)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></TableScroll>}</Paper>
   </Stack>;
 }

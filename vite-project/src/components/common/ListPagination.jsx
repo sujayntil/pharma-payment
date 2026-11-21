@@ -12,7 +12,7 @@ export default function ListPagination({ total, page, onChange, searchActive = f
       : `0 ${label}`;
 
   return (
-    <Group justify="space-between" mt="md">
+    <Group justify="space-between" mt="md" className="list-pagination">
       <Text size="sm" c="dimmed">{summary}</Text>
       {!searchActive && total > PAGE_SIZE && (
         <Pagination size="sm" total={Math.ceil(total / PAGE_SIZE)} value={page} onChange={onChange} />

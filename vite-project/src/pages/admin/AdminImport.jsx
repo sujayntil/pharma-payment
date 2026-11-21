@@ -10,6 +10,7 @@ import ListPagination, { PAGE_SIZE } from '../../components/common/ListPaginatio
 import ManualInvoiceModal from './ManualInvoiceModal';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
+import TableScroll from '../../components/common/TableScroll';
 
 
 export default function AdminImport() {
@@ -59,7 +60,7 @@ export default function AdminImport() {
         subtitle={`${customer.type || 'No type'} · ${customer.invoice_count || 0} invoices`}
         details={[{ label: 'Assigned MR', full: true, value: <Select size="sm" clearable placeholder="Unassigned" aria-label={`Assign MR for ${customer.name}`} data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={customer.mr_id ? String(customer.mr_id) : null} onChange={(value) => askMap(customer, value)} /> }]}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={680}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Invoices</Table.Th><Table.Th>Assigned MR</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.invoice_count || 0}</Table.Td><Table.Td><Select size="xs" clearable placeholder="Unassigned" data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={customer.mr_id ? String(customer.mr_id) : null} onChange={(value) => askMap(customer, value)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
+    ))}</CardList> : <TableScroll minWidth={680}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Customer</Table.Th><Table.Th>Type</Table.Th><Table.Th>Invoices</Table.Th><Table.Th>Assigned MR</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{customers.map((customer) => <Table.Tr key={customer.id}><Table.Td fw={600}>{customer.name}</Table.Td><Table.Td>{customer.type || '—'}</Table.Td><Table.Td>{customer.invoice_count || 0}</Table.Td><Table.Td><Select size="xs" clearable placeholder="Unassigned" data={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} value={customer.mr_id ? String(customer.mr_id) : null} onChange={(value) => askMap(customer, value)} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></TableScroll>}
       <ListPagination total={customerTotal} page={page} onChange={setPage} searchActive={Boolean(search.trim())} label="customers" />
     </Paper>
     <ManualInvoiceModal opened={manualOpen} onClose={() => setManualOpen(false)} mrOptions={mrs.map((mr) => ({ value: String(mr.id), label: mr.name }))} onSaved={(text) => { setMessage(text); setRefresh((value) => value + 1); }} />

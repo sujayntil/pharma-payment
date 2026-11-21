@@ -16,6 +16,7 @@ import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { dateTime, downloadErrorText, errorText, money, saveDownload, shortDate, timeOf } from '../../utils/formatters';
+import StickyFilters from '../common/StickyFilters';
 
 const istDay = (at) => new Date(at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
@@ -118,18 +119,21 @@ export default function DeletedItems({ preset }) {
 
   return (
     <Stack gap="md">
+      {/* Laptop: search and filters stay pinned while the rows scroll. */}
+      <StickyFilters enabled={!isMobile}>
       <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, reason, person" chips={chips} onReset={reset} activeOutline>
         <FilterSelect placeholder="Everything" data={KINDS} value={filters.kind} onChange={(kind) => update({ kind: kind || '' })} />
         <FilterSelect placeholder="Anyone" icon={<IconUser size={16} />} data={byOptions} value={filters.byId} onChange={(byId) => update({ byId: byId || '' })} />
         <DateRangeFilter label="Deleted" value={filters.range} onChange={(range) => update({ range })} />
       </FilterBar>
+      </StickyFilters>
 
       {data && (
         <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-          <StatCard size="md" label="Invoices deleted" value={data.invoices} />
-          <StatCard size="md" label="Collections removed" hint={isMobile ? undefined : "Money on deleted invoices"} value={money(data.collections_removed)} color={data.collections_removed > 0 ? 'red' : undefined} />
-          <StatCard size="md" label="Customers deleted" value={data.customers} />
-          <StatCard size="md" label="Restored" value={data.restored} color={data.restored ? 'green' : undefined} />
+          <StatCard size="slim" label="Invoices deleted" value={data.invoices} />
+          <StatCard size="slim" label="Collections removed" hint={isMobile ? undefined : "Money on deleted invoices"} value={money(data.collections_removed)} color={data.collections_removed > 0 ? 'red' : undefined} />
+          <StatCard size="slim" label="Customers deleted" value={data.customers} />
+          <StatCard size="slim" label="Restored" value={data.restored} color={data.restored ? 'green' : undefined} />
         </SimpleGrid>
       )}
 

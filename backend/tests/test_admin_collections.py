@@ -145,6 +145,16 @@ class AdminCollectionLedgerTests(unittest.TestCase):
         self.current_user = self.other_mr
         self.assertEqual(self.client.get(f"/customers/{cid}/ledger/pdf").status_code, 404)
 
+    def test_quick_search(self):
+        r = self.client.get("/admin/search", params={"q": "tuls"}).json()
+        self.assertEqual([c["name"] for c in r["customers"]], ["Tulsi Pharmacy"])
+        self.assertEqual(r["invoices"][0]["invoice_number"], "A100")          # found through the customer name
+        r = self.client.get("/admin/search", params={"q": "a100"}).json()
+        self.assertEqual((r["invoice_count"], r["invoices"][0]["invoice_number"]), (1, "A100"))
+        self.assertEqual(self.client.get("/admin/search", params={"q": "x"}).json()["invoices"], [])
+        self.current_user = self.mr
+        self.assertEqual(self.client.get("/admin/search", params={"q": "tuls"}).status_code, 403)
+
     def test_ledger_excel_is_admin_only(self):
         from io import BytesIO
         from openpyxl import load_workbook

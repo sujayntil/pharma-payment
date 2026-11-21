@@ -18,6 +18,7 @@ import { RecordedBy, StatusCell } from '../../components/collections/CollectionB
 import { errorText, money, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
+import TableScroll from '../../components/common/TableScroll';
 
 // Disabled (MR edit invoice): const blank ={ invoice_number: '', invoice_date: '', customer_name: '', total_amount: '', payment_mode: '', remarks: '' };
 
@@ -106,13 +107,13 @@ export default function MrInvoices() {
         details={[{ label: 'Bill amount', value: money(invoice.total_amount) }, { label: 'Collected', value: money(invoice.paid_amount) }, { label: 'Recorded by', value: <RecordedBy row={invoice} />, full: true }]}
         actions={historyIcon(invoice)}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={1040}><Table striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id}>
+    ))}</CardList> : <TableScroll minWidth={1040}><Table striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th ta="right">Collected</Table.Th><Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{invoices.map((invoice) => <Table.Tr key={invoice.id}>
       <Table.Td fw={600}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td>
       <Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td><Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'green'}>{money(invoice.pending_amount)}</Table.Td>
       <Table.Td><StatusCell row={invoice} /></Table.Td>
       <Table.Td maw={200}><RecordedBy row={invoice} /></Table.Td>
       <Table.Td>{historyIcon(invoice)}</Table.Td>
-    </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
+    </Table.Tr>)}</Table.Tbody></Table></TableScroll>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
     <InvoiceHistory invoiceId={historyId} onClose={() => setHistoryId(null)} />

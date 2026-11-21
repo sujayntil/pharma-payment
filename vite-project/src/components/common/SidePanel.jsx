@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ActionIcon, Drawer, Portal, Tooltip, Transition } from '@mantine/core';
 import { IconChevronRight } from '@tabler/icons-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -13,11 +14,33 @@ import classes from './SidePanel.module.css';
  * edgeClose=false: hide the → (e.g. while another panel is open on top).
  * Every other prop goes to Mantine's Drawer.
  */
+/** Inside a panel, pinned table headers sit just under the panel's own header. */
+function StickyOffset() {
+  const probe = useRef(null);
+  useEffect(() => {
+    const content = probe.current?.closest('.mantine-Drawer-content');
+    const header = content?.querySelector('.mantine-Drawer-header');
+    if (!content) return undefined;
+    const set = () => {
+      const h = `${header ? header.offsetHeight : 0}px`;
+      content.style.setProperty('--sticky-base', h);
+      content.style.setProperty('--sticky-top', h);
+      content.style.setProperty('--sticky-bg', getComputedStyle(content).backgroundColor);
+    };
+    set();
+    const observer = new ResizeObserver(set);
+    if (header) observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+  return <span ref={probe} hidden />;
+}
+
 export default function SidePanel({ opened, onClose, width = 840, modal = true, edgeClose = true, mobileProps = {}, zIndex = 200, styles, classNames, children, ...rest }) {
   const isMobile = useIsMobile();
   if (isMobile) {
     return (
       <Drawer opened={opened} onClose={onClose} position="bottom" radius="lg" zIndex={zIndex} styles={styles} classNames={classNames} {...rest} {...mobileProps}>
+        {opened && <StickyOffset />}
         {children}
       </Drawer>
     );
@@ -39,6 +62,7 @@ export default function SidePanel({ opened, onClose, width = 840, modal = true, 
         styles={styles}
         {...rest}
       >
+        {opened && <StickyOffset />}
         {children}
       </Drawer>
       {/* The → on the panel's left edge (outside the panel, so it isn't clipped by its scrolling). */}

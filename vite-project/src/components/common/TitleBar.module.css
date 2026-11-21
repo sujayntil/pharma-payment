@@ -1,0 +1,15 @@
+.bar { min-height: 44px; }
+.title { font-size: 28px; line-height: 1.15; white-space: nowrap; }
+.mini {
+  border-radius: 8px;
+  padding: 4px 12px;
+  background: var(--app-soft, var(--mantine-color-gray-0));
+  border: 1px solid var(--app-line, var(--mantine-color-gray-3));
+  min-width: 92px;
+}
+.mini[data-tone='green'] { background: var(--mantine-color-green-light); border-color: transparent; }
+.mini[data-tone='red'] { background: var(--mantine-color-red-light); border-color: transparent; }
+.miniLabel { font-size: 11px; line-height: 1.3; color: var(--mantine-color-dimmed); white-space: nowrap; }
+.miniValue { font-size: 16px; font-weight: 700; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mini[data-tone='green'] .miniValue { color: var(--mantine-color-green-8); }
+.mini[data-tone='red'] .miniValue { color: var(--mantine-color-red-7); }

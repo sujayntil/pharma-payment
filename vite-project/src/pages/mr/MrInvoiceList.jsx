@@ -26,6 +26,7 @@ import { RecordedBy, StatusCell } from '../../components/collections/CollectionB
 import { errorText, money, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
+import TableScroll from '../../components/common/TableScroll';
 
 /*
  * MR "Invoices": one screen for what used to be "My Invoices" and "My
@@ -204,7 +205,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
               selected={ticks.isTicked(item)}
               selecting={ticks.count > 0}
             />)}</CardList>
-            : <Table.ScrollContainer minWidth={panelOpen ? 640 : 1000}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm">
+            : <TableScroll minWidth={panelOpen ? 640 : 1000}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm">
               <Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={items} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead>
               <Table.Tbody>{items.map((item) => <Table.Tr key={item.invoice_id} onClick={() => setOpenId(item.invoice_id)} style={{ cursor: 'pointer' }}  data-selected={openId === item.invoice_id || undefined}>
                 <Table.Td onClick={(e) => e.stopPropagation()}><TickCell ticks={ticks} invoice={item} /></Table.Td>
@@ -222,7 +223,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
                   {historyIcon(item)}
                 </Group></Table.Td>
               </Table.Tr>)}</Table.Tbody>
-            </Table></Table.ScrollContainer>}
+            </Table></TableScroll>}
       <ListPagination total={data.total_count} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
     <TickedBar ticks={ticks} invoices={items} onCollect={collectTicked} bottom={isMobile ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 8} />

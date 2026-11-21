@@ -25,6 +25,9 @@ import { downloadErrorText, errorText, money, saveDownload, dayOf, timeOf } from
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
+import TableScroll from '../../components/common/TableScroll';
+import StickyFilters from '../../components/common/StickyFilters';
+import TitleBar, { MiniStat } from '../../components/common/TitleBar';
 
 /**
  * Second line of a phone collection card, kept to one short line:
@@ -148,25 +151,44 @@ export default function AdminCollections({ preset = null }) {
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
   ];
 
-  return <Stack gap="md" style={panelSpace}>
-    <Title order={1}>Collections</Title>
-
-    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search invoice, customer, MR…" chips={chips} onReset={reset} moreActive={[filters.mrId, filters.mode, filters.recordedBy, filters.entryType].filter(Boolean).length} more={<>
-      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
+  const exportButton = <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!count} onClick={exportExcel}>Export</Button>;
+  const filterBar = (
+    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search invoice, customer, MR…" chips={chips} onReset={reset}
+      moreAsButton moreActive={[filters.mode, filters.recordedBy, filters.entryType].filter(Boolean).length} more={<>
         <FilterSelect placeholder="All modes" icon={<IconWallet size={16} />} data={[...PAYMENT_MODES, 'Admin adjustment', 'Reversal']} value={filters.mode} onChange={(mode) => update({ mode })} />
         <FilterSelect placeholder="Recorded by" icon={<IconUserShield size={16} />} data={RECORDED_BY} value={filters.recordedBy} onChange={(recordedBy) => update({ recordedBy })} />
         <FilterSelect placeholder="All entries" data={ENTRY_TYPES} value={filters.entryType} onChange={(entryType) => update({ entryType })} />
-    </>}>
+      </>}>
       <DateRangeFilter label="Collected" value={filters.range} onChange={(range) => update({ range })} months firstDate={firstDate} quick={['today', 'yesterday']} />
+      <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
     </FilterBar>
+  );
 
-    <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
-      <StatCard label={`Net collected${rangeLabel ? ` · ${rangeLabel}` : ''}`} hint="Collections minus reversals" value={money(total)} bg="var(--mantine-color-green-light)" />
-      <StatCard label="Ledger entries" value={count} />
-    </SimpleGrid>
-
+  return <Stack gap="md" style={panelSpace}>
+    {isMobile ? (
+      <>
+        <Title order={1}>Collections</Title>
+        {filterBar}
+        <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
+          <StatCard size="slim" label={`Net collected${rangeLabel ? ` · ${rangeLabel}` : ''}`} hint="Collections minus reversals" value={money(total)} bg="var(--mantine-color-green-light)" />
+          <StatCard size="slim" label="Ledger entries" value={count} />
+        </SimpleGrid>
+        <Group justify="space-between" gap="xs"><Text fw={700}>{count} {count === 1 ? 'entry' : 'entries'}</Text>{exportButton}</Group>
+      </>
+    ) : (
+      // Laptop: title, its two cards, search and filters stay pinned; rows scroll.
+      <StickyFilters>
+        <Stack gap="sm">
+          <TitleBar title="Collections">
+            <MiniStat tone="green" label={`Net collected${rangeLabel ? ` · ${rangeLabel}` : ''}`} value={money(total)} />
+            <MiniStat label="Entries" value={count} />
+            {exportButton}
+          </TitleBar>
+          {filterBar}
+        </Stack>
+      </StickyFilters>
+    )}
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}
-    <Group justify="space-between" gap="xs"><Text fw={700}>{count} {count === 1 ? 'entry' : 'entries'}</Text><Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!count} onClick={exportExcel}>Export</Button></Group>
     <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && rows.length > 0)}>{loading && !rows.length ? <Group justify="center" p="xl"><Loader /></Group> : !rows.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="collections" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">No collections recorded yet.</Text>) : isMobile ? <CardList>{rows.map((row) => (
       <RowCard
         key={row.payment_id}
@@ -178,7 +200,7 @@ export default function AdminCollections({ preset = null }) {
         highlight={row.is_reversal ? 'orange.0' : undefined}
         badges={<><Badge variant="light" color={row.is_reversal ? 'orange' : 'gray'}>{row.mode || '—'}</Badge><StatusBadge status={row.invoice_status} />{leftNote(row)}<div style={{ marginLeft: 'auto' }}>{rowActions(row)}</div></>}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={historyId ? 720 : 940}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Date</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Assigned MR</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Invoice status</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.payment_id} onClick={() => setHistoryId(row.invoice_id)} style={{ cursor: 'pointer' }}  data-selected={historyId === row.invoice_id || undefined}>
+    ))}</CardList> : <TableScroll minWidth={historyId ? 720 : 940}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Date</Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Customer</Table.Th><Table.Th>Assigned MR</Table.Th><Table.Th ta="right">Amount</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Recorded by</Table.Th><Table.Th>Invoice status</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.payment_id} onClick={() => setHistoryId(row.invoice_id)} style={{ cursor: 'pointer' }}  data-selected={historyId === row.invoice_id || undefined}>
       <Table.Td style={{ whiteSpace: 'nowrap' }}>{dayOf(row.payment_date)}<Text size="xs" c="dimmed">{timeOf(row.payment_date)}</Text></Table.Td>
       <Table.Td fw={600}>{row.invoice_number}</Table.Td>
       <Table.Td>{row.customer_name || '—'}</Table.Td>
@@ -188,7 +210,7 @@ export default function AdminCollections({ preset = null }) {
       <Table.Td><RecordedBy row={row} /></Table.Td>
       <Table.Td><StatusBadge status={row.invoice_status} />{leftNote(row)}</Table.Td>
       <Table.Td>{rowActions(row)}</Table.Td>
-    </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
+    </Table.Tr>)}</Table.Tbody></Table></TableScroll>}
       <ListPagination total={count} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="entries" />
     </Paper>
     <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={reload} />

@@ -36,6 +36,9 @@ import EmptyResults from '../../components/common/EmptyResults';
 import { notifications } from '@mantine/notifications';
 import ManualInvoiceModal from './ManualInvoiceModal';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
+import TableScroll from '../../components/common/TableScroll';
+import StickyFilters from '../../components/common/StickyFilters';
+import TitleBar, { MiniStat } from '../../components/common/TitleBar';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -68,8 +71,10 @@ export default function AdminInvoices() {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [invoices, setInvoices] = useState([]); const [total, setTotal] = useState(0); const [pendingTotal, setPendingTotal] = useState(0); const [mrs, setMrs] = useState([]);
-  const [tab, setTab] = useState('pending'); const [counts, setCounts] = useState({});
-  const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
+  // From the Dashboard search's "See all in Invoices": that text, across all invoices.
+  const [fromSearch] = useState(() => window.history.state?.usr?.search || '');
+  const [tab, setTab] = useState(fromSearch ? 'all' : 'pending'); const [counts, setCounts] = useState({});
+  const [search, setSearch] = useState(fromSearch); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useState(BLANK); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [editing, setEditing] = useState(null); const [form, setForm] = useState(null); const [deleting, setDeleting] = useState(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const isMobile = useIsMobile();
@@ -271,18 +276,42 @@ export default function AdminInvoices() {
   );
 
   const shownInvoices = invoices.filter((invoice) => !hiddenIds.has(invoice.id));
-  return <Stack gap="md" style={panelSpace}><Group justify="space-between" wrap="nowrap"><Title order={1}>Invoices</Title><Button leftSection={<IconPlus size={16} />} onClick={() => setManualOpen(true)}>Add invoice</Button></Group>
-    {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
-    <SegmentedControl fullWidth={isMobile} style={isMobile ? undefined : { alignSelf: 'flex-start' }} data={tabData} value={tab} onChange={changeTab} aria-label="Invoice status" />
-    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}>
-      {/* Replaced by the tabs above + "Show only": <StatusTabs value={filters.status} onChange={(status) => update({ status })} /> */}
+  const tabs = <SegmentedControl fullWidth={isMobile} style={isMobile ? undefined : { alignSelf: 'flex-start' }} data={tabData} value={tab} onChange={changeTab} aria-label="Invoice status" />;
+  const addButton = <Button leftSection={<IconPlus size={16} />} onClick={() => setManualOpen(true)}>Add invoice</Button>;
+  const filterBar = (
+    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}
+      moreAsButton moreActive={[filters.customerType, filters.sort].filter(Boolean).length} more={<>
+        <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_OPTIONS} value={filters.customerType} onChange={(customerType) => update({ customerType: customerType || '' })} />
+        <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
+      </>}>
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}
-      <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_OPTIONS} value={filters.customerType} onChange={(customerType) => update({ customerType: customerType || '' })} />
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
       <DateRangeFilter label="Invoice date" value={filters.range} onChange={(range) => update({ range })} months firstDate={firstDate} quick={['today', 'yesterday']} />
-      <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
     </FilterBar>
+  );
+  return <Stack gap="md" style={panelSpace}>
+    {isMobile && <Group justify="space-between" wrap="nowrap"><Title order={1}>Invoices</Title>{addButton}</Group>}
+    {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
+    {isMobile ? (
+      <>
+        {tabs}
+        {filterBar}
     <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text>{isMobile ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} disabled={!total} onClick={exportExcel}><IconDownload size={16} /></ActionIcon></Tooltip> : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>}</Group></Group>
+      </>
+    ) : (
+      // Laptop: title, tabs, totals, search and filters stay pinned; rows scroll.
+      <StickyFilters>
+        <Stack gap="sm">
+          <TitleBar title="Invoices" left={tabs}>
+            <MiniStat label={total === 1 ? 'Invoice' : 'Invoices'} value={total} />
+            {pendingTotal > 0 && <MiniStat tone="red" label="Pending" value={money(pendingTotal)} />}
+            <Button variant="default" leftSection={<IconDownload size={16} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>
+            {addButton}
+          </TitleBar>
+          {filterBar}
+        </Stack>
+      </StickyFilters>
+    )}
     <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && invoices.length > 0)}>{loading && !shownInvoices.length ? <Group justify="center" p="xl"><Loader /></Group> : !shownInvoices.length ? (chips.some(Boolean) ? <EmptyResults search={search} noun="invoices" onClear={reset} /> : <Text ta="center" c="dimmed" py="xl">{tab === 'pending' ? 'Nothing pending. All invoices are settled.' : tab === 'paid' ? 'No paid invoices yet.' : 'No invoices yet.'}</Text>) : isMobile ? <CardList>{shownInvoices.map((invoice) => (
       <InvoiceCard
         key={invoice.id}
@@ -298,14 +327,14 @@ export default function AdminInvoices() {
         selecting={ticks.count > 0}
         canTick={ANY}
       />
-    ))}</CardList> : <Table.ScrollContainer minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={invoices} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownInvoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }}  data-selected={historyId === invoice.id || undefined}>
+    ))}</CardList> : <TableScroll minWidth={panelOpen ? 640 : 960}><Table className="pin-last" striped highlightOnHover verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th w={36}><TickAllCell ticks={ticks} invoices={invoices} /></Table.Th><Table.Th>Invoice</Table.Th><Table.Th>Date</Table.Th><Table.Th>Customer</Table.Th><Table.Th>MR</Table.Th>{!panelOpen && <><Table.Th ta="right">Bill</Table.Th><Table.Th ta="right">Collected</Table.Th></>}<Table.Th ta="right">Pending</Table.Th><Table.Th>Status</Table.Th>{!panelOpen && <Table.Th>Recorded by</Table.Th>}<Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{shownInvoices.map((invoice) => <Table.Tr key={invoice.id} onClick={() => setHistoryId(invoice.id)} style={{ cursor: 'pointer' }}  data-selected={historyId === invoice.id || undefined}>
       <Table.Td onClick={(event) => event.stopPropagation()}><TickCell ticks={ticks} invoice={invoice} /></Table.Td>
       <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>{invoice.invoice_number}</Table.Td><Table.Td style={{ whiteSpace: 'nowrap' }}>{shortDate(invoice.invoice_date)}</Table.Td><Table.Td>{invoice.customer_name || '—'}</Table.Td><Table.Td>{invoice.mr_name || <Text span c="dimmed" size="sm">Unassigned</Text>}</Table.Td>
       {!panelOpen && <><Table.Td ta="right">{money(invoice.total_amount)}</Table.Td><Table.Td ta="right">{money(invoice.paid_amount)}</Table.Td></>}<Table.Td ta="right" fw={600} c={invoice.pending_amount ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Table.Td>
       <Table.Td><StatusCell row={invoice} /></Table.Td>
       {!panelOpen && <Table.Td maw={170}><RecordedBy row={invoice} /></Table.Td>}
       <Table.Td><Group justify="flex-end" gap={6} wrap="nowrap">{recordButton(invoice)}{rowMenu(invoice)}</Group></Table.Td>
-    </Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer>}
+    </Table.Tr>)}</Table.Tbody></Table></TableScroll>}
       <ListPagination total={total} page={page} onChange={setPage} searchActive={Boolean(debouncedSearch.trim())} label="invoices" />
     </Paper>
     <TickedBar ticks={ticks} invoices={invoices} onCollect={ticks.invoices().some((invoice) => Number(invoice.pending_amount) > 0) ? collectTicked : undefined} onDelete={() => setBulkDeleting(ticks.invoices())} deleteLabel="Delete invoices" />

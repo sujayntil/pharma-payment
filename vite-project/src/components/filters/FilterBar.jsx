@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { Badge, Button, CloseButton, Drawer, Group, Paper, Pill, Select, Stack, Text, TextInput } from '@mantine/core';
+import { useContext, useState } from 'react';
+import { Badge, Button, CloseButton, Drawer, Group, Paper, Pill, Popover, Select, Stack, Text, TextInput } from '@mantine/core';
 import { IconAdjustmentsHorizontal, IconFilterOff, IconSearch } from '@tabler/icons-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import classes from './filters.module.css';
-import { FilterSheetContext, SHEET_DROPDOWN_PROPS, useInFilterSheet } from './filterSheetContext';
+import { FilterSheetContext, MoreFiltersContext, SHEET_DROPDOWN_PROPS, useInFilterSheet } from './filterSheetContext';
 
 /** Search box with a clear button and Esc-to-clear. */
 export function SearchInput({ value, onChange, placeholder = 'Search', className, ...props }) {
@@ -27,6 +27,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search', className
 /** Label-less select sized for a filter row; the placeholder doubles as the "All" option. */
 export function FilterSelect({ value, onChange, data, placeholder, icon, ...props }) {
   const inSheet = useInFilterSheet();
+  const inMore = useContext(MoreFiltersContext);
   return (
     <Select
       className={classes.select}
@@ -36,7 +37,7 @@ export function FilterSelect({ value, onChange, data, placeholder, icon, ...prop
       placeholder={placeholder}
       leftSection={icon}
       clearable
-      comboboxProps={{ shadow: 'md', middlewares: { flip: true, shift: { padding: 8 } }, ...(inSheet && SHEET_DROPDOWN_PROPS) }}
+      comboboxProps={{ shadow: 'md', middlewares: { flip: true, shift: { padding: 8 } }, ...(inSheet && SHEET_DROPDOWN_PROPS), ...(inMore && { withinPortal: false }) }}
       aria-label={placeholder}
       {...props}
     />
@@ -55,11 +56,12 @@ export function FilterSelect({ value, onChange, data, placeholder, icon, ...prop
  * chips: [{ key, label, onRemove }] (key 'q' = the search chip)
  * more:  secondary filters, shown with the others (moreActive is kept for
  *        backward compatibility; the count now comes from the chips).
+ * moreAsButton: on laptops, put the `more` filters behind a "More" button
+ *        (keeps the bar to one line).
  * activeOutline: draw a green outline round the phone Filters button while
  *        any filter is on (used on the MR screens).
  */
-// eslint-disable-next-line no-unused-vars
-export default function FilterBar({ search, onSearch, searchPlaceholder, children, more, moreActive = 0, chips = [], onReset, summary, compact = false, activeOutline = false }) {
+export default function FilterBar({ search, onSearch, searchPlaceholder, children, more, moreActive = 0, moreAsButton = false, chips = [], onReset, summary, compact = false, activeOutline = false }) {
   const active = chips.filter(Boolean);
   const filterCount = active.filter((chip) => chip.key !== 'q').length;
   const hasFilters = Boolean(children || more);
@@ -134,7 +136,21 @@ export default function FilterBar({ search, onSearch, searchPlaceholder, childre
       <Group gap="sm" wrap="wrap" align="center">
         {onSearch && <SearchInput value={search} onChange={onSearch} placeholder={searchPlaceholder} />}
         {children}
-        {more}
+        {more && moreAsButton ? (
+          <Popover position="bottom-end" shadow="md" withinPortal trapFocus={false} width={260}>
+            <Popover.Target>
+              <Button variant={moreActive ? 'light' : 'default'} leftSection={<IconAdjustmentsHorizontal size={16} />}
+                rightSection={moreActive ? <Badge size="sm" circle>{moreActive}</Badge> : null} aria-label={moreActive ? `More filters, ${moreActive} on` : 'More filters'}>
+                More
+              </Button>
+            </Popover.Target>
+            <Popover.Dropdown>
+              <MoreFiltersContext.Provider value>
+                <Stack gap="sm" className={classes.moreFields}>{more}</Stack>
+              </MoreFiltersContext.Provider>
+            </Popover.Dropdown>
+          </Popover>
+        ) : more}
         {onReset && (
           <Button className={classes.reset} variant="subtle" color="gray" leftSection={<IconFilterOff size={15} />} disabled={!active.length} onClick={onReset}>
             Reset

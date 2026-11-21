@@ -205,17 +205,22 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const collected = item.records === 'collected';
   const age = item.records === 'age' || item.records === 'outstanding';
   const title = item.title || RECORD_TITLES[item.records];
-  const allItems = data?.items || [];
+  // From the Dashboard: only overdue / not yet due bills (days past credit),
+  // or several customer types at once (its "Other" = Hospital + Other).
+  const allItems = (data?.items || []).filter((r) => (!item.due || (item.due === 'overdue' ? r.days_late >= 0 : !(r.days_late >= 0)))
+    && (!item.types || item.types.includes(r.type)));
   // In-panel search and filters (on the loaded rows; totals follow them).
   const [q, setQ] = useState('');
   const [pick, setPick] = useState(null);      // status (invoices) or mode (collections)
   const [typePick, setTypePick] = useState(null);
   const typeFixed = Boolean(filters.customer_type || item.customerType);
+  const typeChoices = item.types || null;
   const term = q.trim().toLowerCase();
   const items = allItems.filter((r) => (!term || [r.customer, r.invoice_number, r.mr, r.mode].some((v) => String(v || '').toLowerCase().includes(term)))
     && (!pick || (collected ? (pick === 'Reversal' ? r.amount < 0 : r.mode === pick && r.amount >= 0) : r.status === pick))
     && (!typePick || r.type === typePick));
   const narrowed = items.length !== allItems.length;
+  const preNarrowed = Boolean(item.due || item.types);
   const shownTotal = items.reduce((sum, r) => sum + (collected ? r.amount : (age ? r.pending : r.total)), 0);
   const modeOptions = [...new Set(allItems.map((r) => (r.amount < 0 ? 'Reversal' : r.mode)).filter(Boolean))].sort();
   const typeOptions = [...new Set(allItems.map((r) => r.type).filter(Boolean))].sort();
@@ -235,7 +240,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
     <Stack gap="sm">
       <div>
         <Text fw={700} fz={18}>{title}</Text>
-        <Text size="sm" c="dimmed">{age ? 'As of today, oldest first' : periodLabel}{data ? ` · ${narrowed ? items.length : data.count} ${collected ? 'payments' : 'invoices'} · ${money(narrowed ? shownTotal : data.total)}` : ''}{narrowed && data ? <Text span c="dimmed"> (of {data.count})</Text> : null}</Text>
+        <Text size="sm" c="dimmed">{age ? 'As of today, oldest first' : periodLabel}{data ? ` · ${narrowed || preNarrowed ? items.length : data.count} ${collected ? 'payments' : 'invoices'} · ${money(narrowed || preNarrowed ? shownTotal : data.total)}` : ''}{narrowed && data ? <Text span c="dimmed"> (of {allItems.length})</Text> : null}</Text>
       </div>
       {error && <Alert color="red">{error}</Alert>}
       {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : data && (
@@ -245,7 +250,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
               collected
                 ? { key: 'mode', placeholder: 'All modes', data: modeOptions, value: pick, onChange: setPick }
                 : { key: 'status', placeholder: 'All statuses', data: (age ? ['UNPAID', 'PARTIAL'] : ['UNPAID', 'PARTIAL', 'PAID']).map((v) => ({ value: v, label: STATUS_LABEL[v] })), value: pick, onChange: setPick },
-              !typeFixed && { key: 'type', placeholder: 'All types', data: typeOptions, value: typePick, onChange: setTypePick },
+              !typeFixed && (!typeChoices || typeChoices.length > 1) && { key: 'type', placeholder: 'All types', data: typeOptions, value: typePick, onChange: setTypePick },
             ]}
             right={<Button size="xs" variant="default" leftSection={<IconDownload size={14} />} disabled={!items.length} onClick={exportCsv}>Export</Button>} />
           {!items.length && <Text c="dimmed" size="sm">{narrowed ? 'Nothing matches.' : 'Nothing here.'}</Text>}

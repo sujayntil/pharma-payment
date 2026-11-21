@@ -17,7 +17,8 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
-import { IconChevronDown, IconChevronLeft, IconChevronRight, IconLogout, IconPill } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronLeft, IconChevronRight, IconDatabaseExport, IconLogout, IconPill } from '@tabler/icons-react';
+import BackupPanel from '../backup/BackupPanel';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { useAppDispatch, useAuth } from '../../hooks/useAppStore';
@@ -69,6 +70,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { user, role, token } = useAuth();
+  const [backupOpen, setBackupOpen] = useState(false);
   const userId = user?.id;
   const initials = user?.name?.trim().slice(0, 1).toUpperCase() || '';
 
@@ -217,6 +219,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               <Menu.Divider />
               <AppearanceSwitch />
               <Menu.Divider />
+              {role === 'ADMIN' && <Menu.Item leftSection={<IconDatabaseExport size={15} />} onClick={() => setBackupOpen(true)}>Backup</Menu.Item>}
               <Menu.Item color="red" leftSection={<IconLogout size={15} />} onClick={signOut}>Log out</Menu.Item>
             </Menu.Dropdown>
           </Menu>
@@ -341,6 +344,7 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
     {/* First open of the day: a short welcome, then the app. */}
     <DailyWelcome />
     {role === 'MR' && <MonthCleared />}
+    {role === 'ADMIN' && <BackupPanel opened={backupOpen} onClose={() => setBackupOpen(false)} />}
     </AppRefreshProvider>
   );
 }

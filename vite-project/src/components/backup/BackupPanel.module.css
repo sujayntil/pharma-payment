@@ -1,0 +1,4 @@
+.list { border: 1px solid var(--app-line, var(--mantine-color-gray-3)); border-radius: 12px; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.row + .row { border-top: 1px solid var(--app-line, var(--mantine-color-gray-3)); }
+.text { flex: 1; min-width: 0; }

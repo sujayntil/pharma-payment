@@ -164,6 +164,18 @@ export const adminApi = {
     return axiosClient.get('/admin/deletions/export', { params, responseType: 'blob' });
   },
 
+  /** Admin › Backup: when it was last downloaded, and the two files. */
+  async backupStatus() {
+    const response = await axiosClient.get('/admin/backup/status');
+    return response.data;
+  },
+  async backupExcel() {
+    return axiosClient.get('/admin/backup/excel', { responseType: 'blob', timeout: 120000 });
+  },
+  async backupFull() {
+    return axiosClient.get('/admin/backup/full', { responseType: 'blob', timeout: 120000 });
+  },
+
   /** Dashboard search: a few customers and invoices matching the text. */
   async quickSearch(q) {
     const response = await axiosClient.get('/admin/search', { params: { q } });

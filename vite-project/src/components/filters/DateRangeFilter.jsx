@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
-import { Button, Collapse, Divider, Group, Popover, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
-import { IconCalendar, IconChevronDown, IconChevronRight, IconX } from '@tabler/icons-react';
+import { Button, Collapse, Divider, Popover, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
+import { IconCalendar, IconChevronDown, IconChevronLeft, IconChevronRight, IconX } from '@tabler/icons-react';
 import { datePresets, describeRange, EMPTY_RANGE, isCustomRange, last15Range } from './dateRanges';
 import { formatDateLocal } from '../../utils/formatters';
 import PeriodGrid from './PeriodGrid';
+import RangeCalendar from './RangeCalendar';
+import DayStepper from './DayStepper';
 import classes from './filters.module.css';
 import { useInFilterSheet } from './filterSheetContext';
 
@@ -18,8 +20,6 @@ import { useInFilterSheet } from './filterSheetContext';
 export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, onChange, allLabel = 'Any date', months = false, firstDate, quick = ['today'] }) {
   const inSheet = useInFilterSheet();
   const [opened, setOpened] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [error, setError] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
   const presets = months ? [] : datePresets();
   const activePreset = presets.find((p) => p.from === value.from && p.to === value.to);
@@ -42,7 +42,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
     : [{ id: 'all', label: allLabel, from: '', to: '' }, ...quick.map((id) => QUICK[id]).filter(Boolean)];
 
   const open = () => {
-    setDraft(value); setError(''); setOpened(true);
+    setOpened(true);
     // Open Custom straight away when the dates in use are a custom range.
     setCustomOpen(months && isCustomRange(value));
   };
@@ -50,33 +50,20 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
   const pending = useRef(null);
   const commit = (range) => { pending.current = null; onChange({ from: range.from, to: range.to }); setOpened(false); };
   const close = () => { const r = pending.current; pending.current = null; if (r) onChange(r); setOpened(false); };
-  const applyCustom = () => {
-    if (draft.from && draft.to && draft.from > draft.to) { setError('Start date must be on or before end date.'); return; }
-    commit(draft);
-  };
 
+  // One calendar: a day, or two taps for a range.
   const custom = (
-    <>
-      <Group grow gap="xs">
-        <TextInput size="xs" type="date" label="From" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.currentTarget.value })} />
-        <TextInput size="xs" type="date" label="To" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.currentTarget.value })} />
-      </Group>
-      {error && <Text size="xs" c="red">{error}</Text>}
-      <Group justify="flex-end" gap="xs">
-        {!inSheet && <Button size="xs" variant="subtle" color="gray" onClick={() => { pending.current = null; setOpened(false); }}>Cancel</Button>}
-        {/* In the phone sheet the sheet's own Apply is the only "Apply". */}
-        <Button size="xs" onClick={applyCustom} disabled={!draft.from && !draft.to}>{inSheet ? 'Use these dates' : 'Apply'}</Button>
-      </Group>
-    </>
+    <RangeCalendar key={`${opened}-${value.from}-${value.to}`} value={value} minDate={firstDate ? String(firstDate).slice(0, 10) : undefined}
+      onApply={commit} applyText={inSheet ? 'Use these dates' : undefined} onCancel={inSheet ? undefined : () => { pending.current = null; setOpened(false); }} />
   );
 
   const panel = months ? (
           <Stack gap={8}>
-            <PeriodGrid value={value} firstDate={firstDate} chips={chips} onPick={commit} onPreview={(r) => { pending.current = null; onChange(r); }}
+            <PeriodGrid hideMonths={customOpen} value={value} firstDate={firstDate} chips={chips} onPick={commit} onPreview={(r) => { pending.current = null; onChange(r); }}
               onClear={value.from || value.to ? () => commit(EMPTY_RANGE) : undefined}
               footer={(
                 <UnstyledButton className={classes.customLink} onClick={() => setCustomOpen((o) => !o)} aria-expanded={customOpen}>
-                  Custom dates <IconChevronRight size={14} style={{ transform: customOpen ? 'rotate(90deg)' : undefined, transition: 'transform 150ms' }} />
+                  {customOpen ? <><IconChevronLeft size={14} /> Months</> : <>Pick a day or dates <IconChevronRight size={14} /></>}
                 </UnstyledButton>
               )} />
             <Collapse expanded={customOpen}><Stack gap="xs" pt={4}>{custom}</Stack></Collapse>
@@ -92,7 +79,7 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
                 </UnstyledButton>
               ))}
             </SimpleGrid>
-            <Divider label="Custom range" labelPosition="left" my={4} />
+            <Divider label="Pick a day or dates" labelPosition="left" my={4} />
             {custom}
           </Stack>
         );
@@ -112,17 +99,20 @@ export default function DateRangeFilter({ label = 'Date', value = EMPTY_RANGE, o
         </Button>
   );
 
+  // One day chosen: ‹ › step to the day before / after.
+  const stepped = (node) => <DayStepper value={value} firstDate={firstDate} onChange={(r) => { pending.current = null; setOpened(false); onChange(r); }}>{node}</DayStepper>;
+
   // Phone filter sheet: open in place under the Dates row (no second layer on top).
   if (inSheet) {
     return (
       <div className={classes.inlineDates}>
-        {trigger}
+        {stepped(trigger)}
         <Collapse expanded={opened}><div className={classes.inlinePanel}>{panel}</div></Collapse>
       </div>
     );
   }
 
-  return (
+  return stepped(
     <Popover opened={opened} onChange={(o) => (o ? setOpened(true) : close())} position="bottom-start" shadow="md" width={months ? 330 : 340} trapFocus middlewares={{ flip: true, shift: { padding: 12 } }}>
       <Popover.Target>{trigger}</Popover.Target>
       <Popover.Dropdown maw="calc(100vw - 24px)">{panel}</Popover.Dropdown>

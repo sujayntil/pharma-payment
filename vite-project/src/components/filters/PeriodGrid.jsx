@@ -27,7 +27,7 @@ const monthIndex = (d) => d.getFullYear() * 12 + d.getMonth();
  * onPick({ from, to }). onPending(range | null): the first tap of a range,
  * so the picker can use it if closed before a second tap.
  */
-export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, onPending, onPreview, onClear, footer }) {
+export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, onPending, onPreview, onClear, footer, hideMonths = false }) {
   // MRs work month by month: no quarters / FY for them.
   const showQuarters = useAuth().role !== 'MR';
   const now = new Date();
@@ -106,6 +106,7 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
           ))}
         </div>
       )}
+      {!hideMonths && <>
       <Group justify="space-between" mb={6} px={2}>
         <ActionIcon variant="subtle" color="gray" radius="xl" size={28} aria-label="Previous year" disabled={year <= firstYear} onClick={() => setYear(year - 1)}><IconChevronLeft size={16} /></ActionIcon>
         <Text fw={700} fz={14}>{year}</Text>
@@ -120,7 +121,8 @@ export default function PeriodGrid({ value = {}, firstDate, chips = [], onPick, 
           {tile('fy', label, fy.start, fy.end, css.quarter, label, false)}
         </div>
       )}
-      {anchor && (
+      </>}
+      {anchor && !hideMonths && (
         <Group className={css.hint} justify="space-between" wrap="nowrap" gap="xs">
           <Text size="xs" c="dimmed" style={{ minWidth: 0 }}><b style={{ color: 'var(--app-ink)' }}>{nameOf(anchor.start, anchor.end)}</b> · tap another month for a range</Text>
           {!onPreview && <Button size="compact-sm" style={{ flexShrink: 0 }} onClick={() => { const r = span(anchor.start, anchor.end); setAnchor(null); onPending?.(null); onPick(r); }}>Done</Button>}

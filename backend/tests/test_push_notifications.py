@@ -185,5 +185,49 @@ class PushNotificationTests(unittest.TestCase):
         self.assertEqual(payload["tag"], f"payment-{payment.id}")
 
 
+class PushDeliveryReportTests(unittest.TestCase):
+    """deliver(): counts devices, removes dead ones (403/404/410), keeps others."""
+
+    def setUp(self):
+        from sqlalchemy.pool import StaticPool
+        self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine)
+        db = self.Session()
+        self.admin = models.User(name="Admin", employee_code="A1", role="ADMIN", password_hash="x")
+        db.add(self.admin); db.flush()
+        for n in range(3):
+            db.add(models.PushSubscription(user_id=self.admin.id, endpoint=f"https://push.example/{n}", p256dh="k", auth="a"))
+        db.commit(); self.admin_id = self.admin.id; db.close()
+
+    def tearDown(self):
+        self.engine.dispose()
+
+    def test_report_and_cleanup(self):
+        import os
+        from types import SimpleNamespace
+        from pywebpush import WebPushException
+        from app import push
+
+        def fake(subscription_info, **kw):
+            n = subscription_info["endpoint"][-1]
+            if n == "1":
+                raise WebPushException("gone", response=SimpleNamespace(status_code=410))
+            if n == "2":
+                raise WebPushException("keys changed", response=SimpleNamespace(status_code=403))
+        with patch.dict(os.environ, {"VAPID_PRIVATE_KEY": "p", "VAPID_SUBJECT": "mailto:a@b.c"}), \
+             patch.object(push, "SessionLocal", self.Session), patch("pywebpush.webpush", side_effect=fake):
+            report = push.deliver({"title": "t"}, 60, user_id=self.admin_id)
+        self.assertEqual(report, {"devices": 3, "delivered": 1, "removed": 2, "problems": []})
+        with self.Session() as db:
+            self.assertEqual([s.endpoint for s in db.query(models.PushSubscription)], ["https://push.example/0"])
+
+    def test_not_configured_is_reported(self):
+        import os
+        from app import push
+        with patch.dict(os.environ, {"VAPID_PRIVATE_KEY": "", "VAPID_SUBJECT": ""}):
+            self.assertEqual(push.deliver({}, 60, user_id=1)["problems"], ["not_configured"])
+
+
 if __name__ == "__main__":
     unittest.main()

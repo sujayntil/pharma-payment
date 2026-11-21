@@ -28,6 +28,11 @@ export const notificationsApi = {
   async markMineSeen() {
     await axiosClient.post('/notifications/mine/seen');
   },
+  /** Send a real test alert to my devices; returns what happened. */
+  async test() {
+    const { data } = await axiosClient.post('/notifications/test');
+    return data;
+  },
   async remove(endpoint) {
     await axiosClient.delete('/notifications/subscriptions', { data: { endpoint } });
   },

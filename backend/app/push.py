@@ -21,11 +21,24 @@ def send_user_notification(user_id: int, payload: dict, ttl: int = 3600) -> bool
 
 
 def _send(payload: dict, ttl: int, role=None, user_id=None) -> bool:
+    return deliver(payload, ttl, role=role, user_id=user_id)["delivered"] > 0
+
+
+# The phone's push service answers these when the saved device can never
+# receive again: gone (404/410), or saved with older app keys (403). Remove it;
+# the app saves a fresh one the next time it opens on that phone.
+_DEAD = (403, 404, 410)
+
+
+def deliver(payload: dict, ttl: int, role=None, user_id=None) -> dict:
+    """Send to every saved device and report: {devices, delivered, removed, problems}."""
+    report = {"devices": 0, "delivered": 0, "removed": 0, "problems": []}
     private_key = os.getenv("VAPID_PRIVATE_KEY")
     subject = os.getenv("VAPID_SUBJECT")
     if not private_key or not subject:
         log.warning("Push skipped: VAPID_PRIVATE_KEY and VAPID_SUBJECT must be configured")
-        return False
+        report["problems"].append("not_configured")
+        return report
 
     with SessionLocal() as db:
         query = (
@@ -36,18 +49,16 @@ def _send(payload: dict, ttl: int, role=None, user_id=None) -> bool:
             query = query.filter(models.User.role == role)
         if user_id is not None:
             query = query.filter(models.User.id == user_id)
-        subscriptions = query.all()
         targets = [
             (sub.id, {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}})
-            for sub in subscriptions
+            for sub in query.all()
         ]
-
+    report["devices"] = len(targets)
     if not targets:
-        return False
+        return report
 
     from pywebpush import WebPushException, webpush
 
-    delivered = False
     for subscription_id, subscription_info in targets:
         try:
             webpush(
@@ -58,17 +69,22 @@ def _send(payload: dict, ttl: int, role=None, user_id=None) -> bool:
                 ttl=ttl,
                 timeout=10,
             )
-            delivered = True
+            report["delivered"] += 1
         except WebPushException as exc:
-            if getattr(exc.response, "status_code", None) in (404, 410):
+            status = getattr(exc.response, "status_code", None)
+            if status in _DEAD:
                 with SessionLocal() as db:
                     db.query(models.PushSubscription).filter_by(id=subscription_id).delete()
                     db.commit()
+                report["removed"] += 1
+                log.warning("Push device removed (push service said %s)", status)
             else:
+                report["problems"].append(f"push_service_{status or 'error'}")
                 log.exception("Could not send push notification")
         except Exception:
+            report["problems"].append("network")
             log.exception("Could not send push notification")
-    return delivered
+    return report
 
 
 # Alerts wait this long so a collection undone from the Undo bar (a typing

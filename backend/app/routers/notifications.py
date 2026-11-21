@@ -49,6 +49,18 @@ def save_subscription(
     return Response(status_code=204)
 
 
+@router.post("/test")
+def send_test(user: models.User = Depends(get_current_user)):
+    """"Send test" in the alerts switch: a real alert to this person's devices,
+    and what happened, so a silent phone can be told apart from a missing device."""
+    from ..push import deliver
+    return deliver(
+        {"title": "Test alert ✅", "body": "Alerts are working on this device.", "tag": "test",
+         "url": "/#/admin" if user.role == models.RoleEnum.ADMIN.value else "/#/mr"},
+        ttl=300, user_id=user.id,
+    )
+
+
 @router.delete("/subscriptions", status_code=204)
 def delete_subscription(
     payload: schemas.PushSubscriptionDelete,

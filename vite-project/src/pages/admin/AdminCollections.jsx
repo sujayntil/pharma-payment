@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowBackUp, IconDots, IconEdit, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
+import { IconArrowBackUp, IconCash, IconDots, IconEdit, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -119,8 +119,8 @@ export default function AdminCollections({ preset = null }) {
   const mrOptions = useMemo(() => mrs.map((mr) => ({ value: String(mr.id), label: mr.name })), [mrs]);
   const rangeLabel = describeRange(filters.range);
   // Payment rows describe money already received, so they carry no Collect
-  // button (option C). Collecting the rest happens on the invoice: open it
-  // from the row or the ⋯ menu.
+  // button. When the row's invoice still has money due (part paid, or after
+  // a reversal), the ⋯ menu offers "Collect balance".
   const canReverse = (row) => !row.is_reversal && row.amount > 0 && !row.fully_reversed && Number(row.paid_amount) > 0;
   const rowActions = (row) => (
     <Group gap={4} wrap="nowrap" justify="flex-end" onClick={(event) => event.stopPropagation()}>
@@ -128,6 +128,7 @@ export default function AdminCollections({ preset = null }) {
         <Menu.Target><ActionIcon variant="subtle" color="gray" aria-label={`More actions for ${row.invoice_number}`}><IconDots size={16} /></ActionIcon></Menu.Target>
         <Menu.Dropdown>
           <Menu.Item leftSection={<IconFileInvoice size={15} />} onClick={() => setHistoryId(row.invoice_id)}>Open invoice</Menu.Item>
+          {Number(row.pending_amount) > 0.009 && <Menu.Item color="green" leftSection={<IconCash size={15} />} onClick={() => setRecording(row)}>Collect balance · {money(row.pending_amount)}</Menu.Item>}
           {!row.is_reversal && row.amount > 0 && !row.fully_reversed && <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => setChangingMode({ ...row, collected_by: row.recorded_by })}>Change payment mode</Menu.Item>}
           {canReverse(row) && <Menu.Item color="red" leftSection={<IconArrowBackUp size={15} />} onClick={() => setReversingPayment(row)}>Reverse payment</Menu.Item>}
         </Menu.Dropdown>

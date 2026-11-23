@@ -6,7 +6,7 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { dateTime, errorText, money } from '../../utils/formatters';
 import { autoFocusOnLaptop } from '../../utils/focus';
 
-const REASONS = ['Cheque bounced', 'Wrong amount', 'Wrong invoice', 'Duplicate entry', 'Other'];
+const REASONS = ['Not received', 'Cheque bounced', 'Wrong amount', 'Wrong invoice', 'Duplicate entry', 'Other'];
 
 /**
  * Admin-only. Reverses one whole collection (a payments-ledger row) with a

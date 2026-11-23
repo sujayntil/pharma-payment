@@ -1,0 +1,14 @@
+/* Activity feed: small dots, one sentence per step. */
+.feed :global(.mantine-Timeline-itemBullet) { border: 0; background: transparent; }
+.dot { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--mantine-color-gray-5); }
+.dot[data-tone='green'] { background: var(--mantine-color-green-6); }
+.dot[data-tone='orange'] { background: var(--mantine-color-orange-6); }
+.dot[data-tone='blue'] { background: var(--mantine-color-blue-6); }
+.title { line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
+.title b { font-weight: 600; }
+.green { color: var(--mantine-color-green-8); font-weight: 600; }
+.orange { color: var(--mantine-color-orange-8); font-weight: 600; }
+.struck { text-decoration: line-through; color: var(--mantine-color-dimmed); font-weight: 600; }
+.reason { margin-top: 2px; color: var(--mantine-color-text); font-style: italic; }
+.dot[data-tone='due'] { box-sizing: border-box; background: transparent; border: 2px solid var(--mantine-color-red-6); }
+.red { color: var(--mantine-color-red-7); font-weight: 700; }

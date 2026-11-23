@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Text, TextInput, ThemeIcon, Timeline } from '@mantine/core';
+import { ActionIcon, Alert, Button, Group, Loader, Menu, Modal, NumberInput, Paper, Progress, Select, SimpleGrid, Stack, Text, TextInput, Timeline } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconArrowBackUp, IconCash, IconDots, IconEdit, IconFileInvoice, IconFlag, IconTrash } from '@tabler/icons-react';
+import { IconArrowBackUp, IconCash, IconDots, IconEdit, IconTrash } from '@tabler/icons-react';
 import { invoicesApi } from '../../api/invoicesApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { SWIPE_SHEET_CLASS, useSwipeDownToClose } from '../../hooks/useSwipeDownToClose';
 import { useAuth } from '../../hooks/useAppStore';
-import { dateTime, errorText, money, shortDate } from '../../utils/formatters';
+import { errorText, money, shortDate } from '../../utils/formatters';
 import { ReversedBadge, StatusBadge } from './CollectionBadges';
 import { useSidePanelWidth } from '../../hooks/useSidePanelSpace';
 import { PAYMENT_MODES, useActorLabel } from './collectionUtils';
@@ -17,25 +17,8 @@ import SidePanel from '../common/SidePanel';
 import ReversePaymentModal from './ReversePaymentModal';
 import ChangeModeModal from './ChangeModeModal';
 import ContactActions from '../customers/ContactActions';
+import css from './InvoiceHistory.module.css';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
-
-const EVENT_STYLE = {
-  CREATED: { color: 'blue', icon: IconFileInvoice },
-  COLLECTED: { color: 'green', icon: IconCash },
-  REVERSED: { color: 'orange', icon: IconArrowBackUp },
-  // Undone from the Undo bar: the collection stays (crossed out), then "Undone".
-  COLLECTED_UNDONE: { color: 'gray', icon: IconCash },
-  UNDONE: { color: 'gray', icon: IconArrowBackUp },
-};
-
-function eventTitle(event) {
-  if (event.type === 'CREATED') return 'Invoice created';
-  if (event.type === 'REVERSED') return 'Payment reversed';
-  if (event.type === 'COLLECTED') return event.after_reversal ? 'Collection recorded again' : 'Collection recorded';
-  if (event.type === 'COLLECTED_UNDONE') return 'Collection recorded';
-  if (event.type === 'UNDONE') return 'Undone';
-  return event.type;
-}
 
 /**
  * The one invoice history view. Bottom sheet on phones, side panel on
@@ -55,6 +38,38 @@ function eventTitle(event) {
  * another row switches the panel to that invoice (no need to close first).
  * Phones: a bottom sheet over the page.
  */
+const IST = 'Asia/Kolkata';
+/** "21 Nov, 5:53 pm" this year, "21 Nov 2025, 5:53 pm" otherwise. */
+function when(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  const sameYear = d.toLocaleDateString('en-IN', { year: 'numeric', timeZone: IST }) === new Date().toLocaleDateString('en-IN', { year: 'numeric', timeZone: IST });
+  const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }), timeZone: IST });
+  return `${day}, ${d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: IST })}`;
+}
+
+/** "21 Nov" this year, "21 Nov 2025" otherwise (YYYY-MM-DD or a timestamp). */
+function day(value) {
+  if (!value) return '';
+  const d = String(value).length <= 10 ? new Date(`${value}T00:00:00`) : new Date(value);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }), timeZone: IST });
+}
+
+/** Due line under the bill: "Due 28 Oct · 26 days overdue" / "Due in 12 days" / "Paid in full". */
+function dueText(invoice) {
+  if (Number(invoice.pending_amount) <= 0.009) return { text: 'Paid in full', tone: 'green' };
+  if (!invoice.due_date) return null;
+  const [y, m, d] = invoice.due_date.split('-').map(Number);
+  const due = new Date(y, m - 1, d);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((today - due) / 86400000);
+  const on = `Due ${day(invoice.due_date)}`;
+  if (days > 0) return { text: `${on} · ${days} ${days === 1 ? 'day' : 'days'} overdue`, tone: 'red' };
+  if (days === 0) return { text: `${on} · due today`, tone: 'orange' };
+  return { text: `${on} · in ${-days} ${days === -1 ? 'day' : 'days'}`, tone: 'dimmed' };
+}
+
 export default function InvoiceHistory({ invoiceId, onClose, onChanged, onRecord, refreshKey = 0, actions }) {
   const isMobile = useIsMobile();
   // Admin: Edit / Delete invoice in the ⋯ menu wherever the panel opens
@@ -145,10 +160,6 @@ function InvoiceEditForm({ invoice, onSaved }) {
   );
 }
 
-function Meta({ children }) {
-  return <Text size="sm" c="dimmed" style={{ overflowWrap: 'anywhere' }}>{children}</Text>;
-}
-
 function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this in place
   const [data, setData] = useState(null);
@@ -157,6 +168,8 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   const [reversing, setReversing] = useState(null);
   const [changingMode, setChangingMode] = useState(null);
   const who = useActorLabel();
+  // In sentences: "You" for yourself, otherwise just the name.
+  const name = (actor) => { const label = who(actor); return label.startsWith('Admin - ') ? label.slice(8) : label; };
   const isAdmin = useAuth().role === 'ADMIN';
   const isMobile = useIsMobile();
 
@@ -172,6 +185,8 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
   if (error && !data) return <Alert color="red">{error}</Alert>;
   if (!data) return <Group justify="center" p="xl"><Loader /></Group>;
   const { invoice, events } = data;
+  const due = dueText(invoice);
+  const balance = Number(invoice.pending_amount);
   const onReversed = () => { setReload((value) => value + 1); onChanged?.(); };
   // Nothing can be reversed once the invoice holds no collected amount (e.g.
   // an older invoice-level "Mark unpaid"), so the option is hidden then too.
@@ -186,7 +201,7 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
     transaction_reference: event.reference,
     invoice_number: invoice.invoice_number,
     customer_name: invoice.customer_name,
-    collected_by: event.actor?.name,
+    collected_by: (event.collector || event.actor)?.name,
   });
 
   return (
@@ -224,38 +239,62 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
           <div><Text size="xs" c="dimmed">Collected</Text><Text size="sm" fw={700} c="green.8">{money(invoice.paid_amount)}</Text></div>
           <div><Text size="xs" c="dimmed">Pending</Text><Text size="sm" fw={700} c={Number(invoice.pending_amount) > 0 ? 'red' : 'dimmed'}>{money(invoice.pending_amount)}</Text></div>
         </SimpleGrid>
+        <Progress value={Math.min(100, (Number(invoice.paid_amount) / Math.max(Number(invoice.total_amount), 1)) * 100)} color="green" size={6} radius="xl" mt={8} aria-label="Collected so far" />
+        {due && <Text size="xs" mt={6} c={due.tone === 'dimmed' ? 'dimmed' : `${due.tone}.7`} fw={due.tone === 'dimmed' ? 400 : 600}>{due.text}</Text>}
       </Paper>
       {onRecord && (Number(invoice.pending_amount) > 0
         ? <Button fullWidth size="md" leftSection={<IconCash size={18} />} onClick={() => onRecord(invoice)}>Collect</Button>
         : <Text size="sm" c="dimmed" ta="center">Fully paid. Nothing to collect.</Text>)}
-      <Text fw={700} size="sm">History</Text>
+      <Text fw={700} size="sm">Activity</Text>
 
-      <Timeline bulletSize={28} lineWidth={2} active={events.length} color="gray">
+      {/* One plain sentence per step: who did what, then when and the details. */}
+      <Timeline bulletSize={12} lineWidth={2} active={-1} className={css.feed}>
         {events.map((event) => {
-          const style = EVENT_STYLE[event.type] || { color: 'gray', icon: IconFlag };
-          const Icon = style.icon;
-          const isReversal = event.type === 'REVERSED';
-          const remarks = event.reason || event.reference;
+          const actor = name(event.actor);
+          const collector = name(event.collector || event.actor);
+          const amount = money(event.amount);
           const reversedOut = event.type === 'COLLECTED' && event.fully_reversed;
-          const undone = event.type === 'COLLECTED_UNDONE';
-          const isUndo = event.type === 'UNDONE';
+          const struck = reversedOut || event.type === 'COLLECTED_UNDONE';
+          let title; let details; let extra = null; let tone = 'gray';
+          if (event.type === 'CREATED') {
+            title = event.actor ? <><b>{actor}</b> created the invoice</> : 'Invoice created';
+            details = [shortDate(event.invoice_date || event.at), money(event.amount)];
+            tone = 'blue';
+          } else if (event.type === 'COLLECTED' || event.type === 'COLLECTED_UNDONE') {
+            title = <><b>{collector}</b> collected <span className={struck ? css.struck : css.green}>{amount}</span></>;
+            details = [when(event.at), event.mode, event.reference && `Ref ${event.reference}`];
+            const typedBy = event.collector && event.actor && event.collector.id !== event.actor.id ? `Entered by ${actor}` : null;
+            const part = !reversedOut && Number(event.reversed_amount) > 0 ? <span className={css.orange}>{money(event.reversed_amount)} reversed</span> : null;
+            const note = reversedOut ? <span className={css.orange}>Reversed</span>
+              : part ? part
+              : event.type === 'COLLECTED_UNDONE' ? 'Undone'
+              : event.kind === 'full' ? <span className={css.green}>Paid in full</span> : null;
+            extra = (typedBy || note) && <Text size="xs" c="dimmed">{typedBy}{typedBy && note ? ' · ' : ''}{note}</Text>;
+            tone = struck ? 'gray' : 'green';
+          } else if (event.type === 'REVERSED') {
+            title = <><b>{actor}</b> reversed <span className={css.orange}>{amount}</span></>;
+            details = [when(event.at), event.reverses && `of ${name(event.reverses.collector) === 'You' ? 'your' : `${name(event.reverses.collector)}'s`} ${money(event.reverses.amount)} from ${day(event.reverses.at)}`];
+            extra = event.reason && <Text size="sm" className={css.reason}>“{event.reason}”</Text>;
+            tone = 'orange';
+          } else if (event.type === 'MODE_CHANGED') {
+            title = <><b>{actor}</b> changed the payment mode</>;
+            details = [when(event.at), `${event.old_mode || '—'} → ${event.mode || '—'}`];
+          } else if (event.type === 'UNDONE') {
+            title = <><b>{actor}</b> undid the collection</>;
+            details = [when(event.at)];
+          } else {
+            title = event.type;
+            details = [when(event.at)];
+          }
           return (
-            <Timeline.Item
-              key={event.id}
-              color={style.color}
-              bullet={<ThemeIcon size={28} radius="xl" color={style.color} variant="filled"><Icon size={15} /></ThemeIcon>}
+            <Timeline.Item key={event.id} color={tone} bullet={<span className={css.dot} data-tone={tone} />}
               title={
                 <Group gap={6} wrap="nowrap" justify="space-between" align="flex-start">
-                  <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
-                    <Text fw={700} size="sm" c={isReversal ? 'orange.8' : undefined}>{eventTitle(event)}</Text>
-                    {event.kind && <Badge size="xs" variant="light" color={event.kind === 'full' ? 'green' : 'yellow'}>{event.kind === 'full' ? 'Full' : 'Partial'}</Badge>}
-                    {reversedOut && <Badge size="xs" variant="light" color="orange">Reversed</Badge>}
-                    {undone && <Badge size="xs" variant="light" color="gray">Undone</Badge>}
-                  </Group>
+                  <Text size="sm" className={css.title}>{title}</Text>
                   {(canReverse(event) || canChangeMode(event)) && (
                     <Menu position="bottom-end" shadow="md" withinPortal>
                       <Menu.Target>
-                        <ActionIcon variant="subtle" color="gray" size="md" aria-label={`Payment actions for ${money(event.amount)}`}><IconDots size={16} /></ActionIcon>
+                        <ActionIcon variant="subtle" color="gray" size="sm" aria-label={`Payment actions for ${amount}`}><IconDots size={15} /></ActionIcon>
                       </Menu.Target>
                       <Menu.Dropdown>
                         {canChangeMode(event) && <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => setChangingMode(paymentOf(event))}>Change payment mode</Menu.Item>}
@@ -266,29 +305,17 @@ function HistoryBody({ invoiceId, onChanged, onRecord, refreshKey, actions }) {
                 </Group>
               }
             >
-              <Meta>{event.type === 'CREATED' ? shortDate(event.invoice_date || event.at) : dateTime(event.at)}</Meta>
-              {event.amount != null && !isUndo && (
-                <Group gap={6} wrap="wrap" mt={2}>
-                  <Text size="sm" fw={700} td={reversedOut || undone ? 'line-through' : undefined} c={isReversal ? 'orange.8' : reversedOut || undone ? 'dimmed' : event.type === 'COLLECTED' ? 'green.8' : undefined}>
-                    {isReversal ? '−' : ''}{money(event.amount)}
-                  </Text>
-                  {event.mode && <Badge size="sm" variant="light" color={isReversal ? 'orange' : 'gray'}>{event.mode}</Badge>}
-                  {event.mode_edited && <Text span size="xs" c="dimmed" fs="italic">mode edited</Text>}
-                </Group>
-              )}
-              {event.actor && <Meta>{who(event.actor)}</Meta>}
-              {remarks && !isUndo && <Meta>{event.reason ? `Reason: ${event.reason}` : remarks}</Meta>}
+              <Text size="xs" c="dimmed">{details.filter(Boolean).join(' · ')}</Text>
+              {extra}
             </Timeline.Item>
           );
         })}
-        <Timeline.Item
-          color="gray"
-          bullet={<ThemeIcon size={28} radius="xl" color="gray" variant="light"><IconFlag size={15} /></ThemeIcon>}
-          title={<Text fw={700} size="sm">Current status</Text>}
-        >
-          <Group gap={6} wrap="wrap" mt={2}><StatusBadge status={invoice.status} />{invoice.is_reversed && <ReversedBadge />}</Group>
-          <Meta>Collected {money(invoice.paid_amount)} · Pending {money(invoice.pending_amount)}</Meta>
-        </Timeline.Item>
+        {balance > 0.009 && (
+          <Timeline.Item key="due" bullet={<span className={css.dot} data-tone="due" />}
+            title={<Text size="sm" className={css.title}><b className={css.red}>{money(balance)}</b> still due</Text>}>
+            <Text size="xs" c="dimmed">Waiting for payment</Text>
+          </Timeline.Item>
+        )}
       </Timeline>
       {isAdmin && <ReversePaymentModal payment={reversing} onClose={() => setReversing(null)} onSaved={onReversed} />}
       {isAdmin && <ChangeModeModal payment={changingMode} onClose={() => setChangingMode(null)} onSaved={onReversed} />}

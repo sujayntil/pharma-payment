@@ -10,7 +10,11 @@ from datetime import datetime, time
 
 from sqlalchemy.orm import Session
 
+from datetime import timedelta
+
 from . import models
+from .credit import credit_days, days_past_credit
+from .insights import today_ist
 from .collection_info import RECORDER_ID, as_utc, linked_reversal_totals, reversal_fields
 
 
@@ -19,6 +23,17 @@ def _actor(user: models.User | None) -> dict | None:
     if user is None:
         return None
     return {"id": user.id, "name": user.name, "role": user.role}
+
+
+def _reverses(original, collectors) -> dict | None:
+    if original is None:
+        return None
+    return {
+        "payment_id": original.id,
+        "amount": original.amount,
+        "at": as_utc(original.payment_date),
+        "collector": _actor(collectors.get(original.collected_by)),
+    }
 
 
 def _status_for(total: float, paid: float) -> str:
@@ -38,11 +53,21 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
         .order_by(models.Payment.payment_date.asc(), models.Payment.id.asc())
         .all()
     )
-    # Collections whose mode an Admin corrected (shown as "mode edited").
-    edited = {
-        (row.new_value or {}).get("payment_id")
-        for row in db.query(models.AuditLog.new_value).filter(models.AuditLog.action == "payment_mode_changed").all()
-    }
+    payment_ids = {payment.id for payment, _ in payments}
+    # Who collected each entry (the MR it counts for), when someone else typed it in.
+    collector_ids = {p.collected_by for p, _ in payments if p.collected_by}
+    collectors = {u.id: u for u in db.query(models.User).filter(models.User.id.in_(collector_ids))} if collector_ids else {}
+    by_id = {p.id: p for p, _ in payments}
+    # Admin corrections of a collection's mode: their own step in the history.
+    mode_changes = [
+        (row, user)
+        for row, user in db.query(models.AuditLog, models.User)
+        .outerjoin(models.User, models.User.id == models.AuditLog.user_id)
+        .filter(models.AuditLog.action == "payment_mode_changed")
+        .all()
+        if (row.new_value or {}).get("payment_id") in payment_ids
+    ]
+    edited = {(row.new_value or {}).get("payment_id") for row, _ in mode_changes}
     logged = (
         db.query(models.InvoiceEvent, models.User)
         .outerjoin(models.User, models.User.id == models.InvoiceEvent.actor_id)
@@ -50,7 +75,6 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
         .order_by(models.InvoiceEvent.created_at.asc(), models.InvoiceEvent.id.asc())
         .all()
     )
-    payment_ids = {payment.id for payment, _ in payments}
     reversed_totals = linked_reversal_totals(db, payment_ids)
 
     created_event = next(
@@ -98,6 +122,10 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "mode_edited": payment.id in edited,
             "reason": payment.reason,
             "actor": _actor(recorder),
+            # The MR the collection counts for (can differ from who typed it in).
+            "collector": _actor(collectors.get(payment.collected_by)),
+            # A reversal: the collection it takes back.
+            "reverses": _reverses(by_id.get(payment.reversal_of_id), collectors) if is_reversal else None,
             "payment_id": payment.id,
             "reversal_of_id": payment.reversal_of_id,
             "kind": None if is_reversal else ("full" if amount >= pending_before - 0.01 else "partial"),
@@ -132,6 +160,26 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "status_after": None,
         })
 
+    for row, user in mode_changes:
+        old, new = row.old_value or {}, row.new_value or {}
+        events.append({
+            "id": f"mode-{row.id}",
+            "type": "MODE_CHANGED",
+            "at": as_utc(row.timestamp),
+            "invoice_date": None,
+            "amount": None,
+            "mode": new.get("mode"),
+            "old_mode": old.get("mode"),
+            "reference": new.get("reference"),
+            "reason": None,
+            "actor": _actor(user),
+            "payment_id": new.get("payment_id"),
+            "reversal_of_id": None,
+            "kind": None,
+            "after_reversal": False,
+            "status_after": None,
+        })
+
     created, rest = events[0], events[1:]
     # Stable sort: ledger rows keep their id order when timestamps tie.
     rest.sort(key=lambda e: (e["at"] is None, e["at"].timestamp() if e["at"] else 0))
@@ -150,6 +198,10 @@ def build_invoice_history(db: Session, invoice: models.Invoice) -> dict:
             "customer_alternate_phone": invoice.customer.alternate_phone if invoice.customer else None,
             "customer_whatsapp_on": invoice.customer.whatsapp_on if invoice.customer else None,
             "customer_type": invoice.customer.type if invoice.customer else None,
+            # Credit period (40 days; 60 for distributors): when it falls due and how late it is.
+            "due_date": (invoice.invoice_date + timedelta(days=credit_days(invoice.customer.type if invoice.customer else None))) if invoice.invoice_date else None,
+            "days_overdue": max(days_past_credit(invoice.invoice_date, invoice.customer.type if invoice.customer else None, today_ist()) or 0, 0)
+            if (invoice.pending_amount or 0) > 0.009 and invoice.invoice_date else 0,
             "mr_name": invoice.mr.name if invoice.mr else None,
             "payment_mode": invoice.payment_mode,
             "remarks": invoice.remarks,

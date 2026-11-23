@@ -1,5 +1,5 @@
 import { useContext, useState } from 'react';
-import { Badge, Button, CloseButton, Drawer, Group, Paper, Pill, Popover, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Badge, Button, Checkbox, CloseButton, Combobox, Drawer, Group, Input, InputBase, Paper, Pill, Popover, Select, Stack, Text, TextInput, useCombobox } from '@mantine/core';
 import { IconAdjustmentsHorizontal, IconFilterOff, IconSearch } from '@tabler/icons-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
@@ -21,6 +21,49 @@ export function SearchInput({ value, onChange, placeholder = 'Search', className
       aria-label={placeholder}
       {...props}
     />
+  );
+}
+
+/**
+ * Tick one or more options (e.g. customer types). value / onChange use a
+ * comma-separated string ("Chemist,Doctor"; "" = all), so it drops into the
+ * same filter state and URL params as a single select. The button reads
+ * "Chemist, Doctor", or "3 types" once three or more are ticked.
+ */
+export function FilterChecks({ value, onChange, data, placeholder, icon, noun = 'types', size, w, style, zIndex, className }) {
+  const inSheet = useInFilterSheet();
+  const inMore = useContext(MoreFiltersContext);
+  const combobox = useCombobox({ onDropdownClose: () => combobox.resetSelectedOption() });
+  const picked = String(value || '').split(',').filter(Boolean);
+  const label = !picked.length ? null : picked.length <= 2 ? picked.join(', ') : `${picked.length} ${noun}`;
+  const toggle = (item) => {
+    const next = picked.includes(item) ? picked.filter((x) => x !== item) : data.filter((d) => d === item || picked.includes(d));
+    onChange(next.join(','));
+  };
+  return (
+    <Combobox store={combobox} onOptionSubmit={toggle} shadow="md" zIndex={zIndex}
+      withinPortal={!inMore} middlewares={{ flip: true, shift: { padding: 8 } }} {...(inSheet && SHEET_DROPDOWN_PROPS)}>
+      <Combobox.Target>
+        <InputBase component="button" type="button" pointer className={className ?? classes.select} size={size} w={w} style={style} leftSection={icon}
+          rightSection={picked.length ? <CloseButton size="sm" aria-label={`Clear ${placeholder}`} onClick={(e) => { e.stopPropagation(); onChange(''); }} /> : <Combobox.Chevron />}
+          rightSectionPointerEvents={picked.length ? 'all' : 'none'}
+          onClick={() => combobox.toggleDropdown()} aria-label={placeholder}>
+          {label ? <span className={classes.checksLabel}>{label}</span> : <Input.Placeholder>{placeholder}</Input.Placeholder>}
+        </InputBase>
+      </Combobox.Target>
+      <Combobox.Dropdown>
+        <Combobox.Options>
+          {data.map((item) => (
+            <Combobox.Option value={item} key={item} active={picked.includes(item)}>
+              <Group gap="sm" wrap="nowrap">
+                <Checkbox checked={picked.includes(item)} onChange={() => {}} size="xs" tabIndex={-1} aria-hidden style={{ pointerEvents: 'none' }} />
+                <span>{item}</span>
+              </Group>
+            </Combobox.Option>
+          ))}
+        </Combobox.Options>
+      </Combobox.Dropdown>
+    </Combobox>
   );
 }
 

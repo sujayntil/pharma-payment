@@ -8,7 +8,8 @@ import { fetchAdminDashboard, fetchOutstandingAlerts, setDashFilters } from '../
 import { PAGE_SIZE } from '../../components/common/ListPagination';
 import { useShowMore } from '../../components/insights/useShowMore';
 import { useNavigate } from 'react-router-dom';
-import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import FilterBar, { FilterChecks } from '../../components/filters/FilterBar';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import { datePresets, describeRange } from '../../components/filters/dateRanges';
 import { recorderOf, useActorLabel } from '../../components/collections/collectionUtils';
@@ -121,12 +122,6 @@ function Recorder({ row }) {
   );
 }
 
-const CUSTOMER_TYPES = [
-  { value: 'distributor', label: 'Distributor' },
-  { value: 'chemist', label: 'Chemist' },
-  { value: 'doctor', label: 'Doctor' },
-  { value: 'other', label: 'Other' },
-];
 
 /** onOpenCustomer: ({ id, name }) => open that customer's ledger (Customers tab). */
 /** One quiet line under "Needs attention" when something was deleted in
@@ -207,7 +202,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
   const onDefault = range.from === thisMonth.from && range.to === thisMonth.to;
   const chips = [
     !onDefault && { key: 'range', label: `Dates: ${rangeLabel || 'All time'}`, onRemove: backToThisMonth },
-    appliedCustomerType && { key: 'type', label: `Customer type: ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}`, onRemove: () => setAppliedCustomerType('') },
+    appliedCustomerType && { key: 'type', label: `Customer type: ${listLabel(appliedCustomerType)}`, onRemove: () => setAppliedCustomerType('') },
   ];
   const reset = () => { backToThisMonth(); setAppliedCustomerType(''); };
   // Excel: Summary by customer type + one sheet per type, for the dates and type picked above.
@@ -226,20 +221,18 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
 
   const filtersOn = chips.some(Boolean);
   const showHigh = (alertsLoading && !alerts.length) || alertCount > 0;
-  const zoneTitle = `${rangeLabel || 'All time'}${appliedCustomerType ? ` · ${CUSTOMER_TYPES.find((t) => t.value === appliedCustomerType)?.label}` : ''}`;
+  const zoneTitle = `${rangeLabel || 'All time'}${appliedCustomerType ? ` · ${listLabel(appliedCustomerType)}` : ''}`;
   const th = { className: css.th };
   // Tap a number: the list behind it, in the same side panel as Insights,
   // with the Dashboard's dates and customer type.
   const [panel, setPanel] = useState([]);
-  const DASH_TYPE = { distributor: ['Distributor'], chemist: ['Chemist'], doctor: ['Doctor'], other: ['Hospital', 'Other'] };
-  const panelTypes = appliedCustomerType ? DASH_TYPE[appliedCustomerType] : null;
   const panelFilters = {
     ...(rangeFrom || rangeTo ? { ...(rangeFrom && { date_from: rangeFrom }), ...(rangeTo && { date_to: rangeTo }) } : { all_time: true }),
-    ...(panelTypes?.length === 1 && { customer_type: panelTypes[0] }),
+    ...(appliedCustomerType && { customer_type: appliedCustomerType }),
   };
   const LIST_TITLES = { sales: 'Tally sales', collected: 'Collected', outstanding: 'Outstanding today' };
   const openList = (records, due) => setPanel([{
-    kind: 'records', records, ...(due && { due }), ...(panelTypes?.length > 1 && { types: panelTypes }),
+    kind: 'records', records, ...(due && { due }),
     title: due === 'overdue' ? 'Overdue bills' : due === 'notdue' ? 'Not yet due' : LIST_TITLES[records],
   }]);
 
@@ -273,7 +266,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
       {/* Flat filter row; Reset appears only once a filter is on. */}
       <FilterBar compact chips={chips} onReset={filtersOn ? reset : undefined}>
         <DateRangeFilter label="Dates" value={range} onChange={setRange} allLabel="All time" months firstDate={dashboard?.first_invoice_date} />
-        <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={appliedCustomerType} onChange={setAppliedCustomerType} />
+        <FilterChecks placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={appliedCustomerType} onChange={setAppliedCustomerType} />
       </FilterBar>
 
       {error && <Alert color="red">{error}</Alert>}

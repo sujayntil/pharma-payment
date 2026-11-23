@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..collection_info import last_collection_fields, latest_collections
 from ..audit import customer_snapshot, write_audit
+from ..customer_groups import customer_group_condition, parse_types
 from ..database import get_db
 from ..ledger_pdf import IST, build_ledger_pdf, nice_date
 from ..ledger_xlsx import build_ledger_xlsx
@@ -56,8 +57,9 @@ def list_customers(
         q = q.filter(models.Customer.mr_id.is_(None))  # "Unassigned" in the MR filter
     elif mr_id:
         q = q.filter(models.Customer.mr_id == mr_id)
-    if customer_type and customer_type.strip():
-        q = q.filter(models.Customer.type.ilike(f"%{customer_type.strip()}%"))
+    types = parse_types(customer_type)
+    if types:
+        q = q.filter(customer_group_condition(types))  # same groups as Insights; several allowed
     q = (
         q
         .outerjoin(models.Invoice, models.Invoice.customer_id == models.Customer.id)

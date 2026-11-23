@@ -5,7 +5,7 @@ import { IconArrowLeft, IconBook2, IconCash, IconDots, IconDownload, IconEdit } 
 import { useDebouncedValue } from '@mantine/hooks';
 import { insightsApi } from '../../api/insightsApi';
 import { customersApi } from '../../api/customersApi';
-import { SearchInput } from '../filters/FilterBar';
+import { FilterChecks, SearchInput } from '../filters/FilterBar';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useAuth } from '../../hooks/useAppStore';
 import ContactActions from '../customers/ContactActions';
@@ -27,8 +27,10 @@ const STATUS_LABEL = { UNPAID: 'Unpaid', PARTIAL: 'Part paid', PAID: 'Paid' };
 /** Search + up to two small dropdowns at the top of a panel list. */
 function PanelFilters({ isMobile, search, onSearch, placeholder, selects, right }) {
   const list = selects.filter(Boolean);
-  const dropdowns = list.map((f) => (
-    <Select key={f.key} size="xs" placeholder={f.placeholder} data={f.data} value={f.value} onChange={f.onChange} clearable
+  const dropdowns = list.map((f) => (f.multi
+    ? <FilterChecks key={f.key} className="" size="xs" placeholder={f.placeholder} data={f.data} value={f.value || ''} onChange={f.onChange}
+        zIndex={400} w={isMobile ? undefined : 150} style={isMobile ? { flex: 1 } : undefined} />
+    : <Select key={f.key} size="xs" placeholder={f.placeholder} data={f.data} value={f.value} onChange={f.onChange} clearable
       comboboxProps={{ withinPortal: true, zIndex: 400 }} w={isMobile ? undefined : 150} style={isMobile ? { flex: 1 } : undefined} aria-label={f.placeholder} />
   ));
   return isMobile ? (
@@ -136,7 +138,7 @@ function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
   const all = data ? data[tab] : [];
   const term = q.trim().toLowerCase();
   const rows = all.filter((r) => (!term || [r.name, r.mr, r.type].some((v) => String(v || '').toLowerCase().includes(term)))
-    && (!typePick || r.type === typePick) && (!mrPick || (r.mr || 'No MR') === mrPick));
+    && (!typePick || typePick.split(',').includes(r.type)) && (!mrPick || (r.mr || 'No MR') === mrPick));
   const pool = data ? [...data.active, ...data.started, ...data.stopped] : [];
   const typeOptions = [...new Set(pool.map((r) => r.type).filter(Boolean))].sort();
   const mrOptions = [...new Set(pool.map((r) => r.mr || 'No MR'))].sort();
@@ -159,7 +161,7 @@ function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
       {data && (
         <PanelFilters isMobile={isMobile} search={q} onSearch={setQ} placeholder="Customer, MR, type"
           selects={[
-            !filters.customer_type && { key: 'type', placeholder: 'All types', data: typeOptions, value: typePick, onChange: setTypePick },
+            typeOptions.length > 1 && { key: 'type', multi: true, placeholder: 'All types', data: typeOptions, value: typePick, onChange: (v) => setTypePick(v || null) },
             (filters.mr_id === undefined || filters.mr_id === null) && { key: 'mr', placeholder: 'All MRs', data: mrOptions, value: mrPick, onChange: setMrPick },
           ]}
           right={rows.length !== all.length ? <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{rows.length} of {all.length}</Text> : null} />
@@ -213,12 +215,13 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const [q, setQ] = useState('');
   const [pick, setPick] = useState(null);      // status (invoices) or mode (collections)
   const [typePick, setTypePick] = useState(null);
-  const typeFixed = Boolean(filters.customer_type || item.customerType);
+  // Fixed to one type (the page's single type, or an "Owed by …" slice): no type pick.
+  const typeFixed = Boolean((filters.customer_type && !String(filters.customer_type).includes(',')) || item.customerType);
   const typeChoices = item.types || null;
   const term = q.trim().toLowerCase();
   const items = allItems.filter((r) => (!term || [r.customer, r.invoice_number, r.mr, r.mode].some((v) => String(v || '').toLowerCase().includes(term)))
     && (!pick || (collected ? (pick === 'Reversal' ? r.amount < 0 : r.mode === pick && r.amount >= 0) : r.status === pick))
-    && (!typePick || r.type === typePick));
+    && (!typePick || typePick.split(',').includes(r.type)));
   const narrowed = items.length !== allItems.length;
   const preNarrowed = Boolean(item.due || item.types);
   const shownTotal = items.reduce((sum, r) => sum + (collected ? r.amount : (age ? r.pending : r.total)), 0);
@@ -250,7 +253,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
               collected
                 ? { key: 'mode', placeholder: 'All modes', data: modeOptions, value: pick, onChange: setPick }
                 : { key: 'status', placeholder: 'All statuses', data: (age ? ['UNPAID', 'PARTIAL'] : ['UNPAID', 'PARTIAL', 'PAID']).map((v) => ({ value: v, label: STATUS_LABEL[v] })), value: pick, onChange: setPick },
-              !typeFixed && (!typeChoices || typeChoices.length > 1) && { key: 'type', placeholder: 'All types', data: typeOptions, value: typePick, onChange: setTypePick },
+              !typeFixed && (!typeChoices || typeChoices.length > 1) && typeOptions.length > 1 && { key: 'type', multi: true, placeholder: 'All types', data: typeOptions, value: typePick, onChange: (v) => setTypePick(v || null) },
             ]}
             right={<Button size="xs" variant="default" leftSection={<IconDownload size={14} />} disabled={!items.length} onClick={exportCsv}>Export</Button>} />
           {!items.length && <Text c="dimmed" size="sm">{narrowed ? 'Nothing matches.' : 'Nothing here.'}</Text>}

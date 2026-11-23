@@ -12,7 +12,8 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
 import { useInvoiceTicks } from '../../hooks/useInvoiceTicks';
-import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
@@ -37,7 +38,6 @@ import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
 
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
-const CUSTOMER_TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital'];
 
 const SORT_OPTIONS = [
   { value: 'oldest', label: 'Oldest pending first' },
@@ -123,8 +123,8 @@ export default function MrCustomers({ openCustomer = null }) {
   ];
 
   return <Stack gap="md"><Group justify="space-between" align="center"><Title order={1}>My customers</Title><Badge size="lg" variant="light">{total} {total === 1 ? 'customer' : 'customers'}</Badge></Group>
-    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={[customerType && { key: 'type', label: `Type: ${customerType}`, onRemove: () => onType('') }, sort && { key: 'sort', label: SORT_LABELS[sort], onRemove: () => onSort('') }, search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') }]} onReset={resetList} activeOutline>
-      <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={customerType} onChange={onType} />
+    <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={[customerType && { key: 'type', label: `Type: ${listLabel(customerType)}`, onRemove: () => onType('') }, sort && { key: 'sort', label: SORT_LABELS[sort], onRemove: () => onSort('') }, search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') }]} onReset={resetList} activeOutline>
+      <FilterChecks placeholder="All types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={customerType} onChange={onType} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORT_OPTIONS} value={sort || 'oldest'} clearable={false} allowDeselect={false} onChange={onSort} />
     </FilterBar>
     {/* Recent: the last few customers opened on this phone, one tap away. */}

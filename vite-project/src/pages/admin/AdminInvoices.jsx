@@ -10,8 +10,8 @@ import { CardList } from '../../components/common/RowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
-import { CUSTOMER_TYPES } from '../../utils/customerTypes';
-import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
+import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 // Replaced by the Pending / Paid / All tabs + "Show only" below:
 // import StatusTabs from '../../components/filters/StatusTabs';
@@ -59,7 +59,6 @@ const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'old
 const ANY = () => true;
 const BLANK = { mrId: '', customerType: '', only: '', range: EMPTY_RANGE, sort: '' };
 // Same groups as Insights and the Dashboard.
-const TYPE_OPTIONS = [...CUSTOMER_TYPES, 'Other'].map((t) => ({ value: t, label: t }));
 
 function tabParams(tab, only) {
   if (tab === 'paid') return { status: 'PAID' };
@@ -208,7 +207,7 @@ export default function AdminInvoices() {
   */
   const chips = [
     filters.only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === filters.only)?.label}`, onRemove: () => update({ only: '' }) },
-    filters.customerType && { key: 'ctype', label: `Type: ${filters.customerType}`, onRemove: () => update({ customerType: '' }) },
+    filters.customerType && { key: 'ctype', label: `Type: ${listLabel(filters.customerType)}`, onRemove: () => update({ customerType: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
     filters.sort && { key: 'sort', label: SORTS.find((s) => s.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },
@@ -281,7 +280,7 @@ export default function AdminInvoices() {
   const filterBar = (
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}
       moreAsButton moreActive={[filters.customerType, filters.sort].filter(Boolean).length} more={<>
-        <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_OPTIONS} value={filters.customerType} onChange={(customerType) => update({ customerType: customerType || '' })} />
+        <FilterChecks placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={filters.customerType} onChange={(customerType) => update({ customerType })} />
         <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
       </>}>
       {onlyOptions.length > 0 && <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={filters.only} onChange={(only) => update({ only })} />}

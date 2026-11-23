@@ -157,7 +157,8 @@ export function Donut({ rows = [], total = 0, active, onPick, centerLabel = 'Sal
         const f = row.value / total; const b = a + f * Math.PI * 2; const big = f > 0.5 ? 1 : 0;
         const [x1, y1] = at(a, R); const [x2, y2] = at(b - 0.0001, R); const [x3, y3] = at(b - 0.0001, r); const [x4, y4] = at(a, r);
         a = b;
-        const lit = hover ? hover === row.key : !active || active === row.key;
+        // active: one key, or a comma list ("Chemist,Doctor") when several are picked.
+        const lit = hover ? hover === row.key : !active || String(active).split(',').includes(row.key);
         return <path key={row.key} d={`M${x1},${y1}A${R},${R} 0 ${big} 1 ${x2},${y2}L${x3},${y3}A${r},${r} 0 ${big} 0 ${x4},${y4}Z`} fill={row.color} opacity={lit ? 1 : 0.25}
           style={{ cursor: 'pointer', transition: 'opacity 120ms', transformOrigin: `${c}px ${c}px`, transform: hover === row.key ? 'scale(1.04)' : undefined }}
           onPointerEnter={(e) => e.pointerType === 'mouse' && setHover(row.key)} onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(null)}

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..audit import customer_snapshot, write_audit
+from ..customer_groups import customer_group_condition, invoice_type_filter, parse_types
 from ..collection_info import last_collection_fields, latest_collections, reversed_invoice_ids
 from ..database import get_db
 from ..overdue import overdue_customer_summaries
@@ -76,9 +77,10 @@ def customers(
             models.Customer.phone.ilike(term),
             models.Customer.alternate_phone.ilike(term),
         ))
-    if customer_type and customer_type.strip():
-        # Same matching as the Admin customer list.
-        query = query.filter(models.Customer.type.ilike(f"%{customer_type.strip()}%"))
+    types = parse_types(customer_type)
+    if types:
+        # Same groups as the Admin lists and Insights; several allowed.
+        query = query.filter(customer_group_condition(types))
     if sort == "oldest":
         query = query.order_by(oldest_pending.is_(None), oldest_pending.asc(), outstanding.desc(), models.Customer.name, models.Customer.id)
     elif sort == "pending":
@@ -234,9 +236,9 @@ def outstanding(
     query = base
     if customer_id is not None:
         query = query.filter(models.Invoice.customer_id == customer_id)
-    if customer_type and customer_type.strip():
-        # Same matching as the customer lists.
-        query = query.filter(models.Invoice.customer.has(models.Customer.type.ilike(f"%{customer_type.strip()}%")))
+    if parse_types(customer_type):
+        # Same groups as the customer lists ("Other" includes invoices with no customer).
+        query = query.filter(invoice_type_filter(db, customer_type))
     if status == "REVERSED":
         query = query.filter(models.Invoice.id.in_(reversed_invoice_ids()))
     elif status:

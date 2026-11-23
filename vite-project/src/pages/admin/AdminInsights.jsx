@@ -13,9 +13,11 @@ import { AGE_COLORS, AGE_LABELS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } fro
 import InsightsPanel from '../../components/insights/InsightsPanel';
 import ShowMore from '../../components/insights/ShowMore';
 import css from './AdminInsights.module.css';
+import { FilterChecks } from '../../components/filters/FilterBar';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import { formatDateLocal, shortDate } from '../../utils/formatters';
 
-const TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital', 'Other'];
+const TYPES = TYPE_GROUPS;
 const NOT_SET = '__none__';
 
 const initials = (name = '') => name.replace(/^Dr\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -85,7 +87,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   const openFresh = (item) => setPanel([item]);
   const mrName = (id) => data?.by_mr.rows.find((r) => r.mr_id === id)?.name || 'MR';
   const chips = [
-    type && { key: 'type', label: type, clear: () => setType(null) },
+    type && { key: 'type', label: listLabel(type), clear: () => setType(null) },
     mrId !== null && { key: 'mr', label: `MR: ${mrName(mrId)}`, clear: () => setMrId(null) },
     area && { key: 'area', label: `Area: ${area === NOT_SET ? 'Not set' : area}`, clear: () => setArea(null) },
   ].filter(Boolean);
@@ -94,6 +96,12 @@ export default function AdminInsights({ onOpenCustomer }) {
   // What every "vs …" compares against, named (e.g. "1–18 Oct", "Sep 2026").
   const prevShort = result.data ? shortRange({ from: result.data.range.previous_from, to: result.data.range.previous_to }) : 'before';
   const toggle = (setter, current, value) => setter(current === value ? null : value);
+  // Customer types: several can be picked ("Chemist,Doctor"); tapping one adds / removes it.
+  const pickedTypes = String(type || '').split(',').filter(Boolean);
+  const toggleType = (t) => {
+    const next = pickedTypes.includes(t) ? pickedTypes.filter((x) => x !== t) : TYPES.filter((x) => x === t || pickedTypes.includes(x));
+    setType(next.length ? next.join(',') : null);
+  };
 
   const swatch = (bg, extra) => <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: bg, margin: '0 5px -1px 0', ...extra }} />;
   const legend = (
@@ -164,7 +172,7 @@ export default function AdminInsights({ onOpenCustomer }) {
       </Group>
 
       <Group gap={8} wrap="wrap">
-        <Select size="sm" w={isMobile ? '48%' : 170} placeholder="All types" clearable data={TYPES} value={type} onChange={setType} aria-label="Customer type" />
+        <div style={{ width: isMobile ? '48%' : 190 }}><FilterChecks placeholder="All types" data={TYPES} value={type || ''} onChange={(v) => setType(v || null)} /></div>
         <Select size="sm" w={isMobile ? '48%' : 170} placeholder="All MRs" clearable aria-label="MR"
           data={(data?.by_mr.rows || []).map((r) => ({ value: String(r.mr_id), label: r.name }))}
           value={mrId === null ? null : String(mrId)} onChange={(v) => setMrId(v === null ? null : Number(v))} />
@@ -175,7 +183,7 @@ export default function AdminInsights({ onOpenCustomer }) {
         ))}
         {chips.length > 0 && <Button size="compact-sm" variant="subtle" color="gray" onClick={clearAll}>Clear all</Button>}
       </Group>
-      <Text size="sm" c="dimmed" mt={-8}>Overview › <Text span fw={600} c="var(--app-ink)">{[periodLabel, type, mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean).join(' › ')}</Text></Text>
+      <Text size="sm" c="dimmed" mt={-8}>Overview › <Text span fw={600} c="var(--app-ink)">{[periodLabel, listLabel(type), mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean).join(' › ')}</Text></Text>
 
       {error && <Alert color="red">{error}</Alert>}
 
@@ -193,10 +201,10 @@ export default function AdminInsights({ onOpenCustomer }) {
           <Paper className={`${css.card} ${css.s6}`} id="ins-types" data-section>
             <div className={css.ch}><div><div className={css.ct}>Sales by customer type</div><div className={css.cs}>{allTime ? 'Since the start' : periodLabel} · tap a type to filter</div></div></div>
             <div className={`${css.cb} ${css.donutBody}`}>
-              <Donut size={isMobile ? 168 : 188} rows={data.by_type.map((r) => ({ key: r.type, value: r.sales, color: TYPE_COLORS[r.type] }))} total={typeTotal} active={type} onPick={(t) => toggle(setType, type, t)} />
+              <Donut size={isMobile ? 168 : 188} rows={data.by_type.map((r) => ({ key: r.type, value: r.sales, color: TYPE_COLORS[r.type] }))} total={typeTotal} active={type} onPick={toggleType} />
               <div className={css.legend} style={{ flex: 1, minWidth: 0 }}>
-                {data.by_type.filter((r) => r.sales > 0 || r.type === type).map((r) => (
-                  <button type="button" key={r.type} className={type === r.type ? css.on : undefined} onClick={() => toggle(setType, type, r.type)}>
+                {data.by_type.filter((r) => r.sales > 0 || pickedTypes.includes(r.type)).map((r) => (
+                  <button type="button" key={r.type} className={pickedTypes.includes(r.type) ? css.on : undefined} onClick={() => toggleType(r.type)}>
                     <i style={{ width: 10, height: 10, borderRadius: 3, background: TYPE_COLORS[r.type], flexShrink: 0 }} />{r.type}
                     <b className={css.num} style={{ marginLeft: 'auto' }}>{lakh(r.sales)}</b>
                     <span className={css.sub} style={{ width: 34, textAlign: 'right' }}>{typeTotal ? Math.round((r.sales / typeTotal) * 100) : 0}%</span>
@@ -214,7 +222,7 @@ export default function AdminInsights({ onOpenCustomer }) {
                 rows={owedByType.map((r) => ({ key: r.type, value: r.owed, color: TYPE_COLORS[r.type] }))} total={owedTotal} active={type} onPick={openOwed} />
               <div className={css.legend} style={{ flex: 1, minWidth: 0 }}>
                 {owedByType.filter((r) => r.owed > 0).map((r) => (
-                  <button type="button" key={r.type} className={type === r.type ? css.on : undefined} onClick={() => openOwed(r.type)}>
+                  <button type="button" key={r.type} className={pickedTypes.includes(r.type) ? css.on : undefined} onClick={() => openOwed(r.type)}>
                     <i style={{ width: 10, height: 10, borderRadius: 3, background: TYPE_COLORS[r.type], flexShrink: 0 }} />
                     <span style={{ minWidth: 0, textAlign: 'left' }}>{r.type}<span className={css.sub} style={{ display: 'block' }}>{r.customers} {r.customers === 1 ? 'customer' : 'customers'}</span></span>
                     <b className={css.num} style={{ marginLeft: 'auto' }}>{lakh(r.owed)}</b>
@@ -376,7 +384,7 @@ export default function AdminInsights({ onOpenCustomer }) {
                 // Tap a payment type: every collection behind it (side panel).
                 return (
                   <button type="button" key={m.mode} className={css.bucket} style={{ display: 'block', padding: '7px 6px' }} aria-label={`See ${m.mode} collections`}
-                    onClick={() => openFresh({ kind: 'mode', mode: m.mode, share, scope: [type, mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean) })}>
+                    onClick={() => openFresh({ kind: 'mode', mode: m.mode, share, scope: [listLabel(type), mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean) })}>
                     <Group justify="space-between" wrap="nowrap"><Text size="sm"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: MODE_COLORS[m.mode] || '#868e96', marginRight: 7 }} />{m.mode}</Text><Text size="sm"><b className={css.num}>{lakh(m.amount)}</b> <span className={css.sub}>{share}%</span></Text></Group>
                     <div className={css.bar}><i style={{ width: `${share}%`, background: MODE_COLORS[m.mode] || '#868e96' }} /></div>
                   </button>

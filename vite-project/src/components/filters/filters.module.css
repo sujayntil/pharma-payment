@@ -158,3 +158,6 @@
 
 /* Laptop "More" popover: one filter per line, full width. */
 .moreFields .select { flex: none; width: 100%; min-width: 0; }
+
+/* Multi-pick filter: keep the picked names on one line. */
+.checksLabel { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

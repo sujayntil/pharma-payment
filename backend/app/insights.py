@@ -185,12 +185,12 @@ class Book:
 
 @dataclass
 class Filters:
-    customer_type: str | None = None   # Distributor / Chemist / Doctor / Other
+    customer_type: tuple = ()          # groups to keep (Distributor / Chemist / Doctor / Hospital / Other); empty = all
     mr_id: int | None = None           # 0 = no MR
     area: str | None = None            # NOT_SET = customers without an area
 
     def match(self, book: Book, inv: Inv, ignore: str = "") -> bool:
-        if self.customer_type and ignore != "type" and book.group_of(inv) != self.customer_type:
+        if self.customer_type and ignore != "type" and book.group_of(inv) not in self.customer_type:
             return False
         if self.mr_id is not None and ignore != "mr":
             if (inv.mr_id or 0) != self.mr_id:

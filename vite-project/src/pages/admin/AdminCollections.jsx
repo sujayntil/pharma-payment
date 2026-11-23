@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowBackUp, IconCash, IconDots, IconEdit, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
+import { IconArrowBackUp, IconCash, IconCategory, IconDots, IconEdit, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -9,7 +9,8 @@ import RowCard, { CardList } from '../../components/common/RowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
-import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
@@ -144,7 +145,7 @@ export default function AdminCollections({ preset = null }) {
     rangeLabel && { key: 'range', label: `Collected: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
     filters.mrId && { key: 'mr', label: `MR: ${filters.mrId === '0' ? 'No MR' : (mrOptions.find((o) => o.value === filters.mrId)?.label || '—')}`, onRemove: () => update({ mrId: '' }) },
     // Only set when opened from Insights (no picker for these here).
-    filters.customerType && { key: 'ctype', label: `Customer type: ${filters.customerType}`, onRemove: () => update({ customerType: '' }) },
+    filters.customerType && { key: 'ctype', label: `Customer type: ${listLabel(filters.customerType)}`, onRemove: () => update({ customerType: '' }) },
     filters.area && { key: 'area', label: `Area: ${filters.area === NO_AREA ? 'Not set' : filters.area}`, onRemove: () => update({ area: '' }) },
     filters.mode && { key: 'mode', label: `Mode: ${filters.mode}`, onRemove: () => update({ mode: '' }) },
     filters.recordedBy && { key: 'by', label: `Recorded ${RECORDED_BY.find((o) => o.value === filters.recordedBy)?.label.toLowerCase()}`, onRemove: () => update({ recordedBy: '' }) },
@@ -159,6 +160,7 @@ export default function AdminCollections({ preset = null }) {
         <FilterSelect placeholder="All modes" icon={<IconWallet size={16} />} data={[...PAYMENT_MODES, 'Admin adjustment', 'Reversal']} value={filters.mode} onChange={(mode) => update({ mode })} />
         <FilterSelect placeholder="Recorded by" icon={<IconUserShield size={16} />} data={RECORDED_BY} value={filters.recordedBy} onChange={(recordedBy) => update({ recordedBy })} />
         <FilterSelect placeholder="All entries" data={ENTRY_TYPES} value={filters.entryType} onChange={(entryType) => update({ entryType })} />
+        <FilterChecks placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={filters.customerType} onChange={(customerType) => update({ customerType })} />
       </>}>
       <DateRangeFilter label="Collected" value={filters.range} onChange={(range) => update({ range })} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />

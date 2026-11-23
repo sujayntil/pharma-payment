@@ -10,7 +10,8 @@ import { CardList } from '../../components/common/RowCard';
 import { listPaperProps, reloadingStyle } from '../../components/common/listPaper';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
-import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
@@ -45,7 +46,6 @@ const ONLY_OPTIONS = {
   all: [{ value: 'UNPAID', label: 'Unpaid' }, { value: 'PARTIAL', label: 'Part paid' }, { value: 'PAID', label: 'Paid' }, { value: 'REVERSED', label: 'Reversed' }],
 };
 const ONLY_PLACEHOLDER = { pending: 'All pending', paid: 'All paid', all: 'All invoices' };
-const CUSTOMER_TYPES = ['Distributor', 'Chemist', 'Doctor', 'Hospital'];
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
 
 function tabParams(tab, only) {
@@ -159,7 +159,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const onlyOptions = ONLY_OPTIONS[tab];
   const chips = [
     only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === only)?.label}`, onRemove: () => { setOnly(''); setPage(1); } },
-    customerType && { key: 'type', label: `Customer type: ${customerType}`, onRemove: () => { setCustomerType(''); setPage(1); } },
+    customerType && { key: 'type', label: `Customer type: ${listLabel(customerType)}`, onRemove: () => { setCustomerType(''); setPage(1); } },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => { setRange(EMPTY_RANGE); setPage(1); } },
     sortChoice && { key: 'sort', label: SORTS.find((s) => s.value === sort)?.label, onRemove: () => { setSortChoice(null); setPage(1); } },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
@@ -181,7 +181,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
       {onlyOptions.length > 0 && (
         <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={only} onChange={(next) => { setOnly(next); setPage(1); }} />
       )}
-      <FilterSelect placeholder="All customer types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={customerType} onChange={(next) => { setCustomerType(next || ''); setPage(1); }} />
+      <FilterChecks placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={customerType} onChange={(next) => { setCustomerType(next || ''); setPage(1); }} />
       <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => { setSort(next || defaultSort); setPage(1); }} />
     </FilterBar>

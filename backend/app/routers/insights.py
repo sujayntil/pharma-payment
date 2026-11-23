@@ -3,6 +3,7 @@ insights, and MR targets. Nothing here changes invoices or payments."""
 from datetime import date, timedelta
 from typing import Optional
 
+from ..customer_groups import parse_types
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,7 @@ from .. import models, schemas
 from ..audit import write_audit
 from ..database import get_db
 from ..deps import require_admin
-from ..insights import (DUE_BUCKETS, TYPE_GROUPS, Filters, customer_change, customer_insights, invoice_list, month_start,
+from ..insights import (DUE_BUCKETS, Filters, customer_change, customer_insights, invoice_list, month_start,
                         save_targets, summary, targets_for, today_ist)
 
 router = APIRouter(prefix="/admin/insights", tags=["insights"])
@@ -30,14 +31,10 @@ def _range(date_from: Optional[date], date_to: Optional[date]) -> tuple[date, da
 
 
 def _filters(customer_type: Optional[str], mr_id: Optional[int], area: Optional[str]) -> Filters:
-    group = None
-    if customer_type:
-        group = next((g for g in TYPE_GROUPS if g.lower() == customer_type.strip().lower()), None)
-        if group is None:
-            raise HTTPException(422, "customer_type must be Distributor, Chemist, Doctor, Hospital or Other")
+    groups = tuple(parse_types(customer_type))  # several allowed: "Chemist,Doctor"
     if mr_id is not None and mr_id < 0:
         raise HTTPException(422, "mr_id must be 0 (no MR) or an MR")
-    return Filters(customer_type=group, mr_id=mr_id, area=(area or "").strip() or None)
+    return Filters(customer_type=groups, mr_id=mr_id, area=(area or "").strip() or None)
 
 
 @router.get("")

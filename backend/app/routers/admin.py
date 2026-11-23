@@ -29,7 +29,8 @@ from fastapi.responses import Response
 from ..deps import require_admin
 from ..push import send_office_payment_notification
 from ..credit import is_overdue
-from ..insights import NOT_SET, TYPE_GROUPS
+from ..insights import NOT_SET
+from ..customer_groups import customer_group_condition, parse_types
 from ..overdue import overdue_customer_summaries
 from ..security import hash_password, password_problem
 from ..utils import clean_search, compute_status, page_result, query_page, set_customer_numbers
@@ -62,20 +63,12 @@ def _payment_date_range_filter(date_from: Optional[date], date_to: Optional[date
 
 
 def _customer_type_filter(customer_type: str):
-    """Same customer-type filter as the Dashboard (distributor / chemist / doctor / other)."""
-    customer_type = (customer_type or "").strip().lower()
-    if customer_type not in {"", "distributor", "chemist", "doctor", "other"}:
-        raise HTTPException(422, "customer_type must be distributor, chemist, doctor, or other")
+    """Customer-type filter (one or more groups, as Insights counts them) for
+    queries that outer-join Customer."""
+    types = parse_types(customer_type)
 
     def apply(query):
-        if customer_type == "other":
-            normalized_type = func.lower(func.trim(func.coalesce(models.Customer.type, "")))
-            return query.filter(
-                or_(models.Customer.id.is_(None), ~normalized_type.in_(("distributor", "chemist", "doctor")))
-            )
-        if customer_type:
-            return query.filter(func.lower(func.trim(models.Customer.type)) == customer_type)
-        return query
+        return query.filter(customer_group_condition(types)) if types else query
     return apply
 
 
@@ -116,19 +109,7 @@ def dashboard(
     user: models.User = Depends(require_admin),
 ):
     """Invoice KPIs plus collections received during the selected dates."""
-    customer_type = (customer_type or "").strip().lower()
-    if customer_type not in {"", "distributor", "chemist", "doctor", "other"}:
-        raise HTTPException(422, "customer_type must be distributor, chemist, doctor, or other")
-
-    def apply_type_filter(query):
-        if customer_type == "other":
-            normalized_type = func.lower(func.trim(func.coalesce(models.Customer.type, "")))
-            return query.filter(
-                or_(models.Customer.id.is_(None), ~normalized_type.in_(("distributor", "chemist", "doctor")))
-            )
-        if customer_type:
-            return query.filter(func.lower(func.trim(models.Customer.type)) == customer_type)
-        return query
+    apply_type_filter = _customer_type_filter(customer_type)
 
     q = apply_type_filter(
         db.query(models.Invoice).outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id)
@@ -493,16 +474,10 @@ def _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_t
             condition = or_(condition, models.Payment.mode.is_(None))
         query = query.filter(condition)
     if customer_type:
-        # Same groups as Insights (Distributor / Chemist / Doctor / Hospital / Other).
-        group = next((g for g in TYPE_GROUPS if g.lower() == customer_type.strip().lower()), None)
-        if group is None:
-            raise HTTPException(422, "customer_type must be Distributor, Chemist, Doctor, Hospital or Other")
-        normalized = func.lower(func.trim(func.coalesce(models.Customer.type, "")))
-        if group == "Other":
-            named = [g.lower() for g in TYPE_GROUPS if g != "Other"]
-            query = query.filter(or_(models.Customer.id.is_(None), ~normalized.in_(named)))
-        else:
-            query = query.filter(normalized == group.lower())
+        # Same groups as Insights; several allowed ("Chemist,Doctor").
+        types = parse_types(customer_type)
+        if types:
+            query = query.filter(customer_group_condition(types))
     if area and area.strip():
         if area.strip() == NOT_SET:
             query = query.filter(or_(models.Customer.id.is_(None), models.Customer.area.is_(None),

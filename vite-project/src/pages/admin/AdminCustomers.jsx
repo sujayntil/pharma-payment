@@ -14,7 +14,7 @@ import { useBackClose } from '../../hooks/useBackClose';
 import { useInvoiceTicks } from '../../hooks/useInvoiceTicks';
 import { deleteWithUndo } from '../../components/collections/deleteWithUndo';
 import { TickAllCell, TickCell, TickedBar } from '../../components/collections/InvoiceTicks';
-import FilterBar, { FilterSelect } from '../../components/filters/FilterBar';
+import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
@@ -33,7 +33,7 @@ import { CustomerContactRow } from '../../components/customers/CustomerContact';
 import EditCustomerModal from '../../components/customers/EditCustomerModal';
 import CustomerFormModal from '../../components/customers/CustomerFormModal';
 
-import { CUSTOMER_TYPES } from '../../utils/customerTypes';
+import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import EmptyResults from '../../components/common/EmptyResults';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
@@ -117,7 +117,7 @@ export default function AdminCustomers({ openCustomer = null }) {
     // Default order is most pending first; a chip shows only for Name A–Z.
     filters.sort && { key: 'sort', label: SORTS.find((option) => option.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
-    filters.type && { key: 'type', label: `Type: ${filters.type}`, onRemove: () => update({ type: '' }) },
+    filters.type && { key: 'type', label: `Type: ${listLabel(filters.type)}`, onRemove: () => update({ type: '' }) },
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
   ];
 
@@ -220,7 +220,7 @@ export default function AdminCustomers({ openCustomer = null }) {
     {!isMobile && <TitleBar title="Customers"><MiniStat label="Customers" value={total} /></TitleBar>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />
-      <FilterSelect placeholder="All types" icon={<IconCategory size={16} />} data={CUSTOMER_TYPES} value={filters.type} onChange={(type) => update({ type })} />
+      <FilterChecks placeholder="All types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={filters.type} onChange={(type) => update({ type })} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={filters.sort || 'pending'} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next === 'pending' ? '' : next })} />
     </FilterBar>
     </Stack></StickyFilters>

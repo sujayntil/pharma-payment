@@ -39,8 +39,10 @@ import EmptyResults from '../../components/common/EmptyResults';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
 import StickyFilters from '../../components/common/StickyFilters';
+import OverdueFilter from '../../components/filters/OverdueFilter';
+import { dueLabel, dueParams } from '../../components/filters/dueFilter';
 import TitleBar, { MiniStat } from '../../components/common/TitleBar';
-const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
+const BLANK_LEDGER = { range: EMPTY_RANGE, status: '', due: '', overdueDays: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
 // Sort choices (default: most pending first).
@@ -99,7 +101,7 @@ export default function AdminCustomers({ openCustomer = null }) {
     const timer = setTimeout(async () => {
       setLedgerLoading(true); setError('');
       try {
-        const result = await customersApi.getCustomerLedger(selected.id, { limit: PAGE_SIZE, offset: (ledgerPage - 1) * PAGE_SIZE, ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }) });
+        const result = await customersApi.getCustomerLedger(selected.id, { limit: PAGE_SIZE, offset: (ledgerPage - 1) * PAGE_SIZE, ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }), ...dueParams(ledgerFilters.due, ledgerFilters.overdueDays) });
         if (active) setLedger(result);
       } catch (err) { if (active) setError(errorText(err)); }
       finally { if (active) setLedgerLoading(false); }
@@ -123,12 +125,13 @@ export default function AdminCustomers({ openCustomer = null }) {
 
   const updateLedger = (patch) => { setLedgerFilters((current) => ({ ...current, ...patch })); setLedgerPage(1); };
   // The ledger's filters (no paging), for the PDF.
-  const ledgerPdfParams = { ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }) };
+  const ledgerPdfParams = { ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }), ...dueParams(ledgerFilters.due, ledgerFilters.overdueDays) };
   const onLedgerSearch = (value) => { setLedgerSearch(value); setLedgerPage(1); };
   const resetLedger = () => { setLedgerFilters(BLANK_LEDGER); setLedgerSearch(''); setLedgerPage(1); };
   const ledgerRange = describeRange(ledgerFilters.range);
   const ledgerChips = [
     ledgerFilters.status && { key: 'status', label: `Status: ${ledgerFilters.status.toLowerCase()}`, onRemove: () => updateLedger({ status: '' }) },
+    ledgerFilters.due && { key: 'due', label: dueLabel(ledgerFilters.due, ledgerFilters.overdueDays), onRemove: () => updateLedger({ due: '', overdueDays: '' }) },
     ledgerRange && { key: 'range', label: `Invoice date: ${ledgerRange}`, onRemove: () => updateLedger({ range: EMPTY_RANGE }) },
     ledgerSearch.trim() && { key: 'q', label: `“${ledgerSearch.trim()}”`, onRemove: () => onLedgerSearch('') },
   ];
@@ -312,7 +315,8 @@ export default function AdminCustomers({ openCustomer = null }) {
         {/* Laptop: search and filters stay pinned while the rows scroll. */}
         <StickyFilters enabled={!isMobile}>
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>
-          <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
+          <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status, ...(status === 'PAID' && { due: '', overdueDays: '' }) })} />
+          {ledgerFilters.status !== 'PAID' && <OverdueFilter due={ledgerFilters.due} days={ledgerFilters.overdueDays} onChange={({ due, days }) => updateLedger({ due, overdueDays: days })} />}
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} months firstDate={firstDate} quick={[]} />
         </FilterBar>
         </StickyFilters>

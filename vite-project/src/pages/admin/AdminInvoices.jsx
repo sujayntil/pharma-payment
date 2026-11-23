@@ -11,6 +11,8 @@ import { listPaperProps, reloadingStyle } from '../../components/common/listPape
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
 import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
+import OverdueFilter from '../../components/filters/OverdueFilter';
+import { dueLabel, dueParams } from '../../components/filters/dueFilter';
 import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 // Replaced by the Pending / Paid / All tabs + "Show only" below:
@@ -57,7 +59,7 @@ const ONLY_PLACEHOLDER = { pending: 'All pending', paid: 'All paid', all: 'All i
 const SORTS = [{ value: 'newest', label: 'Newest invoice first' }, { value: 'oldest', label: 'Oldest invoice first' }, { value: 'amount', label: 'Highest pending first' }];
 // sort '' = the tab's default: Pending oldest first, Paid / All newest first.
 const ANY = () => true;
-const BLANK = { mrId: '', customerType: '', only: '', range: EMPTY_RANGE, sort: '' };
+const BLANK = { mrId: '', customerType: '', only: '', due: '', overdueDays: '', range: EMPTY_RANGE, sort: '' };
 // Same groups as Insights and the Dashboard.
 
 function tabParams(tab, only) {
@@ -120,8 +122,8 @@ export default function AdminInvoices() {
           sort_order: sort,
           ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }),
           ...(filters.mrId && { mr_id: filters.mrId }),
-        ...(filters.customerType && { customer_type: filters.customerType }),
           ...(filters.customerType && { customer_type: filters.customerType }),
+          ...(tab !== 'paid' && dueParams(filters.due, filters.overdueDays)),
           ...(filters.range.from && { date_from: filters.range.from }),
           ...(filters.range.to && { date_to: filters.range.to }),
         });
@@ -151,6 +153,8 @@ export default function AdminInvoices() {
         sort_order: sort,
         ...(search.trim() && { search: search.trim() }),
         ...(filters.mrId && { mr_id: filters.mrId }),
+        ...(filters.customerType && { customer_type: filters.customerType }),
+        ...(tab !== 'paid' && dueParams(filters.due, filters.overdueDays)),
         ...(filters.range.from && { date_from: filters.range.from }),
         ...(filters.range.to && { date_to: filters.range.to }),
       }), 'invoices.xlsx');
@@ -159,7 +163,15 @@ export default function AdminInvoices() {
   };
 
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
-  const changeTab = (next) => { setTab(next); if (!ONLY_OPTIONS[next].some((o) => o.value === filters.only)) update({ only: '' }); setPage(1); };
+  const changeTab = (next) => {
+    setTab(next);
+    const clear = {
+      ...(!ONLY_OPTIONS[next].some((o) => o.value === filters.only) && { only: '' }),
+      ...(next === 'paid' && filters.due && { due: '', overdueDays: '' }), // paid bills are never overdue
+    };
+    if (Object.keys(clear).length) update(clear);
+    setPage(1);
+  };
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
   const reload = useCallback(() => { setRefresh((value) => value + 1); setHistoryKey((value) => value + 1); }, []);
@@ -207,6 +219,7 @@ export default function AdminInvoices() {
   */
   const chips = [
     filters.only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === filters.only)?.label}`, onRemove: () => update({ only: '' }) },
+    tab !== 'paid' && filters.due && { key: 'due', label: dueLabel(filters.due, filters.overdueDays), onRemove: () => update({ due: '', overdueDays: '' }) },
     filters.customerType && { key: 'ctype', label: `Type: ${listLabel(filters.customerType)}`, onRemove: () => update({ customerType: '' }) },
     filters.mrId && { key: 'mr', label: `MR: ${mrFilterOptions.find((o) => o.value === filters.mrId)?.label || '—'}`, onRemove: () => update({ mrId: '' }) },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => update({ range: EMPTY_RANGE }) },
@@ -279,7 +292,8 @@ export default function AdminInvoices() {
   const addButton = <Button leftSection={<IconPlus size={16} />} onClick={() => setManualOpen(true)}>Add invoice</Button>;
   const filterBar = (
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Invoice, customer, MR" chips={chips} onReset={reset}
-      moreAsButton moreActive={[filters.customerType, filters.sort].filter(Boolean).length} more={<>
+      moreAsButton moreActive={[tab !== 'paid' && filters.due, filters.customerType, filters.sort].filter(Boolean).length} more={<>
+        {tab !== 'paid' && <OverdueFilter due={filters.due} days={filters.overdueDays} onChange={({ due, days }) => update({ due, overdueDays: days })} />}
         <FilterChecks placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={filters.customerType} onChange={(customerType) => update({ customerType })} />
         <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => update({ sort: next && next !== defaultSort ? next : '' })} />
       </>}>

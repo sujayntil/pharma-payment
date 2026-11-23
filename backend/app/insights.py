@@ -275,7 +275,8 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
     # "Owed to you" is always today's position (not tied to the dates):
     # everything unpaid, split into not yet due and overdue.
     owed = [i for i in invs if i.pending > OPEN]
-    overdue_now = sum(i.pending for i in owed if (_late(book, i, today) or -1) >= 0)
+    # A bill is overdue from its due day (days past credit >= 0), same as the Dashboard.
+    overdue_now = sum(i.pending for i in owed if (_late(book, i, today) if i.date else None) is not None and _late(book, i, today) >= 0)
     kpis["outstanding"] = {"value": round(sum(i.pending for i in owed), 2), "previous": None, "change": None,
                            "spark": [], "as_of_today": True, "overdue": round(overdue_now, 2),
                            "not_due": round(sum(i.pending for i in owed) - overdue_now, 2)}

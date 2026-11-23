@@ -12,7 +12,9 @@ from ..collection_info import RECORDER_ID, last_collection_fields, latest_collec
 from ..ai.extractor import extract_invoice_from_image  # noqa: F401  (used by the disabled extract route)
 from ..invoice_history import build_invoice_history
 from ..audit import invoice_snapshot, write_audit
+from ..credit import credit_days, days_past_credit, due_filter_condition
 from ..customer_groups import invoice_type_filter
+from ..insights import today_ist
 from ..database import get_db
 from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
 from ..deps import get_current_user, require_admin
@@ -206,11 +208,13 @@ def list_invoices(
     pending_only: bool = False,          # "Pending" tab: invoices with a balance
     sort_order: Optional[str] = None,    # newest (default) | oldest | amount
     customer_type: Optional[str] = None,  # Distributor / Chemist / Doctor / Hospital / Other
+    due: Optional[str] = None,            # overdue | notdue (past / within the credit period)
+    overdue_days: Optional[int] = None,   # with due=overdue: more than this many days past due
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     q, search = _admin_invoice_query(
-        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type
+        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type, due, overdue_days
     )
     # Pending total for exactly this filtered set (paged responses only).
     filtered_outstanding = q.with_entities(
@@ -224,7 +228,8 @@ def list_invoices(
     return {**page_result(items, total, page_size, page_offset), "filtered_outstanding": filtered_outstanding}
 
 
-def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type=None):
+def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type=None,
+                         due=None, overdue_days=None):
     """Validates the Admin invoice filters and returns (unordered query,
     cleaned search). One builder for the list and the Excel export, so both
     always cover exactly the same rows."""
@@ -252,6 +257,7 @@ def _admin_invoice_query(db, mr_id, status, customer_id, date_from, date_to, sea
         q = q.filter(models.Invoice.customer_id == customer_id)
     if customer_type and customer_type.strip():
         q = q.filter(invoice_type_filter(db, customer_type))
+    q = apply_due_filter(q, due, overdue_days)
     if date_from:
         q = q.filter(models.Invoice.invoice_date >= date_from)
     if date_to:
@@ -291,15 +297,18 @@ def export_invoices(
     pending_only: bool = False,
     sort_order: Optional[str] = None,
     customer_type: Optional[str] = None,
+    due: Optional[str] = None,
+    overdue_days: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     """Admin-only Excel download of the invoice list with the same filters,
     search and sort as GET /invoices (all matching rows, not just one page)."""
     q, _search = _admin_invoice_query(
-        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type
+        db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type, due, overdue_days
     )
     total = q.order_by(None).count()
+    today = today_ist()
     if total > EXPORT_MAX_ROWS:
         raise HTTPException(
             413, f"{total} invoices match. Narrow the filters to {EXPORT_MAX_ROWS} or fewer to export."
@@ -325,10 +334,12 @@ def export_invoices(
                 invoice.invoice_date,
                 invoice.customer.name if invoice.customer else None,
                 invoice.mr.name if invoice.mr else "Unassigned",
+                invoice.customer.type if invoice.customer else None,
                 float(invoice.total_amount or 0),
                 float(invoice.paid_amount or 0),
                 float(invoice.pending_amount or 0),
                 _STATUS_WORDS.get(invoice.status, invoice.status),
+                *_due_cells(invoice, today),
                 "Yes" if last.get("is_reversal") else "",
                 recorder,
                 to_ist(last["payment_date"]) if last.get("payment_date") else None,
@@ -340,13 +351,32 @@ def export_invoices(
     db.commit()
     return workbook_response(
         f"invoices-{stamp}.xlsx", "Invoices",
-        ["Invoice", "Invoice date", "Customer", "MR", "Bill", "Collected", "Pending", "Status",
-         "Last entry reversed", "Last recorded by", "Last recorded at"],
-        rows(), widths=[16, 14, 32, 20, 14, 14, 14, 12, 18, 24, 20],
+        ["Invoice", "Invoice date", "Customer", "MR", "Customer type", "Bill", "Collected", "Pending", "Status",
+         "Due date", "Days overdue", "Last entry reversed", "Last recorded by", "Last recorded at"],
+        rows(), widths=[16, 14, 32, 20, 14, 14, 14, 14, 12, 14, 13, 18, 24, 20],
     )
 
 
 _STATUS_WORDS = {"PAID": "Paid", "PARTIAL": "Part paid", "UNPAID": "Unpaid"}
+
+
+def apply_due_filter(q, due, overdue_days):
+    """The Overdue filter (Invoices, MR Invoices, ledgers): 422 on bad input."""
+    try:
+        condition = due_filter_condition((due or "").strip().lower() or None, overdue_days, today_ist())
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return q if condition is None else q.filter(condition)
+
+
+def _due_cells(invoice, today):
+    """Due date and days overdue for the Excel (blank when paid or no date)."""
+    if not invoice.invoice_date:
+        return [None, None]
+    ctype = invoice.customer.type if invoice.customer else None
+    due_on = invoice.invoice_date + timedelta(days=credit_days(ctype))
+    late = days_past_credit(invoice.invoice_date, ctype, today)
+    return [due_on, late if (invoice.pending_amount or 0) > 0.009 and late is not None and late >= 0 else None]
 
 
 @router.get("/{invoice_id}", response_model=schemas.InvoiceOut)

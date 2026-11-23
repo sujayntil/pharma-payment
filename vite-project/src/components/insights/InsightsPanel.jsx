@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, NumberInput, SegmentedControl, Select, Stack, Table, Text, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
+import { IconArrowLeft, IconArrowsSort, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
 import { useDebouncedValue } from '@mantine/hooks';
 import { insightsApi } from '../../api/insightsApi';
 import { customersApi } from '../../api/customersApi';
@@ -12,7 +12,9 @@ import ContactActions from '../customers/ContactActions';
 import EditCustomerModal from '../customers/EditCustomerModal';
 import { PanelTop } from '../common/BackToTop';
 import SidePanel from '../common/SidePanel';
-import { errorText, money, shortDate } from '../../utils/formatters';
+import { errorText, formatDateLocal, money, shortDate } from '../../utils/formatters';
+import OverdueFilter from '../filters/OverdueFilter';
+import { matchesDue } from '../filters/dueFilter';
 import InvoiceHistory from '../collections/InvoiceHistory';
 import RecordCollectionModal from '../collections/RecordCollectionModal';
 import CustomerCollectModal from '../collections/CustomerCollectModal';
@@ -46,6 +48,8 @@ function PanelFilters({ isMobile, search, onSearch, placeholder, selects, right 
   );
 }
 
+const ORDER_OPTIONS = [{ value: 'oldest', label: 'Oldest bill first' }, { value: 'newest', label: 'Newest bill first' }, { value: 'amount', label: 'Highest pending first' }];
+const ORDER_LABEL = Object.fromEntries(ORDER_OPTIONS.map((o) => [o.value, o.label]));
 const RECORD_TITLES = { sales: 'Sales', collected: 'Collected', outstanding: 'Owed to you today', active: 'Invoices of active customers' };
 // "12 days overdue" / "due in 8 days": days past the customer's credit period.
 const dueText = (late) => (late === null || late === undefined ? '' : late > 0 ? `${late} days overdue` : late === 0 ? 'overdue from today' : `due in ${-late} days`);
@@ -207,10 +211,12 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const collected = item.records === 'collected';
   const age = item.records === 'age' || item.records === 'outstanding';
   const title = item.title || RECORD_TITLES[item.records];
-  // From the Dashboard: only overdue / not yet due bills (days past credit),
-  // or several customer types at once (its "Other" = Hospital + Other).
-  const allItems = (data?.items || []).filter((r) => (!item.due || (item.due === 'overdue' ? r.days_late >= 0 : !(r.days_late >= 0)))
-    && (!item.types || item.types.includes(r.type)));
+  // Several customer types at once (older Dashboard links).
+  const allItems = (data?.items || []).filter((r) => !item.types || item.types.includes(r.type));
+  // Bills owed: Overdue filter (from the Dashboard's Overdue / Not yet due it
+  // starts there) and the order, oldest bill first by default.
+  const [due, setDue] = useState({ due: item.due || '', days: '' });
+  const [order, setOrder] = useState('oldest');
   // In-panel search and filters (on the loaded rows; totals follow them).
   const [q, setQ] = useState('');
   const [pick, setPick] = useState(null);      // status (invoices) or mode (collections)
@@ -221,18 +227,33 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const term = q.trim().toLowerCase();
   const items = allItems.filter((r) => (!term || [r.customer, r.invoice_number, r.mr, r.mode].some((v) => String(v || '').toLowerCase().includes(term)))
     && (!pick || (collected ? (pick === 'Reversal' ? r.amount < 0 : r.mode === pick && r.amount >= 0) : r.status === pick))
-    && (!typePick || typePick.split(',').includes(r.type)));
+    && (!typePick || typePick.split(',').includes(r.type))
+    && (!age || matchesDue(r.days_late, due.due, due.days)));
+  if (age) {
+    const byDate = (r) => r.invoice_date || '';
+    items.sort(order === 'amount' ? (a, b) => b.pending - a.pending
+      : order === 'newest' ? (a, b) => byDate(b).localeCompare(byDate(a)) : (a, b) => byDate(a).localeCompare(byDate(b)));
+  }
   const narrowed = items.length !== allItems.length;
-  const preNarrowed = Boolean(item.due || item.types);
+  const preNarrowed = Boolean(item.types);
   const shownTotal = items.reduce((sum, r) => sum + (collected ? r.amount : (age ? r.pending : r.total)), 0);
   const modeOptions = [...new Set(allItems.map((r) => (r.amount < 0 ? 'Reversal' : r.mode)).filter(Boolean))].sort();
   const typeOptions = [...new Set(allItems.map((r) => r.type).filter(Boolean))].sort();
 
+  // Due date = today minus the days it is past due (days_late).
+  const dueOn = (r) => {
+    if (r.days_late == null) return '';
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - Number(r.days_late));
+    return formatDateLocal(d);
+  };
   const exportCsv = () => {
-    const head = collected ? ['Payment date', 'Invoice', 'Customer', 'MR', 'Mode', 'Amount'] : ['Invoice', 'Invoice date', 'Customer', 'MR', 'Total', 'Paid', 'Pending', 'Status'];
+    const head = collected ? ['Payment date', 'Invoice', 'Customer', 'MR', 'Mode', 'Amount']
+      : age ? ['Invoice', 'Invoice date', 'Customer', 'Customer type', 'MR', 'Total', 'Paid', 'Pending', 'Status', 'Due date', 'Days overdue']
+        : ['Invoice', 'Invoice date', 'Customer', 'MR', 'Total', 'Paid', 'Pending', 'Status'];
     const rows = items.map((r) => (collected
       ? [r.payment_date, r.invoice_number, r.customer, r.mr || '', r.mode, r.amount]
-      : [r.invoice_number, r.invoice_date, r.customer, r.mr || '', r.total, r.paid, r.pending, r.status]));
+      : age ? [r.invoice_number, r.invoice_date, r.customer, r.type || '', r.mr || '', r.total, r.paid, r.pending, STATUS_LABEL[r.status] || r.status, dueOn(r), r.days_late >= 0 ? r.days_late : '']
+        : [r.invoice_number, r.invoice_date, r.customer, r.mr || '', r.total, r.paid, r.pending, r.status]));
     const text = [head, ...rows].map((row) => row.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + text], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = `${title} - ${periodLabel || 'insights'}.csv`; a.click();
@@ -243,7 +264,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
     <Stack gap="sm">
       <div>
         <Text fw={700} fz={18}>{title}</Text>
-        <Text size="sm" c="dimmed">{age ? 'As of today, oldest first' : periodLabel}{data ? ` · ${narrowed || preNarrowed ? items.length : data.count} ${collected ? 'payments' : 'invoices'} · ${money(narrowed || preNarrowed ? shownTotal : data.total)}` : ''}{narrowed && data ? <Text span c="dimmed"> (of {allItems.length})</Text> : null}</Text>
+        <Text size="sm" c="dimmed">{age ? `As of today, ${ORDER_LABEL[order].toLowerCase()}` : periodLabel}{data ? ` · ${narrowed || preNarrowed ? items.length : data.count} ${collected ? 'payments' : 'invoices'} · ${money(narrowed || preNarrowed ? shownTotal : data.total)}` : ''}{narrowed && data ? <Text span c="dimmed"> (of {allItems.length})</Text> : null}</Text>
       </div>
       {error && <Alert color="red">{error}</Alert>}
       {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : data && (
@@ -256,6 +277,13 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
               !typeFixed && (!typeChoices || typeChoices.length > 1) && typeOptions.length > 1 && { key: 'type', multi: true, placeholder: 'All types', data: typeOptions, value: typePick, onChange: (v) => setTypePick(v || null) },
             ]}
             right={<Button size="xs" variant="default" leftSection={<IconDownload size={14} />} disabled={!items.length} onClick={exportCsv}>Export</Button>} />
+          {age && (
+            <Group gap={8} wrap={isMobile ? 'wrap' : 'nowrap'}>
+              <OverdueFilter size="xs" zIndex={400} compact={isMobile} due={due.due} days={due.days} onChange={setDue} />
+              <Select size="xs" w={isMobile ? undefined : 170} style={isMobile ? { flex: 1 } : { marginLeft: 'auto' }} data={ORDER_OPTIONS} value={order} onChange={(v) => setOrder(v || 'oldest')}
+                allowDeselect={false} leftSection={<IconArrowsSort size={14} />} comboboxProps={{ withinPortal: true, zIndex: 400 }} aria-label="Order" />
+            </Group>
+          )}
           {!items.length && <Text c="dimmed" size="sm">{narrowed ? 'Nothing matches.' : 'Nothing here.'}</Text>}
           {isMobile ? (
             <Stack gap={0}>

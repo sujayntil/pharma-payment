@@ -12,6 +12,8 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useSidePanelSpace } from '../../hooks/useSidePanelSpace';
 import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/FilterBar';
 import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
+import OverdueFilter from '../../components/filters/OverdueFilter';
+import { dueLabel, dueParams } from '../../components/filters/dueFilter';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
@@ -66,6 +68,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(initialTab);
   const [only, setOnly] = useState('');
+  const [due, setDue] = useState({ due: '', days: '' }); // Overdue filter (not on the Paid tab)
   const [customerType, setCustomerType] = useState('');
   const [range, setRange] = useState(EMPTY_RANGE);
   // Pending is worked oldest first; Paid and All read newest first. A sort the
@@ -115,6 +118,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
         const result = await mrApi.getOutstanding({
           ...tabParams(tab, only),
           ...(customerType && { customer_type: customerType }),
+          ...(tab !== 'paid' && dueParams(due.due, due.days)),
           sort_order: sort,
           limit: PAGE_SIZE,
           offset: (page - 1) * PAGE_SIZE,
@@ -127,7 +131,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
       finally { if (active) setLoading(false); }
     }, 0);
     return () => { active = false; clearTimeout(timer); };
-  }, [tab, only, customerType, range, sort, page, debouncedSearch, reload, appRefresh]);
+  }, [tab, only, due, customerType, range, sort, page, debouncedSearch, reload, appRefresh]);
 
   // Tab counts (unfiltered), refreshed after every collection.
   useEffect(() => {
@@ -141,10 +145,11 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const changeTab = (next) => {
     setTab(next);
     if (!ONLY_OPTIONS[next].some((o) => o.value === only)) setOnly('');
+    if (next === 'paid') setDue({ due: '', days: '' }); // paid bills are never overdue
     setPage(1);
   };
   const onSearch = (value) => { setSearch(value); setPage(1); };
-  const reset = () => { setOnly(''); setCustomerType(''); setRange(EMPTY_RANGE); setSortChoice(null); setSearch(''); setPage(1); };
+  const reset = () => { setOnly(''); setDue({ due: '', days: '' }); setCustomerType(''); setRange(EMPTY_RANGE); setSortChoice(null); setSearch(''); setPage(1); };
   const onSaved = useCallback(() => { setReload((v) => v + 1); setHistoryKey((v) => v + 1); }, []);
   const clearTicksSoon = ticks.clearSoon;
   const onTickedSaved = useCallback(() => { onSaved(); clearTicksSoon(); }, [onSaved, clearTicksSoon]);
@@ -159,6 +164,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const onlyOptions = ONLY_OPTIONS[tab];
   const chips = [
     only && { key: 'only', label: `Show only: ${onlyOptions.find((o) => o.value === only)?.label}`, onRemove: () => { setOnly(''); setPage(1); } },
+    tab !== 'paid' && due.due && { key: 'due', label: dueLabel(due.due, due.days), onRemove: () => { setDue({ due: '', days: '' }); setPage(1); } },
     customerType && { key: 'type', label: `Customer type: ${listLabel(customerType)}`, onRemove: () => { setCustomerType(''); setPage(1); } },
     rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => { setRange(EMPTY_RANGE); setPage(1); } },
     sortChoice && { key: 'sort', label: SORTS.find((s) => s.value === sort)?.label, onRemove: () => { setSortChoice(null); setPage(1); } },
@@ -181,6 +187,7 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
       {onlyOptions.length > 0 && (
         <FilterSelect placeholder={ONLY_PLACEHOLDER[tab]} icon={<IconCircleCheck size={16} />} data={onlyOptions} value={only} onChange={(next) => { setOnly(next); setPage(1); }} />
       )}
+      {tab !== 'paid' && <OverdueFilter due={due.due} days={due.days} onChange={(next) => { setDue(next); setPage(1); }} />}
       <FilterChecks placeholder="All customer types" icon={<IconCategory size={16} />} data={TYPE_GROUPS} value={customerType} onChange={(next) => { setCustomerType(next || ''); setPage(1); }} />
       <DateRangeFilter label="Invoice date" value={range} onChange={(next) => { setRange(next); setPage(1); }} months firstDate={firstDate} quick={['today', 'yesterday']} />
       <FilterSelect placeholder="Sort" icon={<IconArrowsSort size={16} />} data={SORTS} value={sort} clearable={false} allowDeselect={false} onChange={(next) => { setSort(next || defaultSort); setPage(1); }} />

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..audit import customer_snapshot, write_audit
 from ..customer_groups import customer_group_condition, invoice_type_filter, parse_types
+from .invoices import apply_due_filter
 from ..collection_info import last_collection_fields, latest_collections, reversed_invoice_ids
 from ..database import get_db
 from ..overdue import overdue_customer_summaries
@@ -214,6 +215,8 @@ def outstanding(
     status: str | None = None,
     customer_id: int | None = None,
     customer_type: str | None = None,
+    due: str | None = None,              # overdue | notdue (as on Admin Invoices)
+    overdue_days: int | None = None,     # with due=overdue: more than this many days past due
     db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
     if date_from and date_to and date_from > date_to:
@@ -239,6 +242,7 @@ def outstanding(
     if parse_types(customer_type):
         # Same groups as the customer lists ("Other" includes invoices with no customer).
         query = query.filter(invoice_type_filter(db, customer_type))
+    query = apply_due_filter(query, due, overdue_days)
     if status == "REVERSED":
         query = query.filter(models.Invoice.id.in_(reversed_invoice_ids()))
     elif status:

@@ -276,7 +276,7 @@ class CollectionHistoryTests(unittest.TestCase):
         pending = self._sheet(self.client.get("/invoices/export", params={"pending_only": True}))
         self.assertEqual({r[0] for r in pending[1:]}, {"A100", "U100"})
         paid = self._sheet(self.client.get("/invoices/export", params={"status": "PAID"}))
-        self.assertEqual([(r[0], r[5], r[7], r[9]) for r in paid[1:]], [("A101", 500, "Paid", "Ravi")])
+        self.assertEqual([(r[0], r[6], r[8], r[12]) for r in paid[1:]], [("A101", 500, "Paid", "Ravi")])
         self.assertEqual(self.client.get("/invoices/export", params={"status": "nope"}).status_code, 422)
         self.current_user = self.mr
         self.assertEqual(self.client.get("/invoices/export").status_code, 403)

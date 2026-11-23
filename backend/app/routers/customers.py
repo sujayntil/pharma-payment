@@ -10,6 +10,7 @@ from ..collection_info import last_collection_fields, latest_collections
 from ..audit import customer_snapshot, write_audit
 from ..customer_groups import customer_group_condition, parse_types
 from ..database import get_db
+from .invoices import apply_due_filter
 from ..ledger_pdf import IST, build_ledger_pdf, nice_date
 from ..ledger_xlsx import build_ledger_xlsx
 from ..deps import get_current_user, require_admin
@@ -262,7 +263,7 @@ def delete_customer(
     return None
 
 
-def _ledger_query(db, user, customer_id, search, date_from, date_to, status):
+def _ledger_query(db, user, customer_id, search, date_from, date_to, status, due=None, overdue_days=None):
     """The ledger's customer and its filtered invoice query (screen and PDF)."""
     customer = (
         db.query(models.Customer).filter(models.Customer.id == customer_id).first()
@@ -284,6 +285,7 @@ def _ledger_query(db, user, customer_id, search, date_from, date_to, status):
         invoice_query = invoice_query.filter(models.Invoice.invoice_date <= date_to)
     if status:
         invoice_query = invoice_query.filter(models.Invoice.status == status.upper())
+    invoice_query = apply_due_filter(invoice_query, due, overdue_days)
     if search and search.strip():
         term = f"%{search.strip()}%"
         invoice_query = invoice_query.filter(or_(
@@ -314,12 +316,14 @@ def customer_ledger(
     date_from: date | None = None,
     date_to: date | None = None,
     status: str | None = None,
+    due: str | None = None,
+    overdue_days: int | None = None,
     limit: int | None = None,
     offset: int | None = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
-    customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status)
+    customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status, due, overdue_days)
     # Totals come from the exact same filtered set as the rows (search
     # included), so the summary always matches what is listed.
     total_invoiced, total_paid = invoice_query.with_entities(
@@ -372,10 +376,10 @@ def customer_ledger(
     return result
 
 
-def _ledger_export(db, user, customer_id, search, date_from, date_to, status):
+def _ledger_export(db, user, customer_id, search, date_from, date_to, status, due=None, overdue_days=None):
     """Everything the PDF and Excel need: same filters and order as the
     screen, every matching invoice (no paging), each with its payments."""
-    customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status)
+    customer, invoice_query, search = _ledger_query(db, user, customer_id, search, date_from, date_to, status, due, overdue_days)
     totals = invoice_query.with_entities(
         func.coalesce(func.sum(models.Invoice.total_amount), 0),
         func.coalesce(func.sum(models.Invoice.paid_amount), 0),
@@ -397,6 +401,10 @@ def _ledger_export(db, user, customer_id, search, date_from, date_to, status):
         scope.append(f"{nice_date(date_from) if date_from else 'Start'} – {nice_date(date_to) if date_to else 'today'}")
     if status:
         scope.append({"PAID": "Paid only", "PARTIAL": "Part paid only", "UNPAID": "Unpaid only"}[status.upper()])
+    if (due or "").lower() == "overdue":
+        scope.append(f"Overdue by more than {overdue_days} days" if overdue_days else "Overdue only")
+    elif (due or "").lower() == "notdue":
+        scope.append("Not yet due")
     if search and search.strip():
         scope.append(f"Search: “{search.strip()}”")
     safe = "".join(ch for ch in customer.name if ch.isalnum() or ch in " .-_").strip() or "Customer"
@@ -411,12 +419,14 @@ def customer_ledger_pdf(
     date_from: date | None = None,
     date_to: date | None = None,
     status: str | None = None,
+    due: str | None = None,
+    overdue_days: int | None = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
     """The ledger as a PDF to share (Admin and the customer's MR)."""
     customer, mr_name, invoices, by_invoice, collectors, totals, scope, safe = _ledger_export(
-        db, user, customer_id, search, date_from, date_to, status)
+        db, user, customer_id, search, date_from, date_to, status, due, overdue_days)
     pdf = build_ledger_pdf(customer, mr_name, invoices, by_invoice, collectors, totals, scope)
     return Response(pdf, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="Ledger - {safe}.pdf"',
@@ -432,12 +442,14 @@ def customer_ledger_xlsx(
     date_from: date | None = None,
     date_to: date | None = None,
     status: str | None = None,
+    due: str | None = None,
+    overdue_days: int | None = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
     """Admin: the ledger as Excel (Invoices and Payments sheets)."""
     customer, mr_name, invoices, by_invoice, collectors, totals, scope, safe = _ledger_export(
-        db, user, customer_id, search, date_from, date_to, status)
+        db, user, customer_id, search, date_from, date_to, status, due, overdue_days)
     content = build_ledger_xlsx(customer, mr_name, invoices, by_invoice, collectors, totals, scope, datetime.now(IST).date())
     write_audit(db, "ledger_exported", user, new={"customer": customer.name, "invoices": len(invoices), "filters": dict(request.query_params)})
     db.commit()

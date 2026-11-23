@@ -16,6 +16,8 @@ import FilterBar, { FilterChecks, FilterSelect } from '../../components/filters/
 import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
 import StatusTabs from '../../components/filters/StatusTabs';
+import OverdueFilter from '../../components/filters/OverdueFilter';
+import { dueLabel, dueParams } from '../../components/filters/dueFilter';
 import { describeRange, EMPTY_RANGE } from '../../components/filters/dateRanges';
 import { RecordedBy, StatusCell } from '../../components/collections/CollectionBadges';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
@@ -37,7 +39,7 @@ import { saveResume } from '../../utils/resume';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
 
-const BLANK_LEDGER = { range: EMPTY_RANGE, status: '' };
+const BLANK_LEDGER = { range: EMPTY_RANGE, status: '', due: '', overdueDays: '' };
 
 const SORT_OPTIONS = [
   { value: 'oldest', label: 'Oldest pending first' },
@@ -80,7 +82,7 @@ export default function MrCustomers({ openCustomer = null }) {
     const timer = setTimeout(async () => {
       setLedgerLoading(true); setError('');
       try {
-        const result = await customersApi.getCustomerLedger(selected.id, { limit: PAGE_SIZE, offset: (ledgerPage - 1) * PAGE_SIZE, ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }) });
+        const result = await customersApi.getCustomerLedger(selected.id, { limit: PAGE_SIZE, offset: (ledgerPage - 1) * PAGE_SIZE, ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }), ...dueParams(ledgerFilters.due, ledgerFilters.overdueDays) });
         if (active) setLedger(result);
       } catch (err) { if (active) setError(errorText(err)); }
       finally { if (active) setLedgerLoading(false); }
@@ -102,7 +104,7 @@ export default function MrCustomers({ openCustomer = null }) {
   const openLedger = (customer) => { rememberCustomer(customer); setRecent(recentCustomers()); setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerFilters(BLANK_LEDGER); setLedgerPage(1); };
   const updateLedger = (patch) => { setLedgerFilters((current) => ({ ...current, ...patch })); setLedgerPage(1); };
   // The ledger's filters (no paging), for the PDF.
-  const ledgerPdfParams = { ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }) };
+  const ledgerPdfParams = { ...(debouncedLedgerSearch.trim() && { search: debouncedLedgerSearch.trim() }), ...(ledgerFilters.range.from && { date_from: ledgerFilters.range.from }), ...(ledgerFilters.range.to && { date_to: ledgerFilters.range.to }), ...(ledgerFilters.status && { status: ledgerFilters.status }), ...dueParams(ledgerFilters.due, ledgerFilters.overdueDays) };
   const onLedgerSearch = (value) => { setLedgerSearch(value); setLedgerPage(1); };
   const resetLedger = () => { setLedgerFilters(BLANK_LEDGER); setLedgerSearch(''); setLedgerPage(1); };
   const ledgerRange = describeRange(ledgerFilters.range);
@@ -118,6 +120,7 @@ export default function MrCustomers({ openCustomer = null }) {
   </>;
   const ledgerChips = [
     ledgerFilters.status && { key: 'status', label: `Status: ${STATUS_LABELS[ledgerFilters.status] || ledgerFilters.status}`, onRemove: () => updateLedger({ status: '' }) },
+    ledgerFilters.due && { key: 'due', label: dueLabel(ledgerFilters.due, ledgerFilters.overdueDays), onRemove: () => updateLedger({ due: '', overdueDays: '' }) },
     ledgerRange && { key: 'range', label: `Invoice date: ${ledgerRange}`, onRemove: () => updateLedger({ range: EMPTY_RANGE }) },
     ledgerSearch.trim() && { key: 'q', label: `“${ledgerSearch.trim()}”`, onRemove: () => onLedgerSearch('') },
   ];
@@ -210,7 +213,8 @@ export default function MrCustomers({ openCustomer = null }) {
           )
           : <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="xs"><StatCard size="md" label="Invoiced" value={money(ledger.total_invoiced)} /><StatCard size="md" label="Collected" color="green" value={money(ledger.total_paid)} /><StatCard size="md" label="Pending" color="red" value={money(ledger.outstanding)} /></SimpleGrid>)}
         <FilterBar compact search={ledgerSearch} onSearch={onLedgerSearch} searchPlaceholder="Search this customer's invoices" chips={ledgerChips} onReset={resetLedger}>
-          <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status })} />
+          <StatusTabs value={ledgerFilters.status} onChange={(status) => updateLedger({ status, ...(status === 'PAID' && { due: '', overdueDays: '' }) })} />
+          {ledgerFilters.status !== 'PAID' && <OverdueFilter due={ledgerFilters.due} days={ledgerFilters.overdueDays} onChange={({ due, days }) => updateLedger({ due, overdueDays: days })} />}
           <DateRangeFilter label="Invoice date" value={ledgerFilters.range} onChange={(range) => updateLedger({ range })} months firstDate={firstDate} quick={[]} />
         </FilterBar>
         {!ledger ? <Group justify="center" p="xl"><Loader /></Group> : <div {...reloadingStyle(ledgerLoading)}>{!ledger.invoices.length ? <EmptyResults search={ledgerSearch} noun="invoices" onClear={resetLedger} /> : <>{isMobile ? <CardList>{ledger.invoices.map((invoice) => (

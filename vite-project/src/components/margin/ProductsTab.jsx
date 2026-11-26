@@ -164,9 +164,10 @@ export default function ProductsTab({ products, productId, onProductId, schemeId
   const setS = (field) => (value) => actions.updateScheme(product.id, scheme.id, { [field]: value });
   const freeOn = freeOpen[scheme.id] ?? Number(scheme.free) > 0;
   const ready = !missing(product, scheme).length;
-  const others = scheme.sell_at === 'mrp' ? [`${pctShort(r.offPtr)} off PTR`, `${pctShort(r.offPts)} off PTS`]
-    : scheme.sell_at === 'ptr' ? [`${pctShort(r.offMrp)} off MRP`, `${pctShort(r.offPts)} off PTS`]
-      : [`${pctShort(r.offMrp)} off MRP`, `${pctShort(r.offPtr)} off PTR`];
+  // Total discount incl. free goods; a price above PTR/PTS is simply left out.
+  const totals = [[r.totMrp, 'MRP', true], [r.totPtr, 'PTR', canPtr(product)], [r.totPts, 'PTS', canPts(product)]]
+    .filter(([v, , ok]) => ok && Number.isFinite(v) && v >= 0)
+    .map(([v, label]) => `${pctShort(v)} off ${label}`);
 
   let confirmTitle = '';
   let confirmText = '';
@@ -250,7 +251,7 @@ export default function ProductsTab({ products, productId, onProductId, schemeId
               <p className={classes.hint}>
                 <b className={classes.n}>{rupees(r.paidInc)}</b> per paid unit
                 {r.free && <> · <b>{units(r.a + r.b)}</b> shipped per <b>{units(r.a)}</b> paid</>}
-                {canPts(product) && <><br />= {others.join(' = ')}</>}
+                {totals.length > 0 && <><br />Total discount: <b>{totals.join(' · ')}</b></>}
               </p>
             )}
           </Paper>

@@ -59,6 +59,10 @@ export function calc(p, s) {
     offMrp: MRPex ? 1 - R0 / MRPex : NaN,
     offPtr: PTRex ? 1 - R0 / PTRex : NaN,
     offPts: PTSex ? 1 - R0 / PTSex : NaN,
+    // Total discount per unit shipped (free goods included).
+    totMrp: MRPex ? 1 - R / MRPex : NaN,
+    totPtr: PTRex ? 1 - R / PTRex : NaN,
+    totPts: PTSex ? 1 - R / PTSex : NaN,
   };
 }
 

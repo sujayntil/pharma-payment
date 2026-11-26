@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Center, Loader } from '@mantine/core';
-import { IconChartBar, IconChartPie, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet, IconShieldCheck } from '@tabler/icons-react';
+import { IconChartBar, IconChartPie, IconFileInvoice, IconUsers, IconTrophy, IconUserCog, IconCash, IconFileSpreadsheet, IconShieldCheck, IconCalculator } from '@tabler/icons-react';
 import AppFrame from '../../components/common/AppFrame';
 
 const AdminDashboard = lazy(() => import('./AdminDashboard'));
@@ -13,6 +13,7 @@ const AdminUsers = lazy(() => import('./AdminUsers'));
 const AdminCollections = lazy(() => import('./AdminCollections'));
 const AdminImport = lazy(() => import('./AdminImport'));
 const AdminAuditLog = lazy(() => import('./AdminAuditLog'));
+const AdminMargin = lazy(() => import('./AdminMargin'));
 
 // "Last 7 days" for the Dashboard's deletions note (India dates).
 const lastDays = (n) => {
@@ -24,6 +25,7 @@ const lastDays = (n) => {
 const ADMIN_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: IconChartBar },
   { id: 'insights', label: 'Insights', icon: IconChartPie },
+  { id: 'margin', label: 'Margin calculator', shortLabel: 'Margin', icon: IconCalculator },
   { id: 'invoices', label: 'Invoices', icon: IconFileInvoice },
   { id: 'customers', label: 'Customers', icon: IconUsers },
   { id: 'collections', label: 'Collections', icon: IconCash },
@@ -51,6 +53,7 @@ export default function AdminLayout() {
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
         {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
         {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
+        {activeTab === 'margin' && <AdminMargin />}
         {activeTab === 'invoices' && <AdminInvoices key={location.state?.search ? `q:${location.state.search}` : 'plain'} />}
         {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? (location.state?.search ? `q:${location.state.search}` : 'list')} openCustomer={openCustomer} />}
         {/* From Insights ("See in Collections"): opens already filtered. */}

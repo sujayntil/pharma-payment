@@ -328,3 +328,48 @@ class CustomerOverdueReminder(Base):
     reminder_date = Column(Date, nullable=False)
     attempted_at = Column(DateTime)
     sent_at = Column(DateTime)
+
+
+# ---- Margin calculator (Admin only). Separate from Products/Invoices: the
+# products here are typed in by hand and only feed the calculator.
+class MarginProduct(Base):
+    __tablename__ = "margin_products"
+
+    # Every value starts empty: nothing is assumed until the Admin types it.
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(80), nullable=False, default="")
+    mrp = Column(Float)              # incl. GST
+    gst = Column(Float)              # % on sale
+    retailer_margin = Column(Float)
+    stockist_margin = Column(Float)
+    cost = Column(Float)             # per unit, incl. GST
+    purchase_gst = Column(Float)
+    batch = Column(Integer)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    schemes = relationship(
+        "MarginScheme", cascade="all, delete-orphan", passive_deletes=True, order_by="MarginScheme.id"
+    )
+
+
+class MarginScheme(Base):
+    __tablename__ = "margin_schemes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("margin_products.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(80), nullable=False, default="")
+    sell_at = Column(String(3))      # mrp | ptr | pts
+    discount = Column(Float)         # % off sell_at
+    buy = Column(Integer)            # free goods: buy X ...
+    free = Column(Integer)           # ... get Y free (empty or 0 = none)
+
+
+class CustomerScheme(Base):
+    """Which scheme a customer gets on a calculator product (one per product)."""
+    __tablename__ = "customer_schemes"
+
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), primary_key=True)
+    product_id = Column(Integer, ForeignKey("margin_products.id", ondelete="CASCADE"), primary_key=True)
+    scheme_id = Column(Integer, ForeignKey("margin_schemes.id", ondelete="CASCADE"), nullable=False, index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

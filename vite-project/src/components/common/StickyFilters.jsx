@@ -7,7 +7,12 @@ import classes from './StickyFilters.module.css';
  * column names pin right below them. The title and summary scroll away, so
  * the rows still get the whole screen. enabled=false → plain wrapper.
  */
-export default function StickyFilters({ enabled = true, children }) {
+/**
+ * atTop: the block is the first thing on the page (Customers, Invoices,
+ * Collections). It then sits in its pinned spot from the start, so it never
+ * slides up 16px and back while scrolling, and gets its own band colour.
+ */
+export default function StickyFilters({ enabled = true, atTop = false, children }) {
   const ref = useRef(null);
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
@@ -30,5 +35,5 @@ export default function StickyFilters({ enabled = true, children }) {
     return () => { resize.disconnect(); scroller.removeEventListener('scroll', onScroll); root.style.removeProperty('--sticky-top'); };
   }, [enabled]);
   if (!enabled) return children;
-  return <div ref={ref} className={classes.bar} data-stuck={stuck || undefined}>{children}</div>;
+  return <div ref={ref} className={classes.bar} data-stuck={stuck || undefined} data-top={atTop || undefined}>{children}</div>;
 }

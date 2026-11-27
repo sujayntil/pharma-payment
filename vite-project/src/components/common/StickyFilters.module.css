@@ -8,3 +8,13 @@
   transition: box-shadow 150ms ease;
 }
 .bar[data-stuck] { box-shadow: 0 8px 12px -10px rgba(15, 23, 42, 0.25); }
+
+/* First thing on the page: start right under the top bar (fill the page's
+   16px top margin) so the block never moves when scrolling starts, and run
+   edge to edge as its own band. */
+.bar[data-top]:first-child {
+  margin: calc(-1 * var(--mantine-spacing-md)) calc(-1 * var(--mantine-spacing-md)) 0;
+  padding: var(--mantine-spacing-md) var(--mantine-spacing-md) 12px;
+  background: var(--app-surface);              /* white band (dark: card colour) */
+  border-bottom: 1px solid var(--app-line);
+}

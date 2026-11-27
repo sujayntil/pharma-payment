@@ -189,7 +189,7 @@ export default function AdminCollections({ preset = null }) {
       </>
     ) : (
       // Laptop: title, its two cards, search and filters stay pinned; rows scroll.
-      <StickyFilters>
+      <StickyFilters atTop>
         <Stack gap="sm">
           <TitleBar title="Collections">
             <MiniStat tone="green" label={`Net collected${rangeLabel ? ` · ${rangeLabel}` : ''}`} value={money(total)} />

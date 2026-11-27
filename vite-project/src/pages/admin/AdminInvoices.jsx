@@ -322,7 +322,7 @@ export default function AdminInvoices() {
       </>
     ) : (
       // Laptop: title, tabs, totals, search and filters stay pinned; rows scroll.
-      <StickyFilters>
+      <StickyFilters atTop>
         <Stack gap="sm">
           <TitleBar title="Invoices" left={tabs}>
             <MiniStat label={total === 1 ? 'Invoice' : 'Invoices'} value={total} />

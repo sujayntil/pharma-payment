@@ -226,7 +226,7 @@ export default function AdminCustomers({ openCustomer = null }) {
     {isMobile && <><Group justify="space-between" align="center" wrap="nowrap"><Group gap="sm" align="center" wrap="nowrap"><Title order={1}>Customers</Title><Badge variant="light" size="lg">{total}</Badge></Group>{/* Add customer is hidden: new customers are added from Import & mapping (Add invoice). The form still supports it: onClick={() => setEditing({})} */}</Group></>}
     {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}{notice && <Alert color="green" withCloseButton onClose={() => setNotice('')}>{notice}</Alert>}
     {/* Laptop: title, count, search and filters stay pinned while the rows scroll. */}
-    <StickyFilters enabled={!isMobile}><Stack gap="sm">
+    <StickyFilters atTop enabled={!isMobile}><Stack gap="sm">
     {!isMobile && <TitleBar title="Customers"><MiniStat label="Customers" value={total} /></TitleBar>}
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Customer, phone" chips={chips} onReset={reset}>
       <FilterSelect placeholder="All MRs" icon={<IconUser size={16} />} data={mrFilterOptions} value={filters.mrId} onChange={(mrId) => update({ mrId })} />

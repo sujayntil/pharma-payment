@@ -9,12 +9,30 @@
 }
 .bar[data-stuck] { box-shadow: 0 8px 12px -10px rgba(15, 23, 42, 0.25); }
 
-/* First thing on the page: start right under the top bar (fill the page's
-   16px top margin) so the block never moves when scrolling starts, and run
-   edge to edge as its own band. */
+/* First thing on the page (Customers, Invoices, Collections on laptop):
+   - starts right under the top bar (fills the page's 16px top margin), so it
+     never moves when scrolling starts;
+   - white band runs edge to edge (menu to scrollbar) even when the content is
+     narrower than the screen: painted with wide shadows, clipped to its own
+     height, so it adds no sideways scrolling. Content stays where it is. */
 .bar[data-top]:first-child {
+  --band: var(--app-surface);
   margin: calc(-1 * var(--mantine-spacing-md)) calc(-1 * var(--mantine-spacing-md)) 0;
   padding: var(--mantine-spacing-md) var(--mantine-spacing-md) 12px;
-  background: var(--app-surface);              /* white band (dark: card colour) */
-  border-bottom: 1px solid var(--app-line);
+  background: var(--band);
+  box-shadow: 0 0 0 100vmax var(--band), 0 1px 0 100vmax var(--app-line);
+  clip-path: inset(0 -100vmax -1px);
+}
+.bar[data-top]:first-child[data-stuck] {
+  box-shadow: 0 0 0 100vmax var(--band), 0 1px 0 100vmax var(--app-line), 0 8px 12px -10px rgba(15, 23, 42, 0.25);
+  clip-path: inset(0 -100vmax -14px);
+}
+/* The list right below starts flush under the band, so its column names sit
+   in their pinned spot from the start and never slide up either. */
+.bar[data-top]:first-child + :global(.mantine-Paper-root) {
+  margin-top: calc(-1 * var(--mantine-spacing-md));
+  padding-top: 0 !important;  /* the card sets its padding inline */
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }

@@ -48,6 +48,10 @@ export const adminApi = {
   async exportByCustomerType(params = {}) {
     return axiosClient.get('/admin/dashboard/export-by-type', { params, responseType: 'blob' });
   },
+  /** Format a list already on screen as the standard Excel / PDF report. */
+  async reportTable(body) {
+    return axiosClient.post('/admin/reports/table', body, { responseType: 'blob', timeout: 120000 });
+  },
   async exportCollections(params = {}) {
     return axiosClient.get('/admin/collections/export', { params, responseType: 'blob' });
   },

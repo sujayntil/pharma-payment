@@ -1,7 +1,7 @@
 import SectionNav from '../../components/common/SectionNav';
 import { useEffect, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Menu, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title, UnstyledButton } from '@mantine/core';
-import { IconBook2, IconChartPie, IconChevronRight, IconDots, IconMapPin, IconTarget, IconX } from '@tabler/icons-react';
+import { IconBook2, IconChartPie, IconChevronRight, IconDots, IconMapPin, IconX } from '@tabler/icons-react';
 import ContactActions from '../../components/customers/ContactActions';
 import { insightsApi } from '../../api/insightsApi';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -9,7 +9,7 @@ import { useAppRefresh } from '../../hooks/useAppRefresh';
 import PeriodPicker from '../../components/insights/PeriodPicker';
 import { businessPeriods, describeRange, isCustomRange, last15Range, shortRange } from '../../components/filters/dateRanges';
 import { Donut, Spark, TrendChart } from '../../components/insights/charts';
-import { AGE_COLORS, AGE_LABELS, lakh, MODE_COLORS, MR_COLORS, TYPE_COLORS } from '../../components/insights/insightsFormat';
+import { lakh, MODE_COLORS, TYPE_COLORS } from '../../components/insights/insightsFormat';
 import InsightsPanel from '../../components/insights/InsightsPanel';
 import ShowMore from '../../components/insights/ShowMore';
 import css from './AdminInsights.module.css';
@@ -21,19 +21,22 @@ const TYPES = TYPE_GROUPS;
 const NOT_SET = '__none__';
 
 const initials = (name = '') => name.replace(/^Dr\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-const FOLLOW_LABEL = { quiet: 'Not ordering', less: 'Buying less', late: 'Paying late' };
+const FOLLOW_LABEL = { quiet: 'Not ordering', less: 'Buying less', late: 'Paying late', more: 'Growing', new: 'New' };
+const DUE_LABELS = { not_due: 'Not due yet', '1-30': '1–30 days overdue', '31-60': '31–60 days overdue', '60+': 'Over 60 days overdue' };
+// Days past the due date for each overdue box (0 = due today).
+const DUE_BANDS = { '1-30': [0, 29], '31-60': [30, 59], '60+': [60, null] };
+const DUE_COLORS = { not_due: '#2f9e44', '1-30': '#f59f00', '31-60': '#f76707', '60+': '#e03131' };
 const pctLabel = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v)}%`);
 
 // "Jump to section" (right-edge dots on laptop, chips on phone).
 const INSIGHT_SECTIONS = [
   { id: 'ins-summary', label: 'Summary' },
+  { id: 'ins-owed', label: 'Money owed' },
   { id: 'ins-types', label: 'By customer type' },
   { id: 'ins-trend', label: 'Sales vs collections' },
-  { id: 'ins-owed', label: 'Money owed' },
   { id: 'ins-mr', label: 'By MR' },
   { id: 'ins-top', label: 'Top customers' },
-  { id: 'ins-follow', label: 'Follow up' },
-  { id: 'ins-more', label: 'New & payments' },
+  { id: 'ins-follow', label: 'Customers to watch' },
   { id: 'ins-area', label: 'By area' },
 ];
 
@@ -47,6 +50,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   const [trend, setTrend] = useState('monthly');
   const [result, setResult] = useState({ key: null, data: null, error: '' });
   const [panel, setPanel] = useState([]); // drill stack
+  const [donutView, setDonutView] = useState('sales'); // the type donut: sales share or owed share
   const [followKind, setFollowKind] = useState('all'); // Customers to follow up: which reason
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -106,7 +110,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   const swatch = (bg, extra) => <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: bg, margin: '0 5px -1px 0', ...extra }} />;
   const legend = (
     <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-      {swatch('#2f9e44')}Recovered {swatch('var(--app-pending)', { marginLeft: 8, border: '1px solid var(--app-pending-line)' })}Pending {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}All collections
+      {swatch('var(--app-pending)', { border: '1px solid var(--app-pending-line)' })}Sales {swatch('#2f9e44', { marginLeft: 8 })}Paid so far {swatch('#1c7ed6', { width: 12, height: 3, marginLeft: 8, verticalAlign: 3 })}Collections
     </Text>
   );
   // All time · Today · Last 7 days · Last 15 days; Clear goes back to this month.
@@ -134,15 +138,15 @@ export default function AdminInsights({ onOpenCustomer }) {
   const empty = (text) => <Text size="sm" c="dimmed" py={6}>{text}</Text>;
 
   // count: show the change as a number ("↑ 3 customers") instead of a %.
-  const kpi = (key, label, value, { good = 'up', color, kind, open: openItem, suffix = '%', note, foot, count } = {}) => {
+  const kpi = (key, label, value, { good = 'up', color, kind, open: openItem, suffix = '%', note, foot, count, cardKey, valueClass } = {}) => {
     const item = k?.[key];
     const diff = count && item?.previous !== null && item?.previous !== undefined ? (item.value || 0) - (item.previous || 0) : null;
     const change = count ? diff : item?.change;
     const better = change === null || change === undefined ? null : (good === 'up' ? change >= 0 : change <= 0);
     return (
-      <button type="button" key={key} className={`${css.card} ${css.kpi} ${kind ? css.clickable : ''}`} onClick={openItem ? () => openFresh(openItem) : kind ? () => openFresh({ kind: 'records', records: kind, title: label }) : undefined} style={kind || openItem ? undefined : { cursor: 'default' }}>
+      <button type="button" key={cardKey || key} className={`${css.card} ${css.kpi} ${kind ? css.clickable : ''}`} onClick={openItem ? () => openFresh(openItem) : kind ? () => openFresh({ kind: 'records', records: kind, title: label }) : undefined} style={kind || openItem ? undefined : { cursor: 'default' }}>
         <div className={css.kl}>{label}{(kind || openItem) && <IconChevronRight size={14} color="var(--app-faint)" />}</div>
-        {loading && !data ? <Skeleton height={28} width={120} mt={6} /> : <div className={css.kv}>{value}</div>}
+        {loading && !data ? <Skeleton height={28} width={120} mt={6} /> : <div className={`${css.kv} ${valueClass || ''}`}>{value}</div>}
         {note && data && <div className={css.note}>{note}</div>}
         {foot ? <div className={css.kf}>{data && foot}</div> : <div className={css.kf}>
           <span>{change === null || change === undefined ? (allTime ? sinceText : 'no earlier data') : <><span className={better ? css.up : css.down}>{count && change === 0 ? 'Same' : <>{change >= 0 ? '↑' : '↓'} {count ? `${Math.abs(change)} ${count}${Math.abs(change) === 1 ? '' : 's'}` : suffix === '%' ? pctLabel(change) : `${Math.abs(change)}${suffix}`}</>}</span></>}</span>
@@ -154,13 +158,23 @@ export default function AdminInsights({ onOpenCustomer }) {
   };
 
   const typeTotal = (data?.by_type || []).reduce((sum, row) => sum + row.sales, 0);
-  const owedByType = [...(data?.owed_by_type || [])].sort((x, y) => y.owed - x.owed);
-  const owedTotal = owedByType.reduce((sum, row) => sum + row.owed, 0);
+  const owedTotal = (data?.by_type || []).reduce((sum, row) => sum + (row.owed || 0), 0);
   // Tap a slice / row: every unpaid bill of that type, oldest first.
-  const openOwed = (t) => openFresh({ kind: 'records', records: 'outstanding', customerType: t, title: `Owed by ${t === 'Other' ? 'other customers' : `${t.toLowerCase()}s`}` });
-  const mrMax = Math.max(...(data?.by_mr.rows || []).map((r) => Math.max(r.sales, r.collected)), 1);
-  const ageTotal = (data?.ageing || []).reduce((sum, row) => sum + row.amount, 0);
   const modeTotal = (data?.payment_modes || []).reduce((sum, row) => sum + Math.max(row.amount, 0), 0);
+  const dueRows = data?.due_ageing || [];
+  const dueTotal = dueRows.reduce((sum, row) => sum + row.amount, 0);
+  const overdueCustomers = data?.kpis.outstanding.overdue_customers ?? 0;
+  const typeRows = (data?.by_type || []).filter((r) => r.sales > 0 || r.owed > 0);
+  const areaNotSet = data?.area.rows.find((a) => a.area === NOT_SET && a.sales > 0);
+  const areaRows = (data?.area.rows || []).filter((a) => a.area !== NOT_SET);
+  // The running period's bar is only part-way through: say so on the axis.
+  const trendPoints = (data?.trend.points || []).map((p, idx, all) => (idx === all.length - 1 ? { ...p, label: `${p.label} (so far)` } : p));
+  const asRow = (c, reason) => ({ ...c, overdue: c.overdue || 0, usual_month: c.usual_month ?? null, reasons: [reason] });
+  const watchRows = followKind === 'more'
+    ? (data?.growing || []).map((c) => asRow(c, { kind: 'more', text: `+${lakh(c.change)} a month lately · usually ${lakh(c.usual_month)}` }))
+    : followKind === 'new'
+      ? (data?.new_customers || []).map((c) => asRow(c, { kind: 'new', text: `First order ${shortDate(c.first_order)} · ${lakh(c.sales)} so far` }))
+      : (data?.follow_up.rows || []).filter((r) => followKind === 'all' || r.reasons.some((x) => x.kind === followKind));
   const areaOptions = data?.area.areas?.length ? [...data.area.areas.map((a) => ({ value: a, label: a })), { value: NOT_SET, label: 'Not set' }] : [];
 
   return (
@@ -191,52 +205,67 @@ export default function AdminInsights({ onOpenCustomer }) {
         {kpi('sales', 'Sales', lakh(k?.sales.value), { color: '#2f9e44', kind: 'sales' })}
         {kpi('collected', 'Collected', lakh(k?.collected.value), { color: '#1c7ed6', kind: 'collected' })}
         {kpi('outstanding', 'Owed to you today', lakh(k?.outstanding.value), { color: '#e03131', kind: 'outstanding',
-          foot: k && <span><b className={css.down}>{lakh(k.outstanding.overdue)}</b> of it overdue</span> })}
-        {kpi('active_customers', 'Active customers', k?.active_customers.value ?? '—', { color: '#7048e8', open: { kind: 'change' }, count: 'customer' })}
+          foot: k && <span>{lakh(k.outstanding.not_due)} not due yet</span> })}
+        {kpi('outstanding', 'Overdue', lakh(k?.outstanding.overdue), { cardKey: 'overdue', kind: 'outstanding', valueClass: css.red,
+          foot: k && <span>{k.outstanding.value ? Math.round((k.outstanding.overdue / k.outstanding.value) * 100) : 0}% of what's owed · {overdueCustomers} customers</span> })}
       </div>
 
       {data && (
         <div className={css.grid} style={loading ? { opacity: 0.6, transition: 'opacity .2s' } : undefined}>
-          {/* Two donuts side by side: what each customer type buys, and what it owes today. */}
-          <Paper className={`${css.card} ${css.s6}`} id="ins-types" data-section>
-            <div className={css.ch}><div><div className={css.ct}>Sales by customer type</div><div className={css.cs}>{allTime ? 'Since the start' : periodLabel} · tap a type to filter</div></div></div>
-            <div className={`${css.cb} ${css.donutBody}`}>
-              <Donut size={isMobile ? 168 : 188} rows={data.by_type.map((r) => ({ key: r.type, value: r.sales, color: TYPE_COLORS[r.type] }))} total={typeTotal} active={type} onPick={toggleType} />
-              <div className={css.legend} style={{ flex: 1, minWidth: 0 }}>
-                {data.by_type.filter((r) => r.sales > 0 || pickedTypes.includes(r.type)).map((r) => (
-                  <button type="button" key={r.type} className={pickedTypes.includes(r.type) ? css.on : undefined} onClick={() => toggleType(r.type)}>
-                    <i style={{ width: 10, height: 10, borderRadius: 3, background: TYPE_COLORS[r.type], flexShrink: 0 }} />{r.type}
-                    <b className={css.num} style={{ marginLeft: 'auto' }}>{lakh(r.sales)}</b>
-                    <span className={css.sub} style={{ width: 34, textAlign: 'right' }}>{typeTotal ? Math.round((r.sales / typeTotal) * 100) : 0}%</span>
+          {/* Money: what's owed, by due date. */}
+          <Paper className={`${css.card} ${css.s12}`} id="ins-owed" data-section>
+            <div className={css.ch}><div><div className={css.ct}>Money owed by due date</div><div className={css.cs}>As of today · tap a box for its bills</div></div><div className={css.big}>{lakh(dueTotal)}</div></div>
+            <div className={css.cb}>
+              <div className={css.stack}>{dueRows.map((a) => <i key={a.bucket} title={DUE_LABELS[a.bucket]} style={{ width: `${dueTotal ? (a.amount / dueTotal) * 100 : 0}%`, background: DUE_COLORS[a.bucket] }} />)}</div>
+              <div className={css.dueGrid}>
+                {dueRows.map((a) => (
+                  <button type="button" key={a.bucket} className={css.dueCell} onClick={() => openFresh({ kind: 'records', records: 'outstanding', title: DUE_LABELS[a.bucket], ...(a.bucket === 'not_due' ? { due: 'notdue' } : { lateBand: DUE_BANDS[a.bucket] }) })}>
+                    <span className={css.k}><i style={{ width: 9, height: 9, borderRadius: 2, background: DUE_COLORS[a.bucket] }} />{DUE_LABELS[a.bucket]}</span>
+                    <b style={a.bucket === 'not_due' ? undefined : { color: DUE_COLORS[a.bucket] }}>{lakh(a.amount)}</b>
+                    <span className={css.sub}>{a.customers} {a.customers === 1 ? 'customer' : 'customers'} · {dueTotal ? Math.round((a.amount / dueTotal) * 100) : 0}%</span>
                   </button>
                 ))}
-                {!typeTotal && empty('No sales in this period.')}
               </div>
+              <div className={css.sub} style={{ marginTop: 8 }}>Due date = bill date + 40 days (60 for distributors).</div>
             </div>
           </Paper>
 
-          <Paper className={`${css.card} ${css.s6}`}>
-            <div className={css.ch}><div><div className={css.ct}>Owed to you by customer type</div><div className={css.cs}>As of today · tap a type for its bills</div></div></div>
-            <div className={`${css.cb} ${css.donutBody}`}>
-              <Donut size={isMobile ? 168 : 188} centerLabel="Owed" unit="of what's owed" label="Owed to you by customer type"
-                rows={owedByType.map((r) => ({ key: r.type, value: r.owed, color: TYPE_COLORS[r.type] }))} total={owedTotal} active={type} onPick={openOwed} />
-              <div className={css.legend} style={{ flex: 1, minWidth: 0 }}>
-                {owedByType.filter((r) => r.owed > 0).map((r) => (
-                  <button type="button" key={r.type} className={pickedTypes.includes(r.type) ? css.on : undefined} onClick={() => openOwed(r.type)}>
-                    <i style={{ width: 10, height: 10, borderRadius: 3, background: TYPE_COLORS[r.type], flexShrink: 0 }} />
-                    <span style={{ minWidth: 0, textAlign: 'left' }}>{r.type}<span className={css.sub} style={{ display: 'block' }}>{r.customers} {r.customers === 1 ? 'customer' : 'customers'}</span></span>
-                    <b className={css.num} style={{ marginLeft: 'auto' }}>{lakh(r.owed)}</b>
-                    <span className={css.sub} style={{ width: 34, textAlign: 'right' }}>{owedTotal ? Math.round((r.owed / owedTotal) * 100) : 0}%</span>
-                  </button>
-                ))}
-                {!owedTotal && empty('Nothing owed right now 🎉')}
+          {/* One table instead of two donuts. */}
+          <Paper className={`${css.card} ${css.s12}`} id="ins-types" data-section>
+            <div className={css.ch}><div><div className={css.ct}>By customer type</div><div className={css.cs}>Sales and collected in {allTime ? 'all time' : periodLabel} · owed as of today · tap a row to filter</div></div></div>
+            <div className={`${css.cb} ${css.typeWrap}`}>
+              <div className={css.typeDonut}>
+                <SegmentedControl size="xs" value={donutView} onChange={setDonutView} data={[{ value: 'sales', label: 'Sales' }, { value: 'owed', label: 'Owed' }]} />
+                <Donut size={isMobile ? 176 : 184} centerLabel={donutView === 'owed' ? 'Owed' : 'Sales'} unit={donutView === 'owed' ? "of what's owed" : 'of sales'} label={`${donutView === 'owed' ? 'Owed' : 'Sales'} by customer type`}
+                  rows={typeRows.map((r) => ({ key: r.type, value: donutView === 'owed' ? r.owed : r.sales, color: TYPE_COLORS[r.type] }))}
+                  total={donutView === 'owed' ? owedTotal : typeTotal} active={type} onPick={toggleType} />
+              </div>
+              <div className={css.tblScroll} style={{ minWidth: 0 }}>
+              <table className={css.tbl}>
+                <thead><tr><th>Type</th><th>Sales</th><th className={css.hideSm} title="Share of sales">% of sales</th><th className={css.hideSm}>Collected</th><th>Owed</th><th className={css.hideSm} title="Share of what's owed">% of owed</th><th>Overdue</th><th className={css.hideSm} title="Customers who bought in this period">Bought</th></tr></thead>
+                <tbody>
+                  {typeRows.map((r) => (
+                    <tr key={r.type} onClick={() => toggleType(r.type)} style={pickedTypes.length && !pickedTypes.includes(r.type) ? { opacity: 0.45 } : undefined}>
+                      <td className={css.left}><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: TYPE_COLORS[r.type], marginRight: 8 }} />{r.type}</td>
+                      <td><b>{lakh(r.sales)}</b></td>
+                      <td className={`${css.muted} ${css.hideSm}`}>{typeTotal ? Math.round((r.sales / typeTotal) * 100) : 0}%</td>
+                      <td className={css.hideSm}>{lakh(r.collected)}</td>
+                      <td>{lakh(r.owed)}</td>
+                      <td className={`${css.muted} ${css.hideSm}`}>{owedTotal ? Math.round((r.owed / owedTotal) * 100) : 0}%</td>
+                      <td className={r.overdue > 0 ? css.red : css.muted}>{r.overdue > 0 ? lakh(r.overdue) : '—'}</td>
+                      <td className={`${css.muted} ${css.hideSm}`}>{r.customers}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot><tr><td className={css.left}>Total</td><td>{lakh(typeTotal)}</td><td className={css.hideSm} /><td className={css.hideSm}>{lakh(typeRows.reduce((s, r) => s + r.collected, 0))}</td><td>{lakh(owedTotal)}</td><td className={css.hideSm} /><td className={css.red}>{lakh(typeRows.reduce((s, r) => s + r.overdue, 0))}</td><td className={css.hideSm} /></tr></tfoot>
+              </table>
               </div>
             </div>
           </Paper>
 
           <Paper className={`${css.card} ${css.s12}`} id="ins-trend" data-section>
             <div className={css.ch}>
-              <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>{isMobile ? 'Tap a bar for its numbers' : 'Hover a bar for its numbers · click to open it'}</div></div>
+              <div><div className={css.ct}>Sales vs collections</div><div className={css.cs}>Last 12 {trend === 'weekly' ? 'weeks' : 'months'} · {isMobile ? 'tap' : 'click'} a bar to open it</div></div>
               <Group gap={10} wrap="nowrap">
                 {!isMobile && legend}
                 <SegmentedControl size="xs" value={trend} onChange={setTrend} data={[{ value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
@@ -244,76 +273,75 @@ export default function AdminInsights({ onOpenCustomer }) {
             </div>
             <div className={css.cb}>
               {isMobile && <div style={{ marginBottom: 6 }}>{legend}</div>}
-              <TrendChart points={data.trend.points} selected={allTime ? null : range} onPick={pickTrend} weekly={trend === 'weekly'} wide={!isMobile} />
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s12}`} id="ins-owed" data-section>
-            <div className={css.ch}><div><div className={css.ct}>Money owed to you</div><div className={css.cs}>As of today · by age of the bill · tap a row</div></div><div className={css.big}>{lakh(ageTotal)}</div></div>
-            <div className={css.cb}>
-              <div className={css.stack}>{data.ageing.map((a) => <i key={a.bucket} title={AGE_LABELS[a.bucket]} style={{ width: `${ageTotal ? (a.amount / ageTotal) * 100 : 0}%`, background: AGE_COLORS[a.bucket] }} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })} />)}</div>
-              {data.ageing.map((a) => (
-                <button type="button" key={a.bucket} className={css.bucket} onClick={() => openFresh({ kind: 'records', records: 'age', bucket: a.bucket, title: AGE_LABELS[a.bucket] })}>
-                  <i style={{ width: 10, height: 10, borderRadius: 3, background: AGE_COLORS[a.bucket], flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 0 }}>{AGE_LABELS[a.bucket]}<span className={css.sub} style={{ display: 'block' }}>{a.customers} {a.customers === 1 ? 'customer' : 'customers'}</span></span>
-                  <b className={css.num} style={{ whiteSpace: 'nowrap' }}>{lakh(a.amount)}</b><span className={css.sub} style={{ width: 36, textAlign: 'right' }}>{ageTotal ? Math.round((a.amount / ageTotal) * 100) : 0}%</span>
-                </button>
-              ))}
-              <div className={css.sub} style={{ marginTop: 6, paddingInline: 6 }}>Chemists & doctors are overdue after 40 days, distributors after 60.</div>
+              <TrendChart points={trendPoints} selected={allTime ? null : range} onPick={pickTrend} weekly={trend === 'weekly'} wide={!isMobile} />
+              {data.payment_modes.length > 0 && (
+                <div className={css.payStrip}>
+                  <span className={css.lbl}>Collected by</span>
+                  {data.payment_modes.map((m) => {
+                    const share = modeTotal ? Math.round((Math.max(m.amount, 0) / modeTotal) * 100) : 0;
+                    return (
+                      <button type="button" key={m.mode} onClick={() => openFresh({ kind: 'mode', mode: m.mode, share, scope: [listLabel(type), mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean) })}>
+                        <i style={{ width: 9, height: 9, borderRadius: 2, background: MODE_COLORS[m.mode] || '#868e96' }} />{m.mode} <b className={css.num}>{share}%</b> <span className={css.sub}>{lakh(m.amount)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`} id="ins-mr" data-section>
             <div className={css.ch}>
-              <div><div className={css.ct}>By MR</div><div className={css.cs}>Tap to filter · targets for {data.by_mr.month_label}</div></div>
-              <Button size="compact-sm" variant="default" leftSection={<IconTarget size={14} />} onClick={() => openFresh({ kind: 'targets' })}>Set targets</Button>
+              <div><div className={css.ct}>By MR</div><div className={css.cs}>Sales and collected in {allTime ? 'all time' : periodLabel} · owed as of today · tap to filter</div></div>
             </div>
-            <div className={css.cb}>
-              {data.by_mr.rows.map((r, index) => {
-                const color = r.mr_id ? MR_COLORS[index % MR_COLORS.length] : '#868e96';
-                const pct = r.sales_target ? Math.round(((r.month_sales || 0) / r.sales_target) * 100) : null;
-                return (
-                  <button type="button" key={r.mr_id} className={css.row} onClick={() => toggle(setMrId, mrId, r.mr_id)} style={mrId !== null && mrId !== r.mr_id ? { opacity: 0.4 } : undefined}>
-                    <span className={css.ini} style={{ background: `${color}22`, color }}>{r.name[0]}</span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <Group justify="space-between" wrap="nowrap"><span className={css.nm}>{r.name}</span><b className={css.num}>{lakh(r.sales)}</b></Group>
-                      <div className={css.bar}><i style={{ width: `${(r.sales / mrMax) * 100}%`, background: '#2f9e44' }} /></div>
-                      <div className={css.bar} style={{ height: 5, marginTop: 3 }}><i style={{ width: `${(Math.max(r.collected, 0) / mrMax) * 100}%`, background: '#1c7ed6' }} /></div>
-                      <Group justify="space-between" mt={3} wrap="nowrap" gap={6}>
-                        <span className={css.sub}>Collected {lakh(r.collected)}</span>
-                        {pct !== null && <span className={css.sub}>Target <b style={{ color: pct >= 100 ? '#2b8a3e' : pct >= 70 ? 'var(--app-ink)' : '#e03131' }}>{pct}%</b> of {lakh(r.sales_target)}{data.by_mr.current_month ? ` · ${data.by_mr.days_left} days left` : ''}</span>}
-                      </Group>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className={`${css.cb} ${css.tblScroll}`}>
+              <table className={css.tbl}>
+                <thead><tr><th>MR</th><th>Sales</th><th>Collected</th><th>Owed</th><th>Overdue</th></tr></thead>
+                <tbody>
+                  {data.by_mr.rows.map((r) => {
+                    return (
+                      <tr key={r.mr_id} onClick={() => toggle(setMrId, mrId, r.mr_id)} style={mrId !== null && mrId !== r.mr_id ? { opacity: 0.45 } : undefined}>
+                        <td className={css.left}><b>{r.name}</b></td>
+                        <td><b>{lakh(r.sales)}</b></td>
+                        <td>{lakh(r.collected)}</td>
+                        <td>{lakh(r.owed)}</td>
+                        <td className={r.overdue > 0 ? css.red : css.muted}>{r.overdue > 0 ? lakh(r.overdue) : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
               {!data.by_mr.rows.length && empty('No MR sales in this period.')}
             </div>
           </Paper>
 
           <Paper className={`${css.card} ${css.s6}`} id="ins-top" data-section>
-            <div className={css.ch}><div><div className={css.ct}>Top customers</div><div className={css.cs}>Top 10 = <b style={{ color: 'var(--app-ink)' }}>{data.top_customers.top10_share}%</b> of sales</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>Top customers</div><div className={css.cs}>Top 10 = <b style={{ color: 'var(--app-ink)' }}>{data.top_customers.top10_share}%</b> of sales · with what they owe today</div></div></div>
             <div className={css.cb}>
               {data.top_customers.dependence && <div className={css.warn}>⚠️ <span><b>{data.top_customers.dependence.name}</b> alone is <b>{Math.round(data.top_customers.dependence.share)}%</b> of sales — a lot riding on one customer.</span></div>}
-              <ShowMore key={listKey} items={data.top_customers.rows} initial={8} render={(c) => custRow(c, <span style={{ width: 120, textAlign: 'right' }}><b className={css.num}>{lakh(c.sales)}</b><div className={css.bar}><i style={{ width: `${(c.sales / data.top_customers.rows[0].sales) * 100}%`, background: TYPE_COLORS[c.type] }} /></div></span>)} />
+              <ShowMore key={listKey} items={data.top_customers.rows} initial={5} render={(c) => custRow(c, (
+                <span style={{ width: isMobile ? 132 : 210, textAlign: 'right', flexShrink: 0 }}>
+                  <b className={css.num}>{lakh(c.sales)}</b>
+                  <span className={css.owes}>{c.owed > 0 ? <>owes {lakh(c.owed)}{c.overdue > 0 && <> · <span className={css.red}>{lakh(c.overdue)} overdue</span></>}</> : 'nothing owed'}</span>
+                </span>
+              ))} />
               {!data.top_customers.rows.length && empty('No sales in this period.')}
             </div>
           </Paper>
 
           <Paper className={`${css.card} ${css.s12}`} id="ins-follow" data-section>
-            <div className={css.ch}><div><div className={css.ct}>Customers to follow up</div><div className={css.cs}>As of today · each compared with their own usual buying · biggest money first</div></div></div>
+            <div className={css.ch}><div><div className={css.ct}>Customers to watch</div><div className={css.cs}><b style={{ color: 'var(--app-ink)' }}>{k?.active_customers.value}</b> active customers{k?.active_customers.previous != null && <> ({k.active_customers.value - k.active_customers.previous >= 0 ? '↑' : '↓'} {Math.abs(k.active_customers.value - k.active_customers.previous)} vs {prevShort})</>} · each compared with their own usual buying</div></div></div>
             <div className={css.cb}>
               <div className={css.fchips}>
-                {[['all', 'All', data.follow_up.rows.length], ['quiet', 'Not ordering', data.follow_up.counts.quiet], ['less', 'Buying less', data.follow_up.counts.less], ['late', 'Paying late', data.follow_up.counts.late]].map(([kind, text, count]) => (
+                {[['all', 'Needs follow up', data.follow_up.rows.length], ['quiet', 'Not ordering', data.follow_up.counts.quiet], ['less', 'Buying less', data.follow_up.counts.less], ['late', 'Paying late', data.follow_up.counts.late], ['more', 'Growing', data.growing.length], ['new', 'New', data.new_customers.length]].map(([kind, text, count]) => (
                   <UnstyledButton key={kind} className={css.fchip} data-on={followKind === kind || undefined} onClick={() => setFollowKind(kind)}>{kind !== 'all' && <i className={css.fuDot} data-kind={kind} />}{text} <b>{count}</b></UnstyledButton>
                 ))}
               </div>
-              {/* Laptop: one row per customer in aligned columns; phone: compact cards. */}
-              {!isMobile && data.follow_up.rows.length > 0 && (
+              {!isMobile && watchRows.length > 0 && (
                 <div className={`${css.fuRow} ${css.fuHead}`}><span>Customer</span><span>Why</span><span className={css.fuNum}>Overdue</span><span className={css.fuNum}>Usual / month</span><span /></div>
               )}
-              <ShowMore key={`${listKey}-${followKind}`} items={data.follow_up.rows.filter((r) => followKind === 'all' || r.reasons.some((x) => x.kind === followKind))} initial={8} render={(c) => {
-                const shown = followKind === 'all' ? c.reasons : c.reasons.filter((x) => x.kind === followKind);
+              <ShowMore key={`${listKey}-${followKind}`} items={watchRows} initial={8} render={(c) => {
+                const shown = ['all', 'more', 'new'].includes(followKind) ? c.reasons : c.reasons.filter((x) => x.kind === followKind);
                 const openIt = () => open({ kind: 'customer', id: c.customer_id, name: c.name });
                 const why = shown.map((x) => {
                   const [main, ...rest] = x.text.split(' · ');
@@ -337,7 +365,7 @@ export default function AdminInsights({ onOpenCustomer }) {
                     <div key={c.customer_id} role="button" tabIndex={0} className={css.fuCard} onClick={openIt} onKeyDown={(e) => { if (e.key === 'Enter') openIt(); }}>
                       <Group justify="space-between" wrap="nowrap" gap={8} align="flex-start">
                         <div style={{ minWidth: 0 }}><div className={css.nm}>{c.name}</div><div className={css.sub}>{who}</div></div>
-                        <span className={css.stake}>{c.overdue > 0 ? <><b style={{ color: 'var(--app-tag-red)' }}>{lakh(c.overdue)}</b><small>overdue</small></> : <><b>{lakh(c.usual_month)}</b><small>usual / month</small></>}</span>
+                        <span className={css.stake}>{c.overdue > 0 ? <><b style={{ color: 'var(--app-tag-red)' }}>{lakh(c.overdue)}</b><small>overdue</small></> : <><b>{c.usual_month ? lakh(c.usual_month) : '—'}</b><small>usual / month</small></>}</span>
                       </Group>
                       <Group justify="space-between" wrap="nowrap" gap={6} align="flex-end" mt={4}>
                         <div style={{ minWidth: 0 }}>{why}</div>
@@ -356,41 +384,7 @@ export default function AdminInsights({ onOpenCustomer }) {
                   </div>
                 );
               }} />
-              {!data.follow_up.rows.length && empty('Nobody needs a follow-up right now 🎉')}
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s4}`} id="ins-more" data-section>
-            <div className={css.ch}><div><div className={css.ct}>Buying more than usual</div><div className={css.cs}>Lately vs their usual month</div></div></div>
-            <div className={css.cb}>
-              <ShowMore key={listKey} items={data.growing} initial={5} render={(c) => custRow(c, <span className={css.stake}><b className={css.green}>+{lakh(c.change)}</b><small>a month</small></span>)} />
-              {!data.growing.length && empty('No one is buying much more than usual right now.')}
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s4}`}>
-            <div className={css.ch}><div><div className={css.ct}>New customers</div><div className={css.cs}>First order {allTime ? 'since the start' : `in ${periodLabel}`}</div></div></div>
-            <div className={css.cb}>
-              <ShowMore key={listKey} items={data.new_customers} initial={5} render={(c) => custRow(c, <span className={css.stake}><b>{lakh(c.sales)}</b><small>{shortDate(c.first_order)}</small></span>)} />
-              {!data.new_customers.length && empty('No new customers in this period.')}
-            </div>
-          </Paper>
-
-          <Paper className={`${css.card} ${css.s4}`}>
-            <div className={css.ch}><div><div className={css.ct}>How customers pay</div><div className={css.cs}>Collected {allTime ? 'since the start' : `in ${periodLabel}`}</div></div></div>
-            <div className={css.cb}>
-              {data.payment_modes.map((m) => {
-                const share = modeTotal ? Math.round((Math.max(m.amount, 0) / modeTotal) * 100) : 0;
-                // Tap a payment type: every collection behind it (side panel).
-                return (
-                  <button type="button" key={m.mode} className={css.bucket} style={{ display: 'block', padding: '7px 6px' }} aria-label={`See ${m.mode} collections`}
-                    onClick={() => openFresh({ kind: 'mode', mode: m.mode, share, scope: [listLabel(type), mrId !== null && mrName(mrId), area && (area === NOT_SET ? 'No area' : area)].filter(Boolean) })}>
-                    <Group justify="space-between" wrap="nowrap"><Text size="sm"><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: MODE_COLORS[m.mode] || '#868e96', marginRight: 7 }} />{m.mode}</Text><Text size="sm"><b className={css.num}>{lakh(m.amount)}</b> <span className={css.sub}>{share}%</span></Text></Group>
-                    <div className={css.bar}><i style={{ width: `${share}%`, background: MODE_COLORS[m.mode] || '#868e96' }} /></div>
-                  </button>
-                );
-              })}
-              {!data.payment_modes.length && empty('No collections in this period.')}
+              {!watchRows.length && empty(followKind === 'new' ? 'No new customers in this period.' : followKind === 'more' ? 'No one is buying much more than usual right now.' : 'Nobody needs a follow-up right now 🎉')}
             </div>
           </Paper>
 
@@ -398,13 +392,15 @@ export default function AdminInsights({ onOpenCustomer }) {
             <Paper className={`${css.card} ${css.s12}`} id="ins-area" data-section>
               <div className={css.ch}><div><div className={css.ct}>Sales by area</div><div className={css.cs}>Tap an area to filter</div></div></div>
               <div className={css.cb}>
-                {data.area.rows.slice(0, 12).map((a) => (
-                  <button type="button" key={a.area} className={css.row} onClick={() => toggle(setArea, area, a.area)}>
-                    <IconMapPin size={16} color="#868e96" />
-                    <span style={{ flex: 1, minWidth: 0 }}><Group justify="space-between" wrap="nowrap"><span className={css.nm}>{a.area === NOT_SET ? 'Not set' : a.area}</span><b className={css.num}>{lakh(a.sales)}</b></Group>
-                      <div className={css.bar}><i style={{ width: `${(a.sales / (data.area.rows[0]?.sales || 1)) * 100}%`, background: '#1c7ed6' }} /></div></span>
-                  </button>
-                ))}
+                {areaNotSet && <div className={css.areaNote}><IconMapPin size={15} /><span><b style={{ color: 'var(--app-ink)' }}>{lakh(areaNotSet.sales)}</b> of sales is from customers with no area · set it in Customers › Edit</span></div>}
+                <div className={css.areaGrid}>
+                  {areaRows.slice(0, 12).map((a) => (
+                    <button type="button" key={a.area} className={css.row} onClick={() => toggle(setArea, area, a.area)}>
+                      <span style={{ flex: 1, minWidth: 0 }}><Group justify="space-between" wrap="nowrap"><span className={css.nm}>{a.area}</span><b className={css.num}>{lakh(a.sales)}</b></Group>
+                        <div className={css.bar} style={{ height: 6 }}><i style={{ width: `${(a.sales / (areaRows[0]?.sales || 1)) * 100}%`, background: '#5c7cfa' }} /></div></span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </Paper>
           ) : (
@@ -418,6 +414,7 @@ export default function AdminInsights({ onOpenCustomer }) {
         stack={panel}
         filters={filters}
         periodLabel={periodLabel}
+        scope={[type && `Type: ${listLabel(type)}`, mrId !== null && `MR: ${mrName(mrId)}`, area && `Area: ${area === NOT_SET ? 'not set' : area}`].filter(Boolean)}
         onPush={open}
         onBack={() => setPanel((stack) => stack.slice(0, -1))}
         onClose={() => setPanel([])}

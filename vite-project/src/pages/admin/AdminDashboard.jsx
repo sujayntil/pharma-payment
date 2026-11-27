@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Avatar, Badge, Button, Group, Loader, Paper, Popover, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip, UnstyledButton } from '@mantine/core';
-import { IconAlertTriangle, IconCategory, IconChartBar, IconDownload, IconInfoCircle, IconChevronRight, IconReceipt, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Alert, Avatar, Badge, Group, Loader, Paper, Popover, SimpleGrid, Skeleton, Stack, Table, Text, UnstyledButton } from '@mantine/core';
+import { IconAlertTriangle, IconCategory, IconChartBar, IconInfoCircle, IconChevronRight, IconReceipt, IconTrash } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppStore';
 import GreetingBanner from '../../components/common/GreetingBanner';
@@ -43,6 +43,7 @@ function istDayLabel(value) {
 }
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import TableScroll from '../../components/common/TableScroll';
+import ExportMenu from '../../components/common/ExportMenu';
 
 /** ₹ smaller and lighter than the digits; counts up when the figure arrives. */
 function Amount({ value, size = 26, color, animate = true }) {
@@ -205,16 +206,18 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
     appliedCustomerType && { key: 'type', label: `Customer type: ${listLabel(appliedCustomerType)}`, onRemove: () => setAppliedCustomerType('') },
   ];
   const reset = () => { backToThisMonth(); setAppliedCustomerType(''); };
-  // Excel: Summary by customer type + one sheet per type, for the dates and type picked above.
+  // Export (Excel or PDF): customers by type for the dates and type picked above;
+  // one type picked = one sheet listing every customer of that type.
   const [exporting, setExporting] = useState(false);
-  const exportByType = async () => {
+  const exportByType = async (format = 'xlsx') => {
     setExporting(true); setError('');
     try {
       saveDownload(await adminApi.exportByCustomerType({
         ...(range.from && { date_from: range.from }),
         ...(range.to && { date_to: range.to }),
         ...(appliedCustomerType && { customer_type: appliedCustomerType }),
-      }), 'customers-by-type.xlsx');
+        format,
+      }), `customers-by-type.${format}`);
     } catch (err) { setError(await downloadErrorText(err)); }
     finally { setExporting(false); }
   };
@@ -274,9 +277,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
       {/* Overview: Tally sales first (top-left, where the eye lands first), then Collected and what's owed today. */}
       <Stack gap={12} id="dash-overview" data-section>
         <ZoneHeading icon={IconChartBar} tone="green" title="Overview" meta={zoneTitle}>
-          {isMobile
-            ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} onClick={exportByType}><IconDownload size={16} /></ActionIcon></Tooltip>
-            : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} onClick={exportByType}>Export</Button>}
+          <ExportMenu iconOnly={isMobile} loading={exporting} onExport={exportByType} />
         </ZoneHeading>
         <SimpleGrid cols={{ base: 2, md: 3 }} spacing="sm">
           <div style={{ gridColumn: isMobile ? 'span 2' : undefined }}>

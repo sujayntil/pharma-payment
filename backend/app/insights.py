@@ -235,6 +235,26 @@ def _in_bucket(book: "Book", i: Inv, today: date, lo: int, hi: int) -> bool:
     return lo <= max((today - i.date).days, 0) <= hi
 
 
+# Money owed by due date: not due yet, then days overdue (0 = due today).
+DUE_BANDS = {"not_due": (None, -1), "1-30": (0, 29), "31-60": (30, 59), "60+": (60, None)}
+
+
+def _is_overdue(book: "Book", i: Inv, today: date) -> bool:
+    late = _late(book, i, today) if i.date else None
+    return late is not None and late >= 0
+
+
+def _owed(book: "Book", invs, today: date) -> tuple[float, float]:
+    """(owed, overdue) today for these bills."""
+    owed = overdue = 0.0
+    for i in invs:
+        if i.pending > OPEN:
+            owed += i.pending
+            if _is_overdue(book, i, today):
+                overdue += i.pending
+    return round(owed, 2), round(overdue, 2)
+
+
 def _pct(cur: float, prev: float) -> int | None:
     if not prev:
         return None
@@ -279,7 +299,8 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
     overdue_now = sum(i.pending for i in owed if (_late(book, i, today) if i.date else None) is not None and _late(book, i, today) >= 0)
     kpis["outstanding"] = {"value": round(sum(i.pending for i in owed), 2), "previous": None, "change": None,
                            "spark": [], "as_of_today": True, "overdue": round(overdue_now, 2),
-                           "not_due": round(sum(i.pending for i in owed) - overdue_now, 2)}
+                           "not_due": round(sum(i.pending for i in owed) - overdue_now, 2),
+                           "overdue_customers": len({i.customer_id for i in owed if _is_overdue(book, i, today)})}
     kpis["collected"]["current"] = split["collected_current"]
     kpis["collected"]["older"] = split["collected_older"]
     kpis["sales"]["recovered"] = split["recovered"]
@@ -306,7 +327,19 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
     for i in all_invs:
         if filters.match(book, i, ignore="type") and within(i.date, start, end):
             by_type[book.group_of(i)] += i.total
-    type_rows = [{"type": t, "sales": round(by_type.get(t, 0), 2)} for t in TYPE_GROUPS]
+    # Per type: sales and collected in the period, owed and overdue today,
+    # and how many customers bought ("Bought").
+    type_invs = defaultdict(list)
+    for i in all_invs:
+        if filters.match(book, i, ignore="type"):
+            type_invs[book.group_of(i)].append(i)
+    type_rows = []
+    for t in TYPE_GROUPS:
+        mine = type_invs.get(t, [])
+        tot = _totals(book, mine, start, end)
+        owed_t, overdue_t = _owed(book, mine, today)
+        type_rows.append({"type": t, "sales": round(by_type.get(t, 0), 2), "collected": tot["collected"],
+                          "owed": owed_t, "overdue": overdue_t, "customers": tot["active_customers"]})
     # Owed to you today by customer type (the donut beside Sales): every unpaid
     # bill whatever its date, same as "Money owed to you".
     owed_type = defaultdict(float)
@@ -333,8 +366,9 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
         target = targets.get(mr_id, {})
         if not (t["sales"] or t["collected"] or month["sales"] or target.get("sales_target")):
             continue
+        owed_m, overdue_m = _owed(book, mine, today)
         mr_rows.append({
-            "mr_id": mr_id, "name": book.mr_names.get(mr_id, "Former MR"),
+            "mr_id": mr_id, "name": book.mr_names.get(mr_id, "Former MR"), "owed": owed_m, "overdue": overdue_m,
             "sales": t["sales"], "collected": t["collected"],
             "month_sales": month["sales"], "month_collected": month["collected"],
             "sales_target": target.get("sales_target"), "collection_target": target.get("collection_target"),
@@ -367,8 +401,14 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
 
     total_sales = current["sales"]
     ranked = sorted(((cid, r) for cid, r in per.items() if r["cur"] > 0), key=lambda x: -x[1]["cur"])
-    top = [cust(cid, sales=round(r["cur"], 2), share=round(r["cur"] / total_sales * 100, 1) if total_sales else 0)
-           for cid, r in ranked]
+    by_cust = defaultdict(list)
+    for i in invs:
+        by_cust[i.customer_id].append(i)
+    top = []
+    for cid, r in ranked:
+        owed_c, overdue_c = _owed(book, by_cust[cid], today)
+        top.append(cust(cid, sales=round(r["cur"], 2), share=round(r["cur"] / total_sales * 100, 1) if total_sales else 0,
+                        owed=owed_c, overdue=overdue_c))
     top10_share = round(sum(r["cur"] for _cid, r in ranked[:10]) / total_sales * 100) if total_sales else 0
     dependence = top[0] if top and top[0]["share"] >= DEPENDENCE_SHARE else None
 
@@ -395,6 +435,22 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
         rows = [i for i in invs if i.pending > OPEN and _in_bucket(book, i, today, lo, hi)]
         ageing.append({"bucket": label, "amount": round(sum(i.pending for i in rows), 2),
                        "invoices": len(rows), "customers": len({i.customer_id for i in rows})})
+
+    # Owed by due date (credit 40 days, distributors 60): not due, then days overdue.
+    # "late" = days past the due date; 0 = due today (counts as overdue).
+    due_bands = {key: [] for key in DUE_BANDS}
+    for i in invs:
+        if i.pending <= OPEN:
+            continue
+        late = _late(book, i, today) if i.date else None
+        late = -1 if late is None else late
+        for key, (lo, hi) in DUE_BANDS.items():
+            if (lo is None or late >= lo) and (hi is None or late <= hi):
+                due_bands[key].append(i)
+                break
+    due_ageing = [{"bucket": key, "amount": round(sum(i.pending for i in rows), 2),
+                   "invoices": len(rows), "customers": len({i.customer_id for i in rows})}
+                  for key, rows in due_bands.items()]
 
     modes = defaultdict(float)
     for i in invs:
@@ -427,6 +483,7 @@ def summary(db: Session, start: date | None, end: date, filters: Filters, trend:
         "growing": health["growing"],
         "new_customers": new_customers,
         "ageing": ageing,
+        "due_ageing": due_ageing,
         "payment_modes": mode_rows,
         "area": {"coverage": coverage, "show": coverage >= AREA_MIN_COVERAGE, "rows": area_rows,
                  "areas": sorted({c.area for c in with_area}, key=str.lower)},

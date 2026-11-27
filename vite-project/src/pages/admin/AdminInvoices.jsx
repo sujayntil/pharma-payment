@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Alert, Button, Group, Loader, Menu, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Button, Group, Loader, Menu, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCategory, IconCircleCheck, IconDots, IconDownload, IconEdit, IconEye, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
+import { /* IconArrowBackUp, IconDots, IconHistory, */ IconArrowsSort, IconCash, IconCategory, IconCircleCheck, IconDots, IconEdit, IconEye, IconPlus, IconTrash, IconUser } from '@tabler/icons-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { invoicesApi } from '../../api/invoicesApi';
 import { adminApi } from '../../api/adminApi';
@@ -41,6 +41,7 @@ import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
 import StickyFilters from '../../components/common/StickyFilters';
 import TitleBar, { MiniStat } from '../../components/common/TitleBar';
+import ExportMenu from '../../components/common/ExportMenu';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -145,10 +146,11 @@ export default function AdminInvoices() {
 
   // Export: every invoice matching the current tab, filters, search and sort (not just this page).
   const [exporting, setExporting] = useState(false);
-  const exportExcel = async () => {
+  const exportExcel = async (format = 'xlsx') => {
     setExporting(true); setError('');
     try {
       saveDownload(await invoicesApi.exportInvoices({
+        format,
         ...tabParams(tab, filters.only),
         sort_order: sort,
         ...(search.trim() && { search: search.trim() }),
@@ -157,7 +159,7 @@ export default function AdminInvoices() {
         ...(tab !== 'paid' && dueParams(filters.due, filters.overdueDays)),
         ...(filters.range.from && { date_from: filters.range.from }),
         ...(filters.range.to && { date_to: filters.range.to }),
-      }), 'invoices.xlsx');
+      }), `invoices.${format}`);
     } catch (err) { setError(await downloadErrorText(err)); }
     finally { setExporting(false); }
   };
@@ -309,7 +311,7 @@ export default function AdminInvoices() {
       <>
         {tabs}
         {filterBar}
-    <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text>{isMobile ? <Tooltip label="Export to Excel" withArrow><ActionIcon variant="default" size="lg" aria-label="Export to Excel" loading={exporting} disabled={!total} onClick={exportExcel}><IconDownload size={16} /></ActionIcon></Tooltip> : <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>}</Group></Group>
+    <Group justify="space-between" gap="xs"><Text fw={700}>{total} {total === 1 ? 'invoice' : 'invoices'}</Text><Group gap="sm" wrap="nowrap"><Text size="sm" c="dimmed">{money(pendingTotal)} pending</Text><ExportMenu iconOnly={isMobile} loading={exporting} disabled={!total} onExport={exportExcel} /></Group></Group>
       </>
     ) : (
       // Laptop: title, tabs, totals, search and filters stay pinned; rows scroll.
@@ -318,7 +320,7 @@ export default function AdminInvoices() {
           <TitleBar title="Invoices" left={tabs}>
             <MiniStat label={total === 1 ? 'Invoice' : 'Invoices'} value={total} />
             {pendingTotal > 0 && <MiniStat tone="red" label="Pending" value={money(pendingTotal)} />}
-            <Button variant="default" leftSection={<IconDownload size={16} />} loading={exporting} disabled={!total} onClick={exportExcel}>Export</Button>
+            <ExportMenu size="sm" loading={exporting} disabled={!total} onExport={exportExcel} />
             {addButton}
           </TitleBar>
           {filterBar}

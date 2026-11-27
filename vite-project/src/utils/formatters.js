@@ -113,11 +113,17 @@ export function isTokenExpired(token) {
  */
 export function saveDownload(response, fallbackName) {
   const header = response.headers?.['content-disposition'] || '';
-  const match = /filename="?([^";]+)"?/i.exec(header);
+  // Prefer the exact UTF-8 name (filename*=UTF-8''…), else the plain one.
+  const exact = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  let name = plain?.[1];
+  if (exact) {
+    try { name = decodeURIComponent(exact[1]); } catch { /* keep the plain name */ }
+  }
   const url = URL.createObjectURL(response.data);
   const link = document.createElement('a');
   link.href = url;
-  link.download = match?.[1] || fallbackName;
+  link.download = name || fallbackName;
   document.body.appendChild(link);
   link.click();
   link.remove();

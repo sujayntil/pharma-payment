@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionIcon, Alert, Button, Group, Loader, Menu, SegmentedControl, Stack, Table, Text } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowRight, IconDots, IconDownload, IconEdit, IconFileInvoice } from '@tabler/icons-react';
+import { IconArrowRight, IconDots, IconEdit, IconFileInvoice } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { SearchInput } from '../filters/FilterBar';
 import ChangeModeModal from '../collections/ChangeModeModal';
 import { downloadErrorText, errorText, money, saveDownload, shortDate } from '../../utils/formatters';
 import { lakh, MODE_COLORS } from './insightsFormat';
 import css from '../../pages/admin/AdminInsights.module.css';
+import ExportMenu from '../common/ExportMenu';
 
 const PAGE = 50;
 
@@ -73,11 +74,11 @@ export default function ModePayments({ item, filters, periodLabel, isMobile, onC
   const { data, error } = state;
   const loading = state.key !== key;
   const rows = data?.rows || [];
-  const exportExcel = async () => {
+  const exportExcel = async (format = 'xlsx') => {
     setExporting(true); setExportError('');
     try {
       const exportParams = { ...params }; delete exportParams.sort; // the file is always newest first
-      saveDownload(await adminApi.exportCollections(exportParams), `${mode} collections.xlsx`);
+      saveDownload(await adminApi.exportCollections({ ...exportParams, format }), `${mode} collections.${format}`);
     } catch (err) {
       setExportError(await downloadErrorText(err));
     } finally { setExporting(false); }
@@ -153,7 +154,7 @@ export default function ModePayments({ item, filters, periodLabel, isMobile, onC
 
           <Group justify="space-between">
             <Text size="sm" fw={600}>{loading ? 'Loading…' : `${data.total_count} ${data.total_count === 1 ? 'entry' : 'entries'}`}</Text>
-            <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!data.total_count} onClick={exportExcel}>Excel</Button>
+            <ExportMenu loading={exporting} disabled={!data.total_count} onExport={exportExcel} />
           </Group>
 
           <div style={{ opacity: loading ? 0.55 : 1, transition: 'opacity 150ms' }}>

@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -16,7 +16,8 @@ from ..credit import credit_days, days_past_credit, due_filter_condition
 from ..customer_groups import invoice_type_filter
 from ..insights import today_ist
 from ..database import get_db
-from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
+from ..excel_export import EXPORT_MAX_ROWS, to_ist
+from ..reports import Col, Report, Sheet, check_format, describe, file_name, report_response
 from ..deps import get_current_user, require_admin
 from ..utils import INVOICE_STATUSES, clean_search, clean_status, compute_status, page_result, query_page
 
@@ -299,11 +300,13 @@ def export_invoices(
     customer_type: Optional[str] = None,
     due: Optional[str] = None,
     overdue_days: Optional[int] = None,
+    fmt: str = Query("xlsx", alias="format"),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Admin-only Excel download of the invoice list with the same filters,
+    """Admin-only Excel or PDF download of the invoice list with the same filters,
     search and sort as GET /invoices (all matching rows, not just one page)."""
+    fmt = check_format(fmt)
     q, _search = _admin_invoice_query(
         db, mr_id, status, customer_id, date_from, date_to, search, pending_only, sort_order, customer_type, due, overdue_days
     )
@@ -345,16 +348,26 @@ def export_invoices(
                 to_ist(last["payment_date"]) if last.get("payment_date") else None,
             ]
 
-    stamp = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%Y-%m-%d")
     # Audit log: who downloaded which data (the filters they used).
-    write_audit(db, "invoices_exported", user, new={"rows": len(ids), "filters": dict(request.query_params)})
+    write_audit(db, "invoices_exported", user, new={"rows": len(ids), "format": fmt, "filters": dict(request.query_params)})
     db.commit()
-    return workbook_response(
-        f"invoices-{stamp}.xlsx", "Invoices",
-        ["Invoice", "Invoice date", "Customer", "MR", "Customer type", "Bill", "Collected", "Pending", "Status",
-         "Due date", "Days overdue", "Last entry reversed", "Last recorded by", "Last recorded at"],
-        rows(), widths=[16, 14, 32, 20, 14, 14, 14, 14, 12, 14, 13, 18, 24, 20],
-    )
+    filters = describe(db, date_from=date_from, date_to=date_to, date_word="Invoice date", mr_id=mr_id, customer_id=customer_id,
+                       customer_type=customer_type, status=status, search=search, due=due, overdue_days=overdue_days,
+                       more=["Unpaid & part paid only"] if pending_only else [])
+    if fmt == "pdf":
+        # PDF: the columns a reader needs on paper.
+        columns = [Col("Invoice", width=12), Col("Date", "date", 12), Col("Customer", width=27), Col("MR", width=10), Col("Type", width=10),
+                   Col("Bill", "money", 12, True), Col("Collected", "money", 12, True), Col("Pending", "money", 12, True),
+                   Col("Status", width=10), Col("Due date", "date", 13), Col("Days overdue", "int", 9)]
+        data = [r[:11] for r in rows()]
+    else:
+        columns = [Col("Invoice", width=16), Col("Invoice date", "date", 14), Col("Customer", width=32), Col("MR", width=20), Col("Customer type", width=14),
+                   Col("Bill", "money", 15, True), Col("Collected", "money", 15, True), Col("Pending", "money", 15, True),
+                   Col("Status", width=12), Col("Due date", "date", 14), Col("Days overdue", "int", 13),
+                   Col("Last entry reversed", width=18), Col("Last recorded by", width=24), Col("Last recorded at", "datetime", 20)]
+        data = list(rows())
+    report = Report("Invoices", filters, user.name, [Sheet("Invoices", columns, data)])
+    return report_response(report, file_name("Invoices", *filters[:3], ext=fmt), fmt)
 
 
 _STATUS_WORDS = {"PAID": "Paid", "PARTIAL": "Part paid", "UNPAID": "Unpaid"}

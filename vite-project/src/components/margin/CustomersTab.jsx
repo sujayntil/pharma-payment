@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Badge, Button, Checkbox, Group, Paper, SegmentedControl, Select, Stack, Table, Text, Title } from '@mantine/core';
-import { IconDownload } from '@tabler/icons-react';
+import { Alert, Badge, Button, Checkbox, Group, Paper, SegmentedControl, Select, Stack, Table, Text, Title } from '@mantine/core';
+import ExportMenu from '../common/ExportMenu';
+import { adminApi } from '../../api/adminApi';
+import { downloadErrorText, saveDownload } from '../../utils/formatters';
 import { FilterChecks, SearchInput } from '../filters/FilterBar';
 import TableScroll from '../common/TableScroll';
 import { TYPE_GROUPS } from '../../utils/customerTypes';
@@ -105,15 +107,24 @@ function ByCustomer({ customers, products, linkOf, countOf, onLink, onNewScheme 
 }
 
 function Assigned({ rows }) {
-  const download = () => {
-    const head = ['Customer', 'Type', 'Product', 'Scheme', 'Rule', 'Billing value / unit', 'Keep / unit', '% of MRP', '% of bill after GST', '% of bill before GST', 'Take home / batch'];
-    const fix = (ok, v, dp = 2) => (ok && Number.isFinite(v) ? v.toFixed(dp) : '');
-    const body = rows.map(({ c, p, s, ok, r }) => [c.name, c.type || '', productName(p), schemeName(s), rule(s), fix(ok, r.get), fix(ok, r.per),
-      fix(ok, r.pMrp * 100), fix(ok, r.pAft * 100), fix(ok, r.pBef * 100), fix(ok, r.take, 0)]);
-    const text = [head, ...body].map((row) => row.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + text], { type: 'text/csv' }));
-    const a = document.createElement('a'); a.href = url; a.download = 'Customer schemes.csv'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  // The list below as the standard Excel / PDF report (internal, confidential).
+  const download = async (format) => {
+    const val = (ok, v) => (ok && Number.isFinite(v) ? v : null);
+    const columns = [
+      { header: 'Customer', width: 26 }, { header: 'Type', width: 11 }, { header: 'Product', width: 22 }, { header: 'Scheme', width: 18 },
+      { header: 'Rule', width: 20 }, { header: 'Billing value / unit', kind: 'money', width: 13 }, { header: 'Keep / unit', kind: 'money', width: 12 },
+      { header: '% of MRP', kind: 'pct', width: 9 }, { header: '% of bill after GST', kind: 'pct', width: 11 }, { header: '% of bill before GST', kind: 'pct', width: 11 },
+      { header: 'Take home / batch', kind: 'money0', width: 13 },
+    ];
+    const body = rows.map(({ c, p, s, ok, r }) => [c.name, c.type || '', productName(p), schemeName(s), rule(s), val(ok, r.get), val(ok, r.per),
+      val(ok, r.pMrp), val(ok, r.pAft), val(ok, r.pBef), val(ok, r.take)]);
+    setExporting(true); setExportError('');
+    try {
+      saveDownload(await adminApi.reportTable({ title: 'Customer schemes', filters: ['Every customer with a scheme'], columns, rows: body, format }), `Customer schemes.${format}`);
+    } catch (err) { setExportError(await downloadErrorText(err)); }
+    finally { setExporting(false); }
   };
   if (!rows.length) {
     return <Paper withBorder p="xl" radius="lg"><Text c="dimmed" ta="center">No customer has a scheme yet. Pick one in “By customer”.</Text></Paper>;
@@ -122,8 +133,9 @@ function Assigned({ rows }) {
     <Paper withBorder p="md" radius="lg">
       <Group justify="space-between" mb="sm">
         <Text size="sm" c="dimmed">{rows.length} customer {rows.length === 1 ? 'scheme' : 'schemes'}</Text>
-        <Button variant="default" size="xs" leftSection={<IconDownload size={14} />} onClick={download}>Download</Button>
+        <ExportMenu loading={exporting} onExport={download} label="Download" />
       </Group>
+      {exportError && <Alert color="red" mb="sm" withCloseButton onClose={() => setExportError('')}>{exportError}</Alert>}
       <TableScroll minWidth={860}>
         <Table striped highlightOnHover verticalSpacing="xs">
           <Table.Thead>

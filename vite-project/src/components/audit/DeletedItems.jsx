@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Stack, Table, Text } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconArrowBackUp, IconDownload, IconFileInvoice, IconUser, IconUsers, IconCashOff } from '@tabler/icons-react';
+import { IconArrowBackUp, IconFileInvoice, IconUser, IconUsers, IconCashOff } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import EmptyResults from '../common/EmptyResults';
 import SidePanel from '../common/SidePanel';
@@ -17,6 +17,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useBackClose } from '../../hooks/useBackClose';
 import { dateTime, downloadErrorText, errorText, money, saveDownload, shortDate, timeOf } from '../../utils/formatters';
 import StickyFilters from '../common/StickyFilters';
+import ExportMenu from '../common/ExportMenu';
 
 const istDay = (at) => new Date(at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
@@ -103,9 +104,9 @@ export default function DeletedItems({ preset }) {
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
   ];
 
-  const exportExcel = async () => {
+  const exportExcel = async (format = 'xlsx') => {
     setExporting(true);
-    try { saveDownload(await adminApi.exportDeletions(params), 'deleted.xlsx'); } catch (err) {
+    try { saveDownload(await adminApi.exportDeletions({ ...params, format }), `deleted.${format}`); } catch (err) {
       notifications.show({ color: 'red', title: 'Export', message: await downloadErrorText(err) });
     } finally { setExporting(false); }
   };
@@ -140,7 +141,7 @@ export default function DeletedItems({ preset }) {
       {error && <Alert color="red" variant="light">{error}</Alert>}
       <Group justify="space-between">
         <Text fw={700}>{data ? `${data.total_count} ${data.total_count === 1 ? 'item' : 'items'}` : ' '}</Text>
-        <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!data?.total_count} onClick={exportExcel}>Export</Button>
+        <ExportMenu loading={exporting} disabled={!data?.total_count} onExport={exportExcel} />
       </Group>
 
       <Paper {...listPaperProps(isMobile)} {...reloadingStyle(loading && rows.length > 0)}>

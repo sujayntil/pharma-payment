@@ -23,9 +23,10 @@ from ..collection_info import (
 from ..audit import customer_snapshot, invoice_snapshot, user_snapshot, write_audit
 from ..database import get_db
 from ..month_clear import months_cleared, reopen_months, trophy_summary
-from ..excel_export import _XLSX, EXPORT_MAX_ROWS, to_ist, workbook_response
-from ..type_export import build_workbook, collect_rows, range_label
-from fastapi.responses import Response
+from ..excel_export import EXPORT_MAX_ROWS, to_ist
+from ..type_export import build_report, collect_rows
+from ..reports import Col, Report, Sheet, check_format, describe, file_name, report_response
+from ..ledger_pdf import money
 from ..deps import require_admin
 from ..push import send_office_payment_notification
 from ..credit import is_overdue
@@ -78,12 +79,15 @@ def export_by_customer_type(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     customer_type: Optional[str] = None,
+    fmt: str = Query("xlsx", alias="format"),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Excel for the Dashboard: a Summary sheet by customer type, then one
-    sheet per type with each customer's totals. Follows the Dashboard's
-    date (invoice date) and customer-type filters."""
+    """Excel or PDF for the Dashboard: customers by type with their totals.
+    One type picked: one sheet with every customer of that type; several:
+    a Summary sheet, then one sheet per type. Follows the Dashboard's date
+    (invoice date) and customer-type filters."""
+    fmt = check_format(fmt)
     type_filter = _customer_type_filter(customer_type)
     conditions = _date_range_filter(date_from, date_to)
     count_q = type_filter(db.query(models.Invoice).outerjoin(models.Customer, models.Invoice.customer_id == models.Customer.id))
@@ -92,12 +96,12 @@ def export_by_customer_type(
     if count_q.count() > EXPORT_MAX_ROWS:
         raise HTTPException(413, f"Too many invoices in these dates. Narrow the dates to export.")
     grouped = collect_rows(db, conditions, type_filter)
-    content = build_workbook(grouped, range_label(date_from, date_to))
-    write_audit(db, "customers_exported", user, new={"customers": sum(len(rows) for rows in grouped.values()), "filters": dict(request.query_params)})
+    write_audit(db, "customers_exported", user, new={"customers": sum(len(rows) for rows in grouped.values()), "format": fmt,
+                                                    "filters": dict(request.query_params)})
     db.commit()
-    stamp = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%d %b %Y")
-    return Response(content=content, media_type=_XLSX,
-                    headers={"Content-Disposition": f'attachment; filename="Customers by type - {stamp}.xlsx"'})
+    filters = describe(db, date_from=date_from, date_to=date_to, date_word="Invoice date", customer_type=customer_type)
+    report = build_report(grouped, filters, user.name)
+    return report_response(report, file_name("Customers by type", *filters, ext=fmt), fmt)
 
 
 @router.get("/dashboard")
@@ -387,11 +391,13 @@ def export_collections(
     search: Optional[str] = None,
     customer_type: Optional[str] = None,
     area: Optional[str] = Query(default=None, max_length=80),
+    fmt: str = Query("xlsx", alias="format"),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
-    """Admin-only Excel download of the collections ledger with the same
+    """Admin-only Excel or PDF download of the collections ledger with the same
     filters and search as GET /admin/collections (all matching rows)."""
+    fmt = check_format(fmt)
     query, _search = _collections_query(db, date_from, date_to, mr_id, mode, recorded_by, entry_type, search, customer_type, area)
     total = query.with_entities(func.count(models.Payment.id)).scalar() or 0
     if total > EXPORT_MAX_ROWS:
@@ -420,16 +426,29 @@ def export_collections(
                 _STATUS_WORDS.get(invoice.status, invoice.status),
             ]
 
-    stamp = datetime.now(_IST).strftime("%Y-%m-%d")
     # Audit log: who downloaded which data (the filters they used).
-    write_audit(db, "collections_exported", user, new={"filters": dict(request.query_params)})
+    write_audit(db, "collections_exported", user, new={"rows": len(rows), "format": fmt, "filters": dict(request.query_params)})
     db.commit()
-    return workbook_response(
-        f"{mode_label(mode) + ' collections' if mode and mode.strip() else 'collections'}-{stamp}.xlsx", "Collections",
-        ["Date (IST)", "Invoice", "Customer", "Assigned MR", "Entry", "Amount", "Mode", "Reference",
-         "Reversal reason", "Recorded by", "Invoice status"],
-        sheet_rows(), widths=[20, 16, 32, 20, 12, 14, 16, 26, 30, 24, 14],
-    )
+    entry_words = {"collection": "Collections only", "reversal": "Reversals only"}
+    filters = describe(db, date_from=date_from, date_to=date_to, date_word="Paid on", mr_id=mr_id, customer_type=customer_type,
+                       area=area, search=search,
+                       more=[f"Mode: {mode_label(mode)}" if mode and mode.strip() else "",
+                             entry_words.get((entry_type or "").strip().lower(), ""),
+                             f"Recorded by: {recorded_by}" if recorded_by else ""])
+    data = list(sheet_rows())
+    collected = sum(r[5] for r in data if r[5] > 0)
+    reversed_ = sum(r[5] for r in data if r[5] < 0)
+    note = f"Collected {money(collected)} · Reversed {money(abs(reversed_))} · Net {money(collected + reversed_)}"
+    if fmt == "pdf":
+        columns = [Col("Date", "datetime", 19), Col("Invoice", width=11), Col("Customer", width=26), Col("MR", width=11), Col("Entry", width=9),
+                   Col("Amount", "money", 12, True), Col("Mode", width=9), Col("Reference / reason", width=20), Col("Recorded by", width=14)]
+        data = [[r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7] or r[8], r[9]] for r in data]
+    else:
+        columns = [Col("Date (IST)", "datetime", 20), Col("Invoice", width=16), Col("Customer", width=32), Col("Assigned MR", width=20),
+                   Col("Entry", width=12), Col("Amount", "money", 15, True), Col("Mode", width=14), Col("Reference", width=26),
+                   Col("Reversal reason", width=30), Col("Recorded by", width=24), Col("Invoice status", width=14)]
+    report = Report("Collections", filters, user.name, [Sheet("Collections", columns, data, note=note)])
+    return report_response(report, file_name("Collections", *filters[:3], ext=fmt), fmt)
 
 
 _STATUS_WORDS = {"PAID": "Paid", "PARTIAL": "Part paid", "UNPAID": "Unpaid"}

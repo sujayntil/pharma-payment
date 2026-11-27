@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconArrowBackUp, IconCash, IconCategory, IconDots, IconEdit, IconFileInvoice, IconDownload, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
+import { IconArrowBackUp, IconCash, IconCategory, IconDots, IconEdit, IconFileInvoice, /* IconHistory, */ IconUser, IconUserShield, IconWallet } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import StatCard from '../../components/common/StatCard';
 import ListPagination, { PAGE_SIZE } from '../../components/common/ListPagination';
@@ -29,6 +29,7 @@ import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
 import StickyFilters from '../../components/common/StickyFilters';
 import TitleBar, { MiniStat } from '../../components/common/TitleBar';
+import ExportMenu from '../../components/common/ExportMenu';
 
 /**
  * Second line of a phone collection card, kept to one short line:
@@ -94,10 +95,11 @@ export default function AdminCollections({ preset = null }) {
 
   // Export: every ledger entry matching the current filters and search (not just this page).
   const [exporting, setExporting] = useState(false);
-  const exportExcel = async () => {
+  const exportExcel = async (format = 'xlsx') => {
     setExporting(true); setError('');
     try {
       saveDownload(await adminApi.exportCollections({
+        format,
         ...(search.trim() && { search: search.trim() }),
         ...(filters.range.from && { date_from: filters.range.from }),
         ...(filters.range.to && { date_to: filters.range.to }),
@@ -107,7 +109,7 @@ export default function AdminCollections({ preset = null }) {
         ...(filters.entryType && { entry_type: filters.entryType }),
         ...(filters.customerType && { customer_type: filters.customerType }),
         ...(filters.area && { area: filters.area }),
-      }), 'collections.xlsx');
+      }), `collections.${format}`);
     } catch (err) { setError(await downloadErrorText(err)); }
     finally { setExporting(false); }
   };
@@ -153,7 +155,7 @@ export default function AdminCollections({ preset = null }) {
     search.trim() && { key: 'q', label: `“${search.trim()}”`, onRemove: () => onSearch('') },
   ];
 
-  const exportButton = <Button size="xs" variant="default" leftSection={<IconDownload size={14} />} loading={exporting} disabled={!count} onClick={exportExcel}>Export</Button>;
+  const exportButton = <ExportMenu loading={exporting} disabled={!count} onExport={exportExcel} />;
   const filterBar = (
     <FilterBar search={search} onSearch={onSearch} searchPlaceholder="Search invoice, customer, MR…" chips={chips} onReset={reset}
       moreAsButton moreActive={[filters.mode, filters.recordedBy, filters.entryType].filter(Boolean).length} more={<>

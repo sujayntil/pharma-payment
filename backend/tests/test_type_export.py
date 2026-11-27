@@ -10,7 +10,8 @@ from sqlalchemy.orm import sessionmaker
 from app import models
 from app.database import Base
 from app.routers.admin import _customer_type_filter, _date_range_filter
-from app.type_export import build_workbook, collect_rows
+from app.reports import build_pdf, build_xlsx
+from app.type_export import build_report, collect_rows
 
 
 class TypeExportTests(unittest.TestCase):
@@ -42,12 +43,25 @@ class TypeExportTests(unittest.TestCase):
         mehta = grouped["Doctor"][0]
         self.assertEqual((mehta["invoices"], mehta["billed"], mehta["collected"], mehta["pending"]), (2, 9600, 2200, 7400))
         self.assertEqual(mehta["oldest"], date(2026, 9, 30))
-        wb = load_workbook(BytesIO(build_workbook(grouped, "All time")))
+        report = build_report(grouped, ["All dates"], "Priya")
+        wb = load_workbook(BytesIO(build_xlsx(report)))
         self.assertEqual(wb.sheetnames, ["Summary", "Chemist", "Doctor", "Other"])
         summary = wb["Summary"]
-        self.assertEqual(summary["A5"].value, "Chemist")
+        self.assertEqual(summary["A2"].value, "Filters: All dates")
+        self.assertIn("by Priya", summary["A3"].value)
+        self.assertEqual(summary["A6"].value, "Chemist")
         self.assertEqual(summary.cell(row=summary.max_row, column=1).value, "Total")
         self.assertEqual(summary.cell(row=summary.max_row, column=6).value, 7400 + 4200 + 1000)
+        self.assertTrue(build_pdf(report).startswith(b"%PDF"))
+
+    def test_one_type_gives_one_sheet_with_every_customer(self):
+        grouped = collect_rows(self.db, _date_range_filter(None, None), _customer_type_filter("Doctor"))
+        wb = load_workbook(BytesIO(build_xlsx(build_report(grouped, ["Type: Doctor"], "Priya"))))
+        self.assertEqual(wb.sheetnames, ["Doctor"])
+        ws = wb["Doctor"]
+        self.assertEqual(ws["A5"].value, "Customer")
+        self.assertEqual(ws["A6"].value, "Dr. Mehta")
+        self.assertEqual(ws.cell(row=7, column=1).value, "Total")
 
     def test_follows_dates_and_type(self):
         grouped = collect_rows(self.db, _date_range_filter(date(2026, 11, 1), date(2026, 11, 30)), _customer_type_filter("doctor"))

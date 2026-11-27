@@ -1,34 +1,25 @@
-"""Admin Dashboard "Export": customers by type, as one formatted workbook.
+"""Admin Dashboard "Export": customers by type (Excel or PDF).
 
-Sheet "Summary": one row per customer type (+ Total).
-Then one sheet per type: every customer with invoices in the selected
-dates, with totals (most pending first, + Total).
+One type picked: a single sheet listing every customer of that type.
+Several types: "Summary" (one row per type + Total), then one sheet per type
+with every customer that has invoices in the selected dates (most pending
+first, + Total).
 """
 
 from collections import defaultdict
-from datetime import date, datetime
-from io import BytesIO
+from datetime import datetime
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from . import models
-from .credit import credit_days, is_overdue
-from .excel_export import _IST, _safe, to_ist
+from .credit import is_overdue
+from .excel_export import _IST, to_ist
+from .reports import Col, Report, Sheet
 
 TYPE_ORDER = ["Distributor", "Chemist", "Doctor", "Hospital"]
 OTHER = "Other"
 
-# ₹ with Indian grouping: ₹2,53,531 / ₹1,23,45,678.
-RUPEES = '[>=10000000]"₹"##\\,##\\,##\\,##0;[>=100000]"₹"##\\,##\\,##0;"₹"##,##0'
-GREEN = PatternFill("solid", fgColor="2F9E44")
-TOTAL_FILL = PatternFill("solid", fgColor="EBFBEE")
-AMBER = PatternFill("solid", fgColor="FFF3BF")
-RED_FILL = PatternFill("solid", fgColor="FFE3E3")
-THIN = Side(style="thin", color="B2F2BB")
 
 
 def type_label(raw: str | None) -> str:
@@ -97,122 +88,43 @@ def collect_rows(db: Session, conditions, type_filter) -> dict[str, list[dict]]:
     return grouped
 
 
-def _header(ws, title: str, subtitle: str, headers: list[str], widths: list[int]):
-    ws["A1"] = title
-    ws["A1"].font = Font(bold=True, size=14, color="1B5E20")
-    ws["A2"] = subtitle
-    ws["A2"].font = Font(size=10, color="868E96")
-    ws.append([])
-    ws.append(headers)
-    for cell in ws[4]:
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = GREEN
-        cell.alignment = Alignment(vertical="center", horizontal="left" if cell.column <= 3 else "right")
-    ws.row_dimensions[4].height = 22
-    ws.freeze_panes = "A5"
-    # Prints landscape, one page wide, header row repeated on every page.
-    ws.page_setup.orientation = "landscape"
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.print_title_rows = "4:4"
-    ws.sheet_view.showGridLines = False
-    for index, width in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(index)].width = width
-
-
-def _total_row(ws, values: list, money_cols: set[int]):
-    ws.append(values)
-    for cell in ws[ws.max_row]:
-        cell.font = Font(bold=True)
-        cell.fill = TOTAL_FILL
-        cell.border = Border(top=Side(style="medium", color="2F9E44"))
-        if cell.column in money_cols:
-            cell.number_format = RUPEES
-
-
-def build_workbook(grouped: dict[str, list[dict]], range_text: str) -> bytes:
-    now = datetime.now(_IST)
-    today = now.date()
-    stamp = f"Invoice dates: {range_text}  ·  Exported {now.strftime('%d %b %Y, %I:%M %p').replace(' 0', ' ')}"
+def build_report(grouped: dict[str, list[dict]], filters: list[str], exported_by: str | None) -> Report:
+    """One type picked: a single sheet with every customer of that type.
+    Several types: a Summary sheet first, then one sheet per type."""
+    today = datetime.now(_IST).date()
     order = [name for name in TYPE_ORDER + [OTHER] if grouped.get(name)]
+    customer_cols = [Col("Customer", width=32), Col("MR", width=16), Col("Phone", width=14), Col("Invoices", "int", 9, True),
+                     Col("Billed", "money0", 14, True), Col("Collected", "money0", 14, True), Col("Pending", "money0", 14, True),
+                     Col("Overdue", "money0", 14, True), Col("Oldest pending", "date", 14), Col("Days old", "int", 9),
+                     Col("Last collection", "date", 14)]
 
-    wb = Workbook()
-    summary = wb.active
-    summary.title = "Summary"
-    _header(summary, "Customers by type", stamp,
-            ["Customer type", "Customers", "Invoices", "Billed", "Collected", "Pending", "Overdue", "% collected"],
-            [18, 12, 11, 15, 15, 15, 17, 13])
-    totals = defaultdict(float)
+    def customer_rows(rows):
+        return [[r["name"], r["mr"], r["phone"], r["invoices"], r["billed"], r["collected"], r["pending"], r["overdue"],
+                 r["oldest"], (today - r["oldest"]).days if r["oldest"] else None,
+                 to_ist(r["last"]).date() if r["last"] else None] for r in rows]
+
+    sheets = []
+    if len(order) > 1:
+        summary_rows = []
+        for name in order:
+            rows = grouped[name]
+            billed = sum(r["billed"] for r in rows)
+            collected = sum(r["collected"] for r in rows)
+            summary_rows.append([name, len(rows), sum(r["invoices"] for r in rows), billed, collected,
+                                 sum(r["pending"] for r in rows), sum(r["overdue"] for r in rows),
+                                 collected / billed if billed else 0])
+        sheets.append(Sheet(
+            "Summary",
+            [Col("Customer type", width=18), Col("Customers", "int", 11, True), Col("Invoices", "int", 10, True),
+             Col("Billed", "money0", 15, True), Col("Collected", "money0", 15, True), Col("Pending", "money0", 15, True),
+             Col("Overdue", "money0", 15, True), Col("% collected", "pct", 12)],
+            summary_rows, heading="Customers by type · Summary",
+            note="Each customer is listed on the sheet of their type: " + ", ".join(order) + ".",
+        ))
     for name in order:
         rows = grouped[name]
-        billed = sum(r["billed"] for r in rows)
-        collected = sum(r["collected"] for r in rows)
-        pending = sum(r["pending"] for r in rows)
-        old = sum(r["overdue"] for r in rows)
-        values = [name, len(rows), sum(r["invoices"] for r in rows), billed, collected, pending, old,
-                  collected / billed if billed else 0]
-        summary.append(values)
-        for key, value in zip(["customers", "invoices", "billed", "collected", "pending", "old"], values[1:7]):
-            totals[key] += value
-    for row in summary.iter_rows(min_row=5):
-        for cell in row:
-            if cell.column in (4, 5, 6, 7):
-                cell.number_format = RUPEES
-            elif cell.column == 8:
-                cell.number_format = "0%"
-        if row[5].value:
-            row[5].font = Font(color="C92A2A")
-        if row[6].value:
-            row[6].font = Font(color="C92A2A")
-    _total_row(summary, ["Total", totals["customers"], totals["invoices"], totals["billed"], totals["collected"],
-                         totals["pending"], totals["old"],
-                         totals["collected"] / totals["billed"] if totals["billed"] else 0], {4, 5, 6, 7})
-    summary.cell(row=summary.max_row, column=8).number_format = "0%"
-    if len(order) > 0:
-        summary.auto_filter.ref = f"A4:H{summary.max_row - 1}"
-
-    for name in order:
-        rows = grouped[name]
-        ws = wb.create_sheet(name[:31])
-        _header(ws, f"{name} customers", stamp,
-                ["Customer", "MR", "Phone", "Invoices", "Billed", "Collected", "Pending", "Oldest pending", "Days", "Last collection"],
-                [34, 16, 15, 10, 15, 15, 15, 15, 8, 16])
-        for row in rows:
-            days = (today - row["oldest"]).days if row["oldest"] else None
-            ws.append([_safe(row["name"]), _safe(row["mr"]), _safe(row["phone"]), row["invoices"], row["billed"],
-                       row["collected"], row["pending"], row["oldest"], days,
-                       to_ist(row["last"]).date() if row["last"] else None])
-            line = ws[ws.max_row]
-            for cell in line[4:7]:
-                cell.number_format = RUPEES
-            if row["pending"] > 0:
-                line[6].font = Font(color="C92A2A", bold=True)
-            line[7].number_format = line[9].number_format = "dd-mmm-yyyy"
-            limit = credit_days(name)
-            if days is not None and days >= limit:
-                line[8].fill = RED_FILL
-                line[8].font = Font(color="C92A2A", bold=True)
-            elif days is not None and days >= limit - 10:
-                line[8].fill = AMBER
-                line[8].font = Font(color="E67700", bold=True)
-            for cell in line:
-                cell.border = Border(bottom=THIN)
-        ws.auto_filter.ref = f"A4:J{ws.max_row}"
-        _total_row(ws, ["Total", None, None, sum(r["invoices"] for r in rows), sum(r["billed"] for r in rows),
-                        sum(r["collected"] for r in rows), sum(r["pending"] for r in rows), None, None, None], {5, 6, 7})
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    return buffer.getvalue()
-
-
-def range_label(date_from: date | None, date_to: date | None) -> str:
-    fmt = lambda d: d.strftime("%d %b %Y").lstrip("0")  # noqa: E731
-    if date_from and date_to:
-        return f"{fmt(date_from)} – {fmt(date_to)}"
-    if date_from:
-        return f"From {fmt(date_from)}"
-    if date_to:
-        return f"Up to {fmt(date_to)}"
-    return "All time"
+        sheets.append(Sheet(name, customer_cols, customer_rows(rows), heading=f"{name} customers",
+                            note=f"{len(rows)} customer{'s' if len(rows) != 1 else ''} with invoices in these dates · most pending first"))
+    if not order:
+        sheets.append(Sheet("Customers", customer_cols, [], heading="Customers by type"))
+    return Report("Customers by type", filters, exported_by, sheets)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, NumberInput, SegmentedControl, Select, Stack, Table, Text, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconArrowsSort, IconBook2, IconCash, IconDots, IconDownload, IconEdit } from '@tabler/icons-react';
+import { IconArrowLeft, IconArrowsSort, IconBook2, IconCash, IconDots, IconEdit } from '@tabler/icons-react';
 import { useDebouncedValue } from '@mantine/hooks';
 import { insightsApi } from '../../api/insightsApi';
 import { customersApi } from '../../api/customersApi';
@@ -14,7 +14,10 @@ import { PanelTop } from '../common/BackToTop';
 import SidePanel from '../common/SidePanel';
 import { errorText, formatDateLocal, money, shortDate } from '../../utils/formatters';
 import OverdueFilter from '../filters/OverdueFilter';
-import { matchesDue } from '../filters/dueFilter';
+import { dueLabel, matchesDue } from '../filters/dueFilter';
+import ExportMenu from '../common/ExportMenu';
+import { adminApi } from '../../api/adminApi';
+import { downloadErrorText, saveDownload } from '../../utils/formatters';
 import InvoiceHistory from '../collections/InvoiceHistory';
 import RecordCollectionModal from '../collections/RecordCollectionModal';
 import CustomerCollectModal from '../collections/CustomerCollectModal';
@@ -58,7 +61,7 @@ const dueText = (late) => (late === null || late === undefined ? '' : late > 0 ?
  * The drill-down side panel (bottom sheet on phones). A stack, so Back goes
  * one step up: list behind a number -> Customer insights -> invoice history.
  */
-export default function InsightsPanel({ stack, filters, periodLabel, onPush, onBack, onClose, onChanged, onOpenLedger }) {
+export default function InsightsPanel({ stack, filters, periodLabel, scope = [], onPush, onBack, onClose, onChanged, onOpenLedger }) {
   const isMobile = useIsMobile();
   const current = stack[stack.length - 1] || null;
   const [openInvoice, setOpenInvoice] = useState(null);
@@ -85,7 +88,7 @@ export default function InsightsPanel({ stack, filters, periodLabel, onPush, onB
         title={stack.length > 1 ? <Button variant="subtle" size="compact-sm" color="green" leftSection={<IconArrowLeft size={14} />} onClick={onBack}>Back</Button> : null}
         styles={{ header: { paddingInline: 16, paddingBlock: 10, minHeight: 0, borderBottom: '1px solid var(--app-line)' }, body: { padding: 16 } }}
       >
-        {current?.kind === 'records' && <Records key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} />}
+        {current?.kind === 'records' && <Records key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} scope={scope} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} />}
         {current?.kind === 'change' && <CustomerChange key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} />}
         {current?.kind === 'customer' && <CustomerInsights key={current.id + ':' + reload} id={current.id} isMobile={isMobile} onInvoice={setOpenInvoice} onCollect={setCollecting} onLedger={onOpenLedger} onEdit={isAdmin ? setEditingCustomer : null} />}
         {current?.kind === 'mode' && <ModePayments key={JSON.stringify(current) + reload} item={current} filters={filters} periodLabel={periodLabel} isMobile={isMobile} onCustomer={(c) => onPush({ kind: 'customer', id: c.id, name: c.name })} onInvoice={setOpenInvoice} onChanged={onChanged} />}
@@ -204,7 +207,7 @@ function CustomerChange({ item, filters, periodLabel, isMobile, onCustomer }) {
   );
 }
 
-function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }) {
+function Records({ item, filters, periodLabel, scope = [], isMobile, onCustomer, onInvoice }) {
   // customerType: from "Owed to you by customer type" (that type only).
   const params = { ...filters, kind: item.records, ...(item.bucket && { bucket: item.bucket }), ...(item.customerType && { customer_type: item.customerType }) };
   const { loading, data, error } = useLoad(() => insightsApi.records(params), JSON.stringify(params));
@@ -228,7 +231,9 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
   const items = allItems.filter((r) => (!term || [r.customer, r.invoice_number, r.mr, r.mode].some((v) => String(v || '').toLowerCase().includes(term)))
     && (!pick || (collected ? (pick === 'Reversal' ? r.amount < 0 : r.mode === pick && r.amount >= 0) : r.status === pick))
     && (!typePick || typePick.split(',').includes(r.type))
-    && (!age || matchesDue(r.days_late, due.due, due.days)));
+    && (!age || matchesDue(r.days_late, due.due, due.days))
+    // From "Money owed by due date": one overdue band, e.g. 31–60 days.
+    && (!item.lateBand || (r.days_late != null && r.days_late >= item.lateBand[0] && (item.lateBand[1] == null || r.days_late <= item.lateBand[1]))));
   if (age) {
     const byDate = (r) => r.invoice_date || '';
     items.sort(order === 'amount' ? (a, b) => b.pending - a.pending
@@ -246,18 +251,36 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - Number(r.days_late));
     return formatDateLocal(d);
   };
-  const exportCsv = () => {
-    const head = collected ? ['Payment date', 'Invoice', 'Customer', 'MR', 'Mode', 'Amount']
-      : age ? ['Invoice', 'Invoice date', 'Customer', 'Customer type', 'MR', 'Total', 'Paid', 'Pending', 'Status', 'Due date', 'Days overdue']
-        : ['Invoice', 'Invoice date', 'Customer', 'MR', 'Total', 'Paid', 'Pending', 'Status'];
+  // Export: the rows shown (after the panel's own search and filters) as the
+  // standard Excel / PDF report, with every filter written at the top.
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const exportList = async (format) => {
+    const money = (header, total = true) => ({ header, kind: 'money', width: 13, total });
+    const columns = collected
+      ? [{ header: 'Payment date', kind: 'date', width: 13 }, { header: 'Invoice', width: 13 }, { header: 'Customer', width: 30 }, { header: 'MR', width: 14 }, { header: 'Mode', width: 11 }, money('Amount')]
+      : age
+        ? [{ header: 'Invoice', width: 13 }, { header: 'Invoice date', kind: 'date', width: 12 }, { header: 'Customer', width: 28 }, { header: 'Type', width: 12 }, { header: 'MR', width: 13 },
+          money('Total'), money('Paid'), money('Pending'), { header: 'Status', width: 10 }, { header: 'Due date', kind: 'date', width: 12 }, { header: 'Days overdue', kind: 'int', width: 10 }]
+        : [{ header: 'Invoice', width: 13 }, { header: 'Invoice date', kind: 'date', width: 12 }, { header: 'Customer', width: 30 }, { header: 'MR', width: 14 }, money('Total'), money('Paid'), money('Pending'), { header: 'Status', width: 10 }];
     const rows = items.map((r) => (collected
-      ? [r.payment_date, r.invoice_number, r.customer, r.mr || '', r.mode, r.amount]
-      : age ? [r.invoice_number, r.invoice_date, r.customer, r.type || '', r.mr || '', r.total, r.paid, r.pending, STATUS_LABEL[r.status] || r.status, dueOn(r), r.days_late >= 0 ? r.days_late : '']
-        : [r.invoice_number, r.invoice_date, r.customer, r.mr || '', r.total, r.paid, r.pending, r.status]));
-    const text = [head, ...rows].map((row) => row.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + text], { type: 'text/csv' }));
-    const a = document.createElement('a'); a.href = url; a.download = `${title} - ${periodLabel || 'insights'}.csv`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+      ? [r.payment_date, r.invoice_number, r.customer, r.mr || '', r.amount < 0 ? 'Reversal' : r.mode, r.amount]
+      : age ? [r.invoice_number, r.invoice_date, r.customer, r.type || '', r.mr || '', r.total, r.paid, r.pending, STATUS_LABEL[r.status] || r.status, dueOn(r), r.days_late >= 0 ? r.days_late : null]
+        : [r.invoice_number, r.invoice_date, r.customer, r.mr || '', r.total, r.paid, r.pending, STATUS_LABEL[r.status] || r.status]));
+    const used = [
+      age ? 'Owed as of today' : periodLabel,
+      ...scope,
+      item.customerType && `Type: ${item.customerType}`,
+      typePick && `Type: ${typePick}`,
+      pick && (collected ? `Mode: ${pick}` : `Status: ${STATUS_LABEL[pick] || pick}`),
+      age && due.due && dueLabel(due.due, due.days),
+      q.trim() && `Search: "${q.trim()}"`,
+    ].filter(Boolean);
+    setExporting(true); setExportError('');
+    try {
+      saveDownload(await adminApi.reportTable({ title, filters: used, columns, rows, format }), `${title}.${format}`);
+    } catch (err) { setExportError(await downloadErrorText(err)); }
+    finally { setExporting(false); }
   };
 
   return (
@@ -267,6 +290,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
         <Text size="sm" c="dimmed">{age ? `As of today, ${ORDER_LABEL[order].toLowerCase()}` : periodLabel}{data ? ` · ${narrowed || preNarrowed ? items.length : data.count} ${collected ? 'payments' : 'invoices'} · ${money(narrowed || preNarrowed ? shownTotal : data.total)}` : ''}{narrowed && data ? <Text span c="dimmed"> (of {allItems.length})</Text> : null}</Text>
       </div>
       {error && <Alert color="red">{error}</Alert>}
+      {exportError && <Alert color="red" withCloseButton onClose={() => setExportError('')}>{exportError}</Alert>}
       {loading && !data ? <Group justify="center" p="lg"><Loader size="sm" /></Group> : data && (
         <>
           <PanelFilters isMobile={isMobile} search={q} onSearch={setQ} placeholder={collected ? 'Customer, invoice, MR, mode' : 'Customer, invoice, MR'}
@@ -276,7 +300,7 @@ function Records({ item, filters, periodLabel, isMobile, onCustomer, onInvoice }
                 : { key: 'status', placeholder: 'All statuses', data: (age ? ['UNPAID', 'PARTIAL'] : ['UNPAID', 'PARTIAL', 'PAID']).map((v) => ({ value: v, label: STATUS_LABEL[v] })), value: pick, onChange: setPick },
               !typeFixed && (!typeChoices || typeChoices.length > 1) && typeOptions.length > 1 && { key: 'type', multi: true, placeholder: 'All types', data: typeOptions, value: typePick, onChange: (v) => setTypePick(v || null) },
             ]}
-            right={<Button size="xs" variant="default" leftSection={<IconDownload size={14} />} disabled={!items.length} onClick={exportCsv}>Export</Button>} />
+            right={<ExportMenu loading={exporting} disabled={!items.length} onExport={exportList} />} />
           {age && (
             <Group gap={8} wrap={isMobile ? 'wrap' : 'nowrap'}>
               <OverdueFilter size="xs" zIndex={400} compact={isMobile} due={due.due} days={due.days} onChange={setDue} />

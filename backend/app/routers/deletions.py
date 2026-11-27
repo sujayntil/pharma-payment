@@ -16,7 +16,8 @@ from ..audit import write_audit
 from ..collection_info import mode_label
 from ..database import get_db
 from ..deps import require_admin
-from ..excel_export import EXPORT_MAX_ROWS, to_ist, workbook_response
+from ..excel_export import EXPORT_MAX_ROWS, to_ist
+from ..reports import Col, Report, Sheet, check_format, describe, file_name, report_response
 from ..utils import compute_status
 
 router = APIRouter(prefix="/admin/deletions", tags=["deletions"])
@@ -211,11 +212,13 @@ def export_deletions(
     kind: Optional[str] = None,
     by_id: Optional[int] = None,
     search: Optional[str] = Query(default=None, max_length=80),
+    fmt: str = Query("xlsx", alias="format"),
     db: Session = Depends(get_db),
     user: models.User = Depends(require_admin),
 ):
+    fmt = check_format(fmt)
     items = _query_rows(db, date_from, date_to, kind, by_id, search)
-    write_audit(db, "deletions_exported", user, new={"rows": len(items), "filters": dict(request.query_params)})
+    write_audit(db, "deletions_exported", user, new={"rows": len(items), "format": fmt, "filters": dict(request.query_params)})
     db.commit()
     label = {"invoice": "Invoice", "customer": "Customer", "user": "User", "undone": "Undone collection"}
     rows = [[
@@ -224,12 +227,17 @@ def export_deletions(
         r.get("reason"), r.get("by"),
         ("Restored " + to_ist(r["restored"]["at"]).strftime("%d %b %Y") + (f" by {r['restored']['by']}" if r["restored"]["by"] else "")) if r["restored"] else None,
     ] for r in items]
-    stamp = datetime.now(IST).strftime("%Y-%m-%d")
-    return workbook_response(
-        f"deleted-{stamp}.xlsx", "Deleted",
-        ["Deleted on (IST)", "What", "Name / number", "Customer", "MR", "Amount", "Collected on it", "Reason", "Deleted by", "Restored"],
-        rows, widths=[20, 18, 24, 32, 16, 14, 16, 30, 18, 28],
-    )
+    by_name = None
+    if by_id:
+        person = db.get(models.User, by_id)
+        by_name = person.name if person else str(by_id)
+    filters = describe(db, date_from=date_from, date_to=date_to, date_word="Deleted on", search=search,
+                       more=[f"What: {label.get(kind, kind)}" if kind else "", f"Deleted by: {by_name}" if by_name else ""])
+    columns = [Col("Deleted on", "datetime", 18), Col("What", width=14), Col("Name / number", width=22), Col("Customer", width=26),
+               Col("MR", width=14), Col("Amount", "money", 13, True), Col("Collected on it", "money", 13, True),
+               Col("Reason", width=26), Col("Deleted by", width=16), Col("Restored", width=22)]
+    report = Report("Deleted items", filters, user.name, [Sheet("Deleted", columns, rows)])
+    return report_response(report, file_name("Deleted items", *filters[:2], ext=fmt), fmt)
 
 
 @router.get("/{audit_id}")

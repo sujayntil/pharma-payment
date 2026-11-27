@@ -265,7 +265,13 @@ class CollectionHistoryTests(unittest.TestCase):
         from openpyxl import load_workbook
         self.assertEqual(response.status_code, 200, response.text)
         self.assertIn("spreadsheetml", response.headers["content-type"])
-        return [list(row) for row in load_workbook(BytesIO(response.content)).active.iter_rows(values_only=True)]
+        ws = load_workbook(BytesIO(response.content)).active
+        # Standard report: title, filters, "exported by" line, a spare row,
+        # then the column headers on row 5, the rows, and a Total row.
+        self.assertTrue(ws["A2"].value.startswith("Filters:"))
+        self.assertIn("Confidential", ws["A3"].value)
+        rows = [list(row) for row in ws.iter_rows(min_row=5, values_only=True)]
+        return [r for r in rows if r[0] != "Total" and r[0] != "No rows match these filters."]
 
     def test_invoice_export_matches_filters_and_is_admin_only(self):
         self.pay(self.paid_invoice, 500, self.mr)

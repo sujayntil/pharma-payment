@@ -23,9 +23,12 @@
   box-shadow: 0 0 0 100vmax var(--band), 0 1px 0 100vmax var(--app-line);
   clip-path: inset(0 -100vmax -1px);
 }
+/* Pinned: no drop shadow here. The white band is a wide shadow, so letting
+   anything show below the band also showed white over the column names (it
+   covered the top of the select-all tick box). The band's line is enough. */
 .bar[data-top]:first-child[data-stuck] {
-  box-shadow: 0 0 0 100vmax var(--band), 0 1px 0 100vmax var(--app-line), 0 8px 12px -10px rgba(15, 23, 42, 0.25);
-  clip-path: inset(0 -100vmax -14px);
+  box-shadow: 0 0 0 100vmax var(--band), 0 1px 0 100vmax var(--app-line);
+  clip-path: inset(0 -100vmax -1px);
 }
 /* The list right below starts flush under the band, so its column names sit
    in their pinned spot from the start and never slide up either. */

@@ -1,0 +1,9 @@
+.input :global(.mantine-Input-input) { background: var(--app-soft, var(--mantine-color-body)); }
+.dropdown { padding: 6px; }
+.option { border-radius: 8px; padding: 8px 10px; }
+.seeAll { display: block; font-size: 13px; font-weight: 600; color: var(--mantine-color-green-8); padding: 8px 10px; }
+
+.phoneHead { display: flex; align-items: center; gap: 6px; padding: 12px 10px; border-bottom: 1px solid var(--app-line); }
+.phoneGroup { font-size: 12px; font-weight: 600; color: var(--app-muted); padding: 14px 6px 6px; }
+.phoneRow { display: block; width: 100%; padding: 10px 8px; border-radius: 10px; }
+.phoneRow:active { background: var(--app-soft); }

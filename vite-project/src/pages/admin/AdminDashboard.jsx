@@ -27,7 +27,7 @@ const DASH_SECTIONS = [
 import OverdueCustomersPanel from '../../components/collections/OverdueCustomersPanel';
 import InvoiceHistory from '../../components/collections/InvoiceHistory';
 import InsightsPanel from '../../components/insights/InsightsPanel';
-import DashboardSearch from '../../components/common/DashboardSearch';
+// import DashboardSearch from '../../components/common/DashboardSearch';
 import RecordCollectionModal from '../../components/collections/RecordCollectionModal';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { dateTime, downloadErrorText, money, saveDownload, timeOf } from '../../utils/formatters';
@@ -269,8 +269,8 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
     <Stack gap={28}>
       <SectionNav watch={`${Boolean(dashboard)}-${alertCount}`} sections={DASH_SECTIONS} />
       <GreetingBanner />
-      {/* Find a customer or invoice from here: ledger or invoice details open straight away. */}
-      <DashboardSearch onCustomer={(c) => onOpenCustomer?.(c)} onInvoice={setOpenId} />
+      {/* Search moved to the top bar (every page). Old box, re-enable if needed:
+      <DashboardSearch onCustomer={(c) => onOpenCustomer?.(c)} onInvoice={setOpenId} /> */}
 
       {/* Flat filter row; Reset appears only once a filter is on. */}
       <FilterBar compact chips={chips} onReset={filtersOn ? reset : undefined}>

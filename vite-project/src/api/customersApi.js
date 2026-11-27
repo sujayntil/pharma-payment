@@ -1,6 +1,16 @@
 import axiosClient from './axiosClient';
 
 export const customersApi = {
+  /** Top-bar search: customers and invoices (an MR only finds their own). */
+  async search(q) {
+    const response = await axiosClient.get('/customers/search', { params: { q } });
+    return response.data;
+  },
+  /** Customer page: summary, 12 months, statement, collections, activity (+ schemes for Admin). */
+  async getProfile(customerId) {
+    const response = await axiosClient.get(`/customers/${customerId}/profile`);
+    return response.data;
+  },
   async getMyCustomers(params = {}) {
     const response = await axiosClient.get('/mr/customers', { params });
     return response.data;

@@ -14,6 +14,7 @@ const AdminCollections = lazy(() => import('./AdminCollections'));
 const AdminImport = lazy(() => import('./AdminImport'));
 const AdminAuditLog = lazy(() => import('./AdminAuditLog'));
 const AdminMargin = lazy(() => import('./AdminMargin'));
+const CustomerProfile = lazy(() => import('../common/CustomerProfile'));
 
 // "Last 7 days" for the Dashboard's deletions note (India dates).
 const lastDays = (n) => {
@@ -41,21 +42,24 @@ export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const segment = location.pathname.split('/')[2];
+  // /admin/customers/123: that customer's page.
+  const profileId = segment === 'customers' && /^\d+$/.test(location.pathname.split('/')[3] || '') ? Number(location.pathname.split('/')[3]) : null;
   const activeTab = ADMIN_TABS.some((tab) => tab.id === segment) ? segment : 'dashboard';
   const tabPath = (tab) => (tab === 'dashboard' ? '/admin' : `/admin/${tab}`);
   // Set when the Dashboard opens a customer; the key remounts Customers on it.
   const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
-  const choose = (tab) => { if (tab !== activeTab || openCustomer || location.state?.collectionsFilters || location.state?.auditView || location.state?.search) navigate(tabPath(tab)); };
+  const choose = (tab) => { if (tab !== activeTab || profileId || openCustomer || location.state?.collectionsFilters || location.state?.auditView || location.state?.search) navigate(tabPath(tab)); };
 
   return (
     <AppFrame items={ADMIN_TABS} active={activeTab} onChange={choose}>
       <main>
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
-        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
-        {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
+        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(`/admin/customers/${customer.id}`)} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
+        {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(`/admin/customers/${customer.id}`)} />}
         {activeTab === 'margin' && <AdminMargin />}
         {activeTab === 'invoices' && <AdminInvoices key={location.state?.search ? `q:${location.state.search}` : 'plain'} />}
-        {activeTab === 'customers' && <AdminCustomers key={openCustomer?.id ?? (location.state?.search ? `q:${location.state.search}` : 'list')} openCustomer={openCustomer} />}
+        {profileId && <CustomerProfile key={profileId} customerId={profileId} base="/admin" />}
+        {activeTab === 'customers' && !profileId && <AdminCustomers key={openCustomer?.id ?? (location.state?.search ? `q:${location.state.search}` : 'list')} openCustomer={openCustomer} />}
         {/* From Insights ("See in Collections"): opens already filtered. */}
         {activeTab === 'collections' && <AdminCollections key={location.state?.collectionsFilters ? JSON.stringify(location.state.collectionsFilters) : 'plain'} preset={location.state?.collectionsFilters ?? null} />}
         {activeTab === 'import' && <AdminImport />}

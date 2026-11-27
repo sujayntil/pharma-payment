@@ -38,6 +38,7 @@ import { authApi } from '../../api/authApi';
 import AppRefreshProvider from './AppRefreshProvider';
 import PullToRefresh from './PullToRefresh';
 import RefreshButton from './RefreshButton';
+import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
 import BackToTop from './BackToTop';
 import backToTopClasses from './SectionNav.module.css';
@@ -188,8 +189,11 @@ export default function AppFrame({ items, active, onChange, children, bottomNav 
               <Text fw={700} size="sm">Portal</Text>
               {!isMobile && <Text c="dimmed" size="xs">Collection workspace</Text>}
             </div>
+            {/* Search, every page (Ctrl K). Phones: an icon on the right. */}
+            {!isMobile && <Box ml={compact ? 24 : 120}><GlobalSearch base={role === 'ADMIN' ? '/admin' : '/mr'} /></Box>}
           </Group>
           <Group gap={isMobile ? 'xs' : 'md'} wrap="nowrap">
+          {isMobile && <GlobalSearch base={role === 'ADMIN' ? '/admin' : '/mr'} />}
           {/* Refresh: Admin everywhere, MR on laptop (MR phones pull down instead). */}
           {!useBottomNav && <RefreshButton size={isMobile ? 34 : 38} />}
           {role === 'ADMIN' && <NotificationBell size={isMobile ? 34 : 38} />}

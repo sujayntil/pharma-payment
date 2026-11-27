@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,8 @@ from ..database import get_db
 from .invoices import apply_due_filter
 from ..ledger_pdf import IST, build_ledger_pdf, nice_date
 from ..ledger_xlsx import build_ledger_xlsx
+from ..customer_profile import build_profile
+from ..quick_search import quick_search_results
 from ..deps import get_current_user, require_admin
 from ..utils import clean_search, normalize_phone, page_result, query_page, resolve_whatsapp_on, same_phone, set_customer_numbers
 
@@ -307,6 +309,28 @@ def _ledger_order(invoice_query):
         models.Invoice.invoice_date.desc(),
         models.Invoice.id.desc(),
     )
+
+
+@router.get("/search")
+def search(
+    q: str = Query(min_length=1, max_length=60),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Top-bar search. Admin: everyone. MR: only their own customers."""
+    return quick_search_results(db, q, None if user.role == models.RoleEnum.ADMIN.value else user.id)
+
+
+@router.get("/{customer_id}/profile")
+def customer_profile(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Customer page: summary, 12 months, statement, collections, activity;
+    schemes for Admin only. An MR only opens their own customers."""
+    customer, _, _ = _ledger_query(db, user, customer_id, None, None, None, None)
+    return build_profile(db, user, customer)
 
 
 @router.get("/{customer_id}/ledger")

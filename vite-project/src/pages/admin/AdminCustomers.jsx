@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Tooltip, Alert, Badge, Button, Group, Loader, Menu, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
+import { useNavigate } from 'react-router-dom';
 import { IconArrowsSort, IconBook, IconBrandWhatsapp, IconCash, IconCategory, IconDots, IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
 import { adminApi } from '../../api/adminApi';
@@ -65,6 +66,7 @@ export default function AdminCustomers({ openCustomer = null }) {
   const [linkSearch] = useState(() => window.history.state?.usr?.search || '');
   const [search, setSearch] = useRememberedState('customers:search', linkSearch, { skip: Boolean(linkSearch) }); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [filters, setFilters] = useRememberedState('customers:filters', { mrId: '', type: '', sort: '' }, { skip: Boolean(linkSearch) }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
+  const navigate = useNavigate();
   const [selected, setSelected] = useState(openCustomer); const [collectingCustomer, setCollectingCustomer] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
   // Back closes the open ledger instead of leaving the screen.
@@ -192,7 +194,8 @@ export default function AdminCustomers({ openCustomer = null }) {
             </Group>
   );
 
-  const openLedger = (customer) => { setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerFilters(BLANK_LEDGER); setLedgerPage(1); };
+  // A customer opens their own page (/admin/customers/:id).
+  const openLedger = (customer) => navigate(`/admin/customers/${customer.id}`);
   const openEdit = (customer) => setEditing(customer);
   // No confirm box for customers (only ones without invoices can be deleted): it leaves the list
   // at once and the server delete waits for the Undo bar.

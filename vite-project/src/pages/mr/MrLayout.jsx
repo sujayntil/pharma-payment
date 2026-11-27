@@ -16,6 +16,7 @@ const MrDashboard = lazy(() => import('./MrDashboard'));
 // const MrCollections = lazy(() => import('./MrCollections'));
 const MrInvoiceList = lazy(() => import('./MrInvoiceList'));
 const MrCustomers = lazy(() => import('./MrCustomers'));
+const CustomerProfile = lazy(() => import('../common/CustomerProfile'));
 
 const MR_TABS = [
   { id: 'dashboard', label: 'Home', icon: IconHome },
@@ -35,11 +36,13 @@ export default function MrLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const segment = location.pathname.split('/')[2];
+  // /mr/customers/123: that customer's page (own customers only).
+  const profileId = segment === 'customers' && /^\d+$/.test(location.pathname.split('/')[3] || '') ? Number(location.pathname.split('/')[3]) : null;
   const activeTab = MR_TABS.some((tab) => tab.id === segment) ? segment : 'dashboard';
   const tabPath = (tab) => (tab === 'dashboard' ? '/mr' : `/mr/${tab}`);
   // Set when Home opens a customer directly; the key remounts Customers on it.
   const openCustomer = activeTab === 'customers' ? (location.state?.openCustomer ?? null) : null;
-  const choose = (tab) => { if (tab !== activeTab || openCustomer) navigate(tabPath(tab)); };
+  const choose = (tab) => { if (tab !== activeTab || openCustomer || profileId) navigate(tabPath(tab)); };
 
   // Reopen where the MR left off (tab and open customer) if the app comes
   // back within 30 minutes; a fresh start later still opens Home.
@@ -80,7 +83,8 @@ export default function MrLayout() {
         {activeTab === 'invoices' && <MrInvoices />}
         {activeTab === 'collections' && <MrCollections />} */}
         {activeTab === 'invoices' && <MrInvoiceList />}
-        {activeTab === 'customers' && <MrCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
+        {profileId && <CustomerProfile key={profileId} customerId={profileId} base="/mr" />}
+        {activeTab === 'customers' && !profileId && <MrCustomers key={openCustomer?.id ?? 'list'} openCustomer={openCustomer} />}
         </Suspense>
       </main>
     </AppFrame>

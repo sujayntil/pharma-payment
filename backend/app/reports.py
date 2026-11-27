@@ -13,6 +13,7 @@ The customer ledger is shared with customers, so it keeps its own layout
 (ledger_pdf.py / ledger_xlsx.py) without the internal-use note.
 """
 from __future__ import annotations
+from xml.sax.saxutils import escape as esc  # typed text must never act as PDF markup
 
 import re
 from urllib.parse import quote
@@ -161,18 +162,18 @@ def build_xlsx(report: Report) -> bytes:
         ws = wb.create_sheet(name)
         ncols = max(len(sheet.columns), 1)
 
-        ws.append([sheet.heading or report.title])
+        ws.append([_safe(sheet.heading or report.title)])
         ws["A1"].font = Font(size=14, bold=True, color=INK)
-        ws.append([filters_line(report.filters)])
+        ws.append([_safe(filters_line(report.filters))])
         ws["A2"].font = Font(size=10, color=INK)
         ws.append([exported_line(report.exported_by)])
         ws["A3"].font = Font(size=9, italic=True, color=DIM)
-        ws.append([sheet.note] if sheet.note else [])
+        ws.append([_safe(sheet.note)] if sheet.note else [])
         if sheet.note:
             ws["A4"].font = Font(size=9, color=DIM)
 
         header_row = 5
-        ws.append([c.header for c in sheet.columns])
+        ws.append([_safe(c.header) for c in sheet.columns])
         for index, col in enumerate(sheet.columns, start=1):
             cell = ws.cell(row=header_row, column=index)
             cell.font = Font(bold=True, color=INK)
@@ -285,11 +286,11 @@ def build_pdf(report: Report) -> bytes:
                             title=report.title, author="Portal")
     usable = pagesize[0] - 28 * mm
     story = [
-        Paragraph(report.title, style(16, bold=True, leading=20)),
+        Paragraph(esc(report.title), style(16, bold=True, leading=20)),
         Spacer(1, 3),
-        Paragraph(filters_line(report.filters), style(9)),
+        Paragraph(esc(filters_line(report.filters)), style(9)),
         Spacer(1, 2),
-        Paragraph(exported_line(report.exported_by), style(8, PDIM)),
+        Paragraph(esc(exported_line(report.exported_by)), style(8, PDIM)),
         Spacer(1, 8),
     ]
     cell = style(8.2, leading=10.5)
@@ -302,22 +303,22 @@ def build_pdf(report: Report) -> bytes:
     for n, sheet in enumerate(report.sheets):
         block = []
         if len(report.sheets) > 1 or sheet.heading:
-            block.append(Paragraph(sheet.heading or sheet.name, style(11.5, bold=True, leading=15)))
+            block.append(Paragraph(esc(sheet.heading or sheet.name), style(11.5, bold=True, leading=15)))
         if sheet.note:
-            block.append(Paragraph(sheet.note, style(8, PDIM)))
+            block.append(Paragraph(esc(sheet.note), style(8, PDIM)))
         if block:
             block.append(Spacer(1, 5))
         cols = sheet.columns
         weights = [max(c.width, 6) for c in cols]
         scale = usable / sum(weights)
         widths = [w * scale for w in weights]
-        data = [[Paragraph(c.header, head_r if c.kind in NUMERIC else head) for c in cols]]
+        data = [[Paragraph(esc(c.header), head_r if c.kind in NUMERIC else head) for c in cols]]
         for row in sheet.rows:
-            data.append([Paragraph(_pdf_text(v, c.kind).replace("&", "&amp;").replace("<", "&lt;"),
+            data.append([Paragraph(esc(_pdf_text(v, c.kind)),
                                    cell_r if c.kind in NUMERIC else cell) for v, c in zip(row, cols)])
         total = _total_row(sheet)
         if total:
-            data.append([Paragraph(_pdf_text(v, c.kind), bold_r if c.kind in NUMERIC else bold) for v, c in zip(total, cols)])
+            data.append([Paragraph(esc(_pdf_text(v, c.kind)), bold_r if c.kind in NUMERIC else bold) for v, c in zip(total, cols)])
         if not sheet.rows:
             data.append([Paragraph("No rows match these filters.", style(8.2, PDIM))] + [""] * (len(cols) - 1))
         table = Table(data, colWidths=widths, repeatRows=1)

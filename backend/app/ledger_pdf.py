@@ -1,6 +1,7 @@
 """Customer ledger as a simple, shareable PDF (not an official statement):
 customer name, the three totals, then each invoice with its payments under it.
 It lists exactly what the ledger screen shows, filters included."""
+from xml.sax.saxutils import escape as esc  # typed text must never act as PDF markup
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -86,11 +87,11 @@ def build_ledger_pdf(customer, mr_name, invoices, payments_by_invoice, collector
 
     # Header: customer on the left, what this covers on the right.
     sub = " · ".join(x for x in [customer.type, customer.area, f"MR: {mr_name}" if mr_name else None, customer.phone] if x)
-    left = [Paragraph(customer.name, s(17, bold=True, leading=21))]
+    left = [Paragraph(esc(customer.name), s(17, bold=True, leading=21))]
     if sub:
-        left.append(Paragraph(sub, s(9, DIM)))
+        left.append(Paragraph(esc(sub), s(9, DIM)))
     right = [Paragraph("LEDGER", s(8, DIM, bold=True, align=2)),
-             Paragraph("<br/>".join(scope) if scope else "All invoices", s(9, INK, align=2))]
+             Paragraph("<br/>".join(esc(x) for x in scope) if scope else "All invoices", s(9, INK, align=2))]
     head = Table([[left, right]], colWidths=[width * 0.66, width * 0.34])
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0),
                               ("RIGHTPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
@@ -124,7 +125,7 @@ def build_ledger_pdf(customer, mr_name, invoices, payments_by_invoice, collector
         if (inv.pending_amount or 0) > 0 and inv.invoice_date:
             label += f" · {(today - inv.invoice_date).days} d"
         rows.append([
-            Paragraph(inv.invoice_number, s(9, bold=True)), Paragraph(nice_date(inv.invoice_date), s(9)),
+            Paragraph(esc(inv.invoice_number), s(9, bold=True)), Paragraph(nice_date(inv.invoice_date), s(9)),
             num(inv.total_amount), num(inv.paid_amount, GREEN if inv.paid_amount else DIM),
             num(inv.pending_amount, RED if (inv.pending_amount or 0) > 0 else DIM, bold=(inv.pending_amount or 0) > 0),
             Paragraph(label, s(8.5, tone, bold=True)),
@@ -140,7 +141,7 @@ def build_ledger_pdf(customer, mr_name, invoices, payments_by_invoice, collector
                 bits = [nice_date(p.payment_date), mode_label(p.mode), who, p.transaction_reference and f"Ref {p.transaction_reference}"]
                 text = "↳ " + " · ".join(b for b in bits if b)
                 tone = DIM
-            rows.append([Paragraph(text, s(8, tone, leading=10)), "", "", Paragraph(money(p.amount), s(8, tone, align=2, leading=10)), "", ""])
+            rows.append([Paragraph(esc(text), s(8, tone, leading=10)), "", "", Paragraph(money(p.amount), s(8, tone, align=2, leading=10)), "", ""])
             r = len(rows) - 1
             style += [("SPAN", (0, r), (2, r)), ("TOPPADDING", (0, r), (-1, r), 0), ("BOTTOMPADDING", (0, r), (-1, r), 3),
                       ("LEFTPADDING", (0, r), (0, r), 10)]

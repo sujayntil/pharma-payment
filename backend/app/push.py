@@ -30,7 +30,7 @@ def _send(payload: dict, ttl: int, role=None, user_id=None) -> bool:
 _DEAD = (403, 404, 410)
 
 
-def deliver(payload: dict, ttl: int, role=None, user_id=None) -> dict:
+def deliver(payload: dict, ttl: int, role=None, user_id=None, exclude_user_id=None) -> dict:
     """Send to every saved device and report: {devices, delivered, removed, problems}."""
     report = {"devices": 0, "delivered": 0, "removed": 0, "problems": []}
     private_key = os.getenv("VAPID_PRIVATE_KEY")
@@ -49,6 +49,8 @@ def deliver(payload: dict, ttl: int, role=None, user_id=None) -> dict:
             query = query.filter(models.User.role == role)
         if user_id is not None:
             query = query.filter(models.User.id == user_id)
+        if exclude_user_id is not None:
+            query = query.filter(models.User.id != exclude_user_id)
         targets = [
             (sub.id, {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}})
             for sub in query.all()
@@ -204,6 +206,46 @@ def office_payment_payloads(db, payment_ids: list[int]) -> list[tuple[int, dict]
     return alerts
 
 
+def admin_peer_payloads(db, payment_ids: list[int]) -> list[tuple[int, dict]]:
+    """(recorder id, alert) for the other Admins when an Admin records or
+    reverses a payment. Parts of one split collection make one alert;
+    entries undone in the meantime are gone and send nothing."""
+    recorder = aliased(models.User)
+    rows = (
+        db.query(models.Payment, models.Invoice, models.Customer, recorder)
+        .join(models.Invoice, models.Invoice.id == models.Payment.invoice_id)
+        .outerjoin(models.Customer, models.Customer.id == models.Invoice.customer_id)
+        .join(recorder, recorder.id == models.Payment.recorded_by)
+        .filter(models.Payment.id.in_(payment_ids))
+        .order_by(models.Payment.id.asc())
+        .all()
+    )
+    groups: dict = {}
+    for payment, invoice, customer, who in rows:
+        if who.role != models.RoleEnum.ADMIN.value:
+            continue
+        groups.setdefault((who.id, payment.batch_id or f"p{payment.id}"), []).append((payment, invoice, customer, who))
+    alerts = []
+    for (recorder_id, _key), parts in groups.items():
+        payment, invoice, customer, who = parts[0]
+        total = abs(sum(part[0].amount or 0 for part in parts))
+        place = customer.name if customer else invoice.invoice_number
+        invoices = invoice.invoice_number if len(parts) == 1 else f"{len(parts)} invoices"
+        if (payment.amount or 0) < 0:
+            title = f"↩️ ₹{total:,.0f} reversed · {place}"
+            body = " · ".join(x for x in (invoices, (payment.reason or "").strip(), f"by {who.name}") if x)
+        else:
+            title = f"₹{total:,.0f} recorded · {place}"
+            body = " · ".join(x for x in (invoices, payment.mode, f"by {who.name}") if x)
+        alerts.append((recorder_id, {
+            "title": title,
+            "body": body,
+            "url": f"/#/admin/invoices?invoice={invoice.id}",
+            "tag": f"peer-{payment.id}",
+        }))
+    return alerts
+
+
 def send_office_payment_notification(payment_ids: list[int], delay: float = ALERT_DELAY_SECONDS):
     """Tells the MR when the office records or reverses a payment on their
     invoices (they didn't do it themselves, so it is news to them)."""
@@ -213,8 +255,12 @@ def send_office_payment_notification(payment_ids: list[int], delay: float = ALER
         time.sleep(delay)
     with SessionLocal() as db:
         alerts = office_payment_payloads(db, payment_ids)
+        peer_alerts = admin_peer_payloads(db, payment_ids)
     for mr_id, payload in alerts:
         send_user_notification(mr_id, payload)
+    # The other Admins hear about it too (never the Admin who entered it).
+    for recorder_id, payload in peer_alerts:
+        deliver(payload, 60, role=models.RoleEnum.ADMIN.value, exclude_user_id=recorder_id)
 
 
 def month_alert_payloads(db, mr_id: int, months: list[str]) -> list[dict]:

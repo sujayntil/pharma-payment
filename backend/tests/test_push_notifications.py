@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import models, schemas
 from app.database import Base
-from app.push import office_payment_payloads, payment_payload
+from app.push import admin_peer_payloads, deliver, office_payment_payloads, payment_payload
 from app.routers.admin import reverse_payment
 from app.routers.notifications import delete_subscription, mark_mine_seen, mark_seen, my_updates, recent_collections, save_subscription
 from app.routers.payments import add_payment
@@ -143,6 +143,39 @@ class PushNotificationTests(unittest.TestCase):
         self.db.delete(office); self.db.commit()
         self.assertEqual(office_payment_payloads(self.db, [gone]), [])
 
+
+    def test_other_admins_hear_about_an_admin_entry_not_the_recorder(self):
+        jyoti = models.User(name="Jyoti", employee_code="A2", role="ADMIN", password_hash="x")
+        self.db.add(jyoti); self.db.commit()
+        self.pay(self.mr, 10)       # MR's own: the usual Admin alert, not this one
+        office = self.pay(jyoti, 30)
+        mine = self.db.query(models.Payment).filter_by(recorded_by=self.mr.id).one()
+        (recorder_id, alert), = admin_peer_payloads(self.db, [mine.id, office.id])
+        self.assertEqual(recorder_id, jyoti.id)
+        self.assertEqual(alert["title"], "₹30 recorded · Tulsi Pharmacy")
+        self.assertEqual(alert["body"], "A00001 · UPI · by Jyoti")
+        reverse_payment(mine.id, schemas.PaymentReversalCreate(reason="Cheque bounced"), BackgroundTasks(), self.db, jyoti)
+        reversal = self.db.query(models.Payment).filter(models.Payment.amount < 0).one()
+        (_, alert), = admin_peer_payloads(self.db, [reversal.id])
+        self.assertEqual(alert["title"], "↩️ ₹10 reversed · Tulsi Pharmacy")
+        self.assertIn("Cheque bounced · by Jyoti", alert["body"])
+        # The MR alert is unchanged.
+        (mr_id, mr_alert), = office_payment_payloads(self.db, [office.id])
+        self.assertEqual((mr_id, mr_alert["title"]), (self.mr.id, "₹30 received · Tulsi Pharmacy"))
+
+    def test_deliver_skips_the_recorder(self):
+        jyoti = models.User(name="Jyoti", employee_code="A2", role="ADMIN", password_hash="x")
+        self.db.add(jyoti); self.db.flush()
+        for n, user in enumerate([self.admin, jyoti, self.mr]):
+            self.db.add(models.PushSubscription(user_id=user.id, endpoint=f"https://push.test/{n}", p256dh="k", auth="a"))
+        self.db.commit()
+        sent = []
+        with patch.dict("os.environ", {"VAPID_PRIVATE_KEY": "k", "VAPID_SUBJECT": "mailto:x@y.z"}), \
+             patch("app.push.SessionLocal", sessionmaker(bind=self.engine)), \
+             patch("pywebpush.webpush", lambda subscription_info, **kw: sent.append(subscription_info["endpoint"])):
+            report = deliver({"title": "t"}, 60, role="ADMIN", exclude_user_id=jyoti.id)
+        self.assertEqual(sent, ["https://push.test/0"])
+        self.assertEqual(report["delivered"], 1)
 
     def pay(self, user, amount):
         add_payment(schemas.PaymentCreate(invoice_id=self.invoice.id, amount=amount, mode="UPI"), BackgroundTasks(), self.db, user)

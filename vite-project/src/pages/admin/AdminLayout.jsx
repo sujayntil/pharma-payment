@@ -54,8 +54,8 @@ export default function AdminLayout() {
     <AppFrame items={ADMIN_TABS} active={activeTab} onChange={choose}>
       <main>
         <Suspense fallback={<Center py="xl"><Loader size="sm" /></Center>}>
-        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(`/admin/customers/${customer.id}`)} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
-        {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(`/admin/customers/${customer.id}`)} />}
+        {activeTab === 'dashboard' && <AdminDashboard onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} onOpenDeleted={() => navigate(tabPath('audit'), { state: { auditView: 'deleted' } })} />}
+        {activeTab === 'insights' && <AdminInsights onOpenCustomer={(customer) => navigate(tabPath('customers'), { state: { openCustomer: customer } })} />}
         {activeTab === 'margin' && <AdminMargin />}
         {activeTab === 'invoices' && <AdminInvoices key={location.state?.search ? `q:${location.state.search}` : 'plain'} />}
         {profileId && <CustomerProfile key={profileId} customerId={profileId} base="/admin" />}

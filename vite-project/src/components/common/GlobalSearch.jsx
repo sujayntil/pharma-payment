@@ -4,6 +4,8 @@ import { useDebouncedValue, useHotkeys } from '@mantine/hooks';
 import { useNavigate } from 'react-router-dom';
 import { IconArrowLeft, IconFileInvoice, IconSearch, IconUsers } from '@tabler/icons-react';
 import { customersApi } from '../../api/customersApi';
+import InvoiceHistory from '../collections/InvoiceHistory';
+import RecordCollectionModal from '../collections/RecordCollectionModal';
 import { StatusBadge } from '../collections/CollectionBadges';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { money, shortDate } from '../../utils/formatters';
@@ -66,6 +68,9 @@ export default function GlobalSearch({ base }) {
   const admin = base === '/admin';
   const [value, setValue] = useState('');
   const [phoneOpen, setPhoneOpen] = useState(false);
+  const [invoiceId, setInvoiceId] = useState(null);
+  const [recording, setRecording] = useState(null);
+  const [changed, setChanged] = useState(0);
   const { query, data, loading } = useResults(value);
   const input = useRef(null);
   const combobox = useCombobox({ onDropdownClose: () => combobox.resetSelectedOption() });
@@ -75,12 +80,21 @@ export default function GlobalSearch({ base }) {
 
   const go = (kind, id, extra) => {
     setValue(''); setPhoneOpen(false); combobox.closeDropdown(); input.current?.blur();
-    if (kind === 'c') navigate(`${base}/customers/${id}`);
-    else if (kind === 'i') navigate(`${base}/customers/${extra}`, { state: { openInvoice: Number(id) } });
+    // Admin: a customer opens their ledger in Customers, an invoice its details
+    // right here. MR: the customer's page (an invoice opens on it).
+    if (kind === 'c') { if (admin) navigate(`${base}/customers`, { state: { openCustomer: { id: Number(id), name: extra } } }); else navigate(`${base}/customers/${id}`); }
+    else if (kind === 'i') { if (admin) setInvoiceId(Number(id)); else navigate(`${base}/customers/${extra}`, { state: { openInvoice: Number(id) } }); }
     else if (kind === 'all-i') navigate(`${base}/invoices`, { state: { search: query } });
     else if (kind === 'all-c') navigate(`${base}/customers`, { state: { search: query } });
   };
   const empty = data && !data.customers.length && !data.invoices.length;
+
+  const details = admin && (
+    <>
+      <InvoiceHistory invoiceId={invoiceId} onClose={() => setInvoiceId(null)} onChanged={() => setChanged((v) => v + 1)} onRecord={setRecording} refreshKey={changed} />
+      <RecordCollectionModal invoice={recording} onClose={() => setRecording(null)} onSaved={() => setChanged((v) => v + 1)} />
+    </>
+  );
 
   if (isMobile) {
     return (
@@ -108,19 +122,21 @@ export default function GlobalSearch({ base }) {
             {query.length < 2 && <Text size="sm" c="dimmed" ta="center" py="xl">Type 2 or more letters.</Text>}
             {empty && <Text size="sm" c="dimmed" ta="center" py="xl">Nothing matches “{query}”.</Text>}
             {data?.customers.length > 0 && <Text className={classes.phoneGroup}>{groupLabel(IconUsers, 'Customers', data.customer_count, data.customers.length)}</Text>}
-            {data?.customers.map((c) => <UnstyledButton key={`c${c.id}`} className={classes.phoneRow} onClick={() => go('c', c.id)}><CustomerLine c={c} /></UnstyledButton>)}
+            {data?.customers.map((c) => <UnstyledButton key={`c${c.id}`} className={classes.phoneRow} onClick={() => go('c', c.id, c.name)}><CustomerLine c={c} /></UnstyledButton>)}
             {admin && data?.customer_count > data?.customers.length && <UnstyledButton className={classes.seeAll} onClick={() => go('all-c')}>See all {data.customer_count} in Customers →</UnstyledButton>}
             {data?.invoices.length > 0 && <Text className={classes.phoneGroup}>{groupLabel(IconFileInvoice, 'Invoices', data.invoice_count, data.invoices.length)}</Text>}
             {data?.invoices.map((i) => <UnstyledButton key={`i${i.id}`} className={classes.phoneRow} onClick={() => go('i', i.id, i.customer_id)}><InvoiceLine i={i} /></UnstyledButton>)}
             {admin && data?.invoice_count > data?.invoices.length && <UnstyledButton className={classes.seeAll} onClick={() => go('all-i')}>See all {data.invoice_count} in Invoices →</UnstyledButton>}
           </ScrollArea>
         </Modal>
+        {details}
       </>
     );
   }
 
   return (
-    <Combobox store={combobox} onOptionSubmit={(key) => { const [k, id, extra] = key.split(':'); go(k, id, extra); }} withinPortal position="bottom-start" offset={6} shadow="md" width={460} zIndex={300}>
+    <>
+    <Combobox store={combobox} onOptionSubmit={(key) => { const [k, id, ...rest] = key.split(':'); go(k, id, rest.join(':')); }} withinPortal position="bottom-start" offset={6} shadow="md" width={460} zIndex={300}>
       <Combobox.Target>
         <TextInput
           ref={input}
@@ -144,7 +160,7 @@ export default function GlobalSearch({ base }) {
           {empty && <Combobox.Empty>Nothing matches “{query}”.</Combobox.Empty>}
           {data?.customers.length > 0 && (
             <Combobox.Group label={groupLabel(IconUsers, 'Customers', data.customer_count, data.customers.length)}>
-              {data.customers.map((c) => <Combobox.Option key={`c${c.id}`} value={`c:${c.id}`} className={classes.option}><CustomerLine c={c} /></Combobox.Option>)}
+              {data.customers.map((c) => <Combobox.Option key={`c${c.id}`} value={`c:${c.id}:${c.name}`} className={classes.option}><CustomerLine c={c} /></Combobox.Option>)}
               {admin && data.customer_count > data.customers.length && <Combobox.Option value="all-c" className={classes.seeAll}>See all {data.customer_count} in Customers →</Combobox.Option>}
             </Combobox.Group>
           )}
@@ -157,5 +173,7 @@ export default function GlobalSearch({ base }) {
         </Combobox.Options>
       </Combobox.Dropdown>
     </Combobox>
+    {details}
+    </>
   );
 }

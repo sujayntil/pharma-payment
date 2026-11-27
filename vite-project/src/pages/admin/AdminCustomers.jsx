@@ -42,6 +42,8 @@ import StickyFilters from '../../components/common/StickyFilters';
 import OverdueFilter from '../../components/filters/OverdueFilter';
 import { dueLabel, dueParams } from '../../components/filters/dueFilter';
 import TitleBar, { MiniStat } from '../../components/common/TitleBar';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '', due: '', overdueDays: '' };
 
 /** openCustomer: optional { id, name } to open straight into that ledger (from the Dashboard). */
@@ -60,8 +62,9 @@ export default function AdminCustomers({ openCustomer = null }) {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0); const [mrs, setMrs] = useState([]);
-  const [search, setSearch] = useState(() => window.history.state?.usr?.search || ''); const [debouncedSearch] = useDebouncedValue(search, 300);
-  const [filters, setFilters] = useState({ mrId: '', type: '', sort: '' }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
+  const [linkSearch] = useState(() => window.history.state?.usr?.search || '');
+  const [search, setSearch] = useRememberedState('customers:search', linkSearch, { skip: Boolean(linkSearch) }); const [debouncedSearch] = useDebouncedValue(search, 300);
+  const [filters, setFilters] = useRememberedState('customers:filters', { mrId: '', type: '', sort: '' }, { skip: Boolean(linkSearch) }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState(openCustomer); const [collectingCustomer, setCollectingCustomer] = useState(null); const [ledger, setLedger] = useState(null); const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1); const [ledgerRefresh, setLedgerRefresh] = useState(0);
   const isMobile = useIsMobile();
   // Back closes the open ledger instead of leaving the screen.
@@ -114,7 +117,11 @@ export default function AdminCustomers({ openCustomer = null }) {
   const mrFilterOptions = useMemo(() => [...mrOptions, { value: '0', label: 'Unassigned' }], [mrOptions]);
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
   const onSearch = (value) => { setSearch(value); setPage(1); };
-  const reset = () => { setFilters({ mrId: '', type: '', sort: '' }); setSearch(''); setPage(1); };
+  const reset = () => {
+    const before = { filters, search };
+    setFilters({ mrId: '', type: '', sort: '' }); setSearch(''); setPage(1);
+    offerUndo('Filters cleared', () => { setFilters(before.filters); setSearch(before.search); setPage(1); });
+  };
   const chips = [
     // Default order is most pending first; a chip shows only for Name A–Z.
     filters.sort && { key: 'sort', label: SORTS.find((option) => option.value === filters.sort)?.label, onRemove: () => update({ sort: '' }) },

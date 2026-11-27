@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Center, Group, Loader, SegmentedControl, Stack, Text, Title } from '@mantine/core';
+import { Alert, Center, Group, Loader, SegmentedControl, Stack, Text } from '@mantine/core';
 import { IconCheck, IconCloudOff } from '@tabler/icons-react';
 import { marginApi } from '../../api/marginApi';
 import ProductsTab from '../../components/margin/ProductsTab';
 import CustomersTab from '../../components/margin/CustomersTab';
 import { errorText } from '../../utils/formatters';
+import { offerUndo } from '../../utils/undo';
+import { productName, schemeName } from '../../utils/marginCalc';
+import TitleBar from '../../components/common/TitleBar';
 
 const SAVE_DELAY = 600;
 
@@ -72,6 +75,13 @@ export default function AdminMargin() {
     setSaveState('saving');
   }, [send]);
 
+  // Before a delete: send that product's / scheme's waiting edits now.
+  const flushFor = (pid, sids) => {
+    [...(pid ? [`product:${pid}`] : []), ...sids.map((sid) => `scheme:${sid}`)].forEach((key) => {
+      if (pending.current.has(key)) { clearTimeout(timers.current.get(key)); send(key); }
+    });
+  };
+
   // Leaving the page: send whatever is still waiting.
   useEffect(() => () => {
     const timerMap = timers.current;
@@ -94,13 +104,29 @@ export default function AdminMargin() {
       setData((d) => ({ ...d, products: d.products.map((p) => (p.id === id ? { ...p, ...changes } : p)) }));
       queue('product', id, changes);
     },
-    deleteProduct: async (id) => {
-      try {
-        await marginApi.deleteProduct(id);
-        setData((d) => ({ products: d.products.filter((p) => p.id !== id), links: d.links.filter((l) => l.product_id !== id) }));
-        setProductId(data.products.find((p) => p.id !== id)?.id ?? null);
-        setSaveState('saved');
-      } catch (err) { fail(err, 'Could not delete the product.'); }
+    // Deletes act at once with "Undo"; the server delete goes out when the
+    // Undo message closes (about 6 seconds), so Undo needs no server call.
+    deleteProduct: (id) => {
+      const index = data.products.findIndex((p) => p.id === id);
+      const product = data.products[index];
+      if (!product) return;
+      const links = data.links.filter((l) => l.product_id === id);
+      flushFor(id, product.schemes.map((sc) => sc.id));
+      const restore = () => {
+        setData((d) => {
+          const products = d.products.filter((p) => p.id !== id);
+          products.splice(Math.min(index, products.length), 0, product);
+          return { products, links: [...d.links.filter((l) => l.product_id !== id), ...links] };
+        });
+        setProductId(id);
+      };
+      setData((d) => ({ products: d.products.filter((p) => p.id !== id), links: d.links.filter((l) => l.product_id !== id) }));
+      setProductId(data.products.find((p) => p.id !== id)?.id ?? null);
+      offerUndo(`${productName(product)} deleted`, restore, {
+        onExpire: () => marginApi.deleteProduct(id)
+          .then(() => setSaveState('saved'))
+          .catch((err) => { restore(); fail(err, 'Could not delete the product.'); }),
+      });
     },
     addScheme: async (pid, values = {}) => {
       try {
@@ -115,20 +141,37 @@ export default function AdminMargin() {
       setData((d) => ({ ...d, products: d.products.map((p) => (p.id !== pid ? p : { ...p, schemes: p.schemes.map((s) => (s.id === sid ? { ...s, ...changes } : s)) })) }));
       queue('scheme', sid, changes);
     },
-    deleteScheme: async (pid, sid) => {
-      try {
-        await marginApi.deleteScheme(sid);
-        setData((d) => ({
-          products: d.products.map((p) => (p.id === pid ? { ...p, schemes: p.schemes.filter((s) => s.id !== sid) } : p)),
-          links: d.links.filter((l) => l.scheme_id !== sid),
-        }));
-        setSaveState('saved');
-      } catch (err) { fail(err, 'Could not delete the scheme.'); }
+    deleteScheme: (pid, sid) => {
+      const product = data.products.find((p) => p.id === pid);
+      const index = product ? product.schemes.findIndex((sc) => sc.id === sid) : -1;
+      if (index < 0 || product.schemes.length < 2) return;
+      const scheme = product.schemes[index];
+      const links = data.links.filter((l) => l.scheme_id === sid);
+      flushFor(null, [sid]);
+      const restore = () => setData((d) => ({
+        products: d.products.map((p) => {
+          if (p.id !== pid) return p;
+          const schemes = p.schemes.filter((sc) => sc.id !== sid);
+          schemes.splice(Math.min(index, schemes.length), 0, scheme);
+          return { ...p, schemes };
+        }),
+        links: [...d.links.filter((l) => l.scheme_id !== sid), ...links],
+      }));
+      setData((d) => ({
+        products: d.products.map((p) => (p.id === pid ? { ...p, schemes: p.schemes.filter((sc) => sc.id !== sid) } : p)),
+        links: d.links.filter((l) => l.scheme_id !== sid),
+      }));
+      offerUndo(`${schemeName(scheme)} deleted`, restore, {
+        onExpire: () => marginApi.deleteScheme(sid)
+          .then(() => setSaveState('saved'))
+          .catch((err) => { restore(); fail(err, 'Could not delete the scheme.'); }),
+      });
     },
   };
 
-  const setLink = async (customerId, pid, sid) => {
+  const setLink = async (customerId, pid, sid, { undoable = true } = {}) => {
     const before = data.links;
+    const previous = before.find((l) => l.customer_id === customerId && l.product_id === pid)?.scheme_id ?? null;
     setData((d) => ({
       ...d,
       links: [...d.links.filter((l) => !(l.customer_id === customerId && l.product_id === pid)),
@@ -138,6 +181,7 @@ export default function AdminMargin() {
     try {
       await marginApi.setLink(customerId, pid, sid);
       setSaveState('saved');
+      if (!sid && previous && undoable) offerUndo('Scheme removed', () => setLink(customerId, pid, previous, { undoable: false }));
     } catch (err) {
       setData((d) => ({ ...d, links: before }));
       fail(err, 'Could not save the scheme for this customer.');
@@ -151,16 +195,16 @@ export default function AdminMargin() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" wrap="wrap" gap="sm">
-        <Group gap="sm" align="baseline">
-          <Title order={1}>Margin calculator</Title>
+      <TitleBar title="Margin calculator" left={(
+        <>
           {saveState === 'saving' && <Text size="xs" c="dimmed">Saving…</Text>}
-          {saveState === 'saved' && <Group gap={4}><IconCheck size={14} color="var(--mantine-color-green-7)" /><Text size="xs" c="dimmed">Saved</Text></Group>}
-          {saveState === 'error' && <Group gap={4}><IconCloudOff size={14} color="var(--mantine-color-red-7)" /><Text size="xs" c="red">Not saved</Text></Group>}
-        </Group>
+          {saveState === 'saved' && <Group gap={4} wrap="nowrap"><IconCheck size={14} color="var(--mantine-color-green-7)" /><Text size="xs" c="dimmed">Saved</Text></Group>}
+          {saveState === 'error' && <Group gap={4} wrap="nowrap"><IconCloudOff size={14} color="var(--mantine-color-red-7)" /><Text size="xs" c="red">Not saved</Text></Group>}
+        </>
+      )}>
         <SegmentedControl value={tab} onChange={setTab}
           data={[{ value: 'products', label: 'Products & schemes' }, { value: 'customers', label: 'Customers' }]} />
-      </Group>
+      </TitleBar>
       {error && <Alert color="red" withCloseButton onClose={() => setError('')}>{error}</Alert>}
       {loading ? <Center py="xl"><Loader size="sm" /></Center>
         : tab === 'products'

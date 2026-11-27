@@ -44,6 +44,8 @@ function istDayLabel(value) {
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import TableScroll from '../../components/common/TableScroll';
 import ExportMenu from '../../components/common/ExportMenu';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
 
 /** ₹ smaller and lighter than the digits; counts up when the figure arrives. */
 function Amount({ value, size = 26, color, animate = true }) {
@@ -163,7 +165,7 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
   const statsPending = dashboard?.total_invoices === undefined && !statsError;
   const isMobile = useIsMobile();
   const alertPage = 1; // first 50 load; the card shows 5 at a time and links to Invoices for the rest
-  const [appliedCustomerType, setAppliedCustomerType] = useState('');
+  const [appliedCustomerType, setAppliedCustomerType] = useRememberedState('dashboard:type', '');
   const [recent, setRecent] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [error, setError] = useState('');
@@ -205,7 +207,11 @@ export default function AdminDashboard({ onOpenCustomer, onOpenDeleted }) {
     !onDefault && { key: 'range', label: `Dates: ${rangeLabel || 'All time'}`, onRemove: backToThisMonth },
     appliedCustomerType && { key: 'type', label: `Customer type: ${listLabel(appliedCustomerType)}`, onRemove: () => setAppliedCustomerType('') },
   ];
-  const reset = () => { backToThisMonth(); setAppliedCustomerType(''); };
+  const reset = () => {
+    const before = { dashFilters, type: appliedCustomerType };
+    backToThisMonth(); setAppliedCustomerType('');
+    offerUndo('Filters cleared', () => { dispatch(setDashFilters(before.dashFilters)); setAppliedCustomerType(before.type); });
+  };
   // Export (Excel or PDF): customers by type for the dates and type picked above;
   // one type picked = one sheet listing every customer of that type.
   const [exporting, setExporting] = useState(false);

@@ -1,6 +1,6 @@
 import SectionNav from '../../components/common/SectionNav';
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Group, Menu, Paper, SegmentedControl, Select, Skeleton, Stack, Text, Title, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Menu, Paper, SegmentedControl, Select, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core';
 import { IconBook2, IconChartPie, IconChevronRight, IconDots, IconMapPin, IconX } from '@tabler/icons-react';
 import ContactActions from '../../components/customers/ContactActions';
 import { insightsApi } from '../../api/insightsApi';
@@ -16,6 +16,9 @@ import css from './AdminInsights.module.css';
 import { FilterChecks } from '../../components/filters/FilterBar';
 import { TYPE_GROUPS, listLabel } from '../../utils/customerTypes';
 import { formatDateLocal, shortDate } from '../../utils/formatters';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
+import TitleBar from '../../components/common/TitleBar';
 
 const TYPES = TYPE_GROUPS;
 const NOT_SET = '__none__';
@@ -43,11 +46,12 @@ const INSIGHT_SECTIONS = [
 export default function AdminInsights({ onOpenCustomer }) {
   const isMobile = useIsMobile();
   const appRefresh = useAppRefresh();
-  const [picked, setPicked] = useState(null); // null = the current month so far (moves on with the date)
-  const [type, setType] = useState(null);
-  const [mrId, setMrId] = useState(null);
-  const [area, setArea] = useState(null);
-  const [trend, setTrend] = useState('monthly');
+  // Remembered while you move around the app (until Reset or sign-out).
+  const [picked, setPicked] = useRememberedState('insights:period', null); // null = the current month so far (moves on with the date)
+  const [type, setType] = useRememberedState('insights:type', null);
+  const [mrId, setMrId] = useRememberedState('insights:mr', null);
+  const [area, setArea] = useRememberedState('insights:area', null);
+  const [trend, setTrend] = useRememberedState('insights:trend', 'monthly');
   const [result, setResult] = useState({ key: null, data: null, error: '' });
   const [panel, setPanel] = useState([]); // drill stack
   const [donutView, setDonutView] = useState('sales'); // the type donut: sales share or owed share
@@ -95,7 +99,11 @@ export default function AdminInsights({ onOpenCustomer }) {
     mrId !== null && { key: 'mr', label: `MR: ${mrName(mrId)}`, clear: () => setMrId(null) },
     area && { key: 'area', label: `Area: ${area === NOT_SET ? 'Not set' : area}`, clear: () => setArea(null) },
   ].filter(Boolean);
-  const clearAll = () => { setType(null); setMrId(null); setArea(null); };
+  const clearAll = () => {
+    const before = { type, mrId, area };
+    setType(null); setMrId(null); setArea(null);
+    offerUndo('Filters cleared', () => { setType(before.type); setMrId(before.mrId); setArea(before.area); });
+  };
   const pickTrend = (point) => pickRange(point);
   // What every "vs …" compares against, named (e.g. "1–18 Oct", "Sep 2026").
   const prevShort = result.data ? shortRange({ from: result.data.range.previous_from, to: result.data.range.previous_to }) : 'before';
@@ -180,10 +188,7 @@ export default function AdminInsights({ onOpenCustomer }) {
   return (
     <Stack gap="md">
       <SectionNav watch={data} sections={INSIGHT_SECTIONS} />
-      <Group justify="space-between" align="center" gap="sm">
-        <Title order={1}>Insights</Title>
-        {isMobile ? <div style={{ width: '100%' }}>{periodPicker}</div> : periodPicker}
-      </Group>
+      <TitleBar title="Insights">{periodPicker}</TitleBar>
 
       <Group gap={8} wrap="wrap">
         <div style={{ width: isMobile ? '48%' : 190 }}><FilterChecks placeholder="All types" data={TYPES} value={type || ''} onChange={(v) => setType(v || null)} /></div>

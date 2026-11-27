@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Checkbox, Group, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Button, Checkbox, Group, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { calc, canPtr, canPts, filled, marginTone, missing, pct, pctShort, productName, rule, rupees, schemeName, units } from '../../utils/marginCalc';
 import classes from './Margin.module.css';
@@ -143,7 +143,6 @@ function Compare({ product, selectedId, onPick, onCopy, onDelete }) {
  * every scheme of the product compared below.
  */
 export default function ProductsTab({ products, productId, onProductId, schemeId, onSchemeId, actions }) {
-  const [confirm, setConfirm] = useState(null); // { kind: 'product' | 'scheme', item }
   const [freeOpen, setFreeOpen] = useState({}); // scheme id -> free-goods boxes shown
   const product = products.find((p) => p.id === productId) || products[0];
 
@@ -169,30 +168,13 @@ export default function ProductsTab({ products, productId, onProductId, schemeId
     .filter(([v, , ok]) => ok && Number.isFinite(v) && v >= 0)
     .map(([v, label]) => `${pctShort(v)} off ${label}`);
 
-  let confirmTitle = '';
-  let confirmText = '';
-  if (confirm && confirm.kind === 'product') {
-    confirmTitle = 'Delete product';
-    confirmText = `Delete ${productName(confirm.item)} and its schemes? Customers on them become “Not supplied”.`;
-  } else if (confirm) {
-    confirmTitle = 'Delete scheme';
-    confirmText = `Delete ${schemeName(confirm.item)}? Customers on it become “Not supplied”.`;
-  }
-
-  const doDelete = async () => {
-    const { kind, item } = confirm;
-    setConfirm(null);
-    if (kind === 'product') await actions.deleteProduct(item.id);
-    else await actions.deleteScheme(product.id, item.id);
-  };
-
   return (
     <Stack gap="md">
       <Group gap="xs" wrap="wrap">
         <Select aria-label="Product" data={products.map((p) => ({ value: String(p.id), label: productName(p) }))}
           value={String(product.id)} onChange={(v) => v && onProductId(Number(v))} allowDeselect={false} searchable w={260} maw="100%" />
         <Button variant="default" leftSection={<IconPlus size={16} />} onClick={actions.addProduct}>Product</Button>
-        <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />} onClick={() => setConfirm({ kind: 'product', item: product })}>Delete</Button>
+        <Button variant="subtle" color="red" leftSection={<IconTrash size={16} />} onClick={() => actions.deleteProduct(product.id)}>Delete</Button>
         <Text size="sm" c="dimmed" ml="auto">{product.schemes.length} {product.schemes.length === 1 ? 'scheme' : 'schemes'}{filled(product.batch) ? ` · batch of ${units(product.batch)} units` : ''}</Text>
       </Group>
 
@@ -265,17 +247,8 @@ export default function ProductsTab({ products, productId, onProductId, schemeId
 
       <Compare product={product} selectedId={scheme.id} onPick={onSchemeId}
         onCopy={(s) => actions.addScheme(product.id, { name: `${schemeName(s)} copy`.slice(0, 80), sell_at: s.sell_at, discount: s.discount, buy: s.buy, free: s.free })}
-        onDelete={(s) => setConfirm({ kind: 'scheme', item: s })} />
+        onDelete={(s) => actions.deleteScheme(product.id, s.id)} />
 
-      <Modal opened={!!confirm} onClose={() => setConfirm(null)} title={confirmTitle} centered>
-        <Stack>
-          <Text>{confirmText}</Text>
-          <Group justify="end">
-            <Button variant="default" onClick={() => setConfirm(null)}>Cancel</Button>
-            <Button color="red" onClick={doDelete}>Delete</Button>
-          </Group>
-        </Stack>
-      </Modal>
     </Stack>
   );
 }

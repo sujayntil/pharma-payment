@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text, Title } from '@mantine/core';
+import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text } from '@mantine/core';
 import { adminApi } from '../../api/adminApi';
 import FilterBar from '../../components/filters/FilterBar';
 import DateRangeFilter from '../../components/filters/DateRangeFilter';
@@ -11,6 +11,7 @@ import { errorText, money } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
+import TitleBar, { MiniStat } from '../../components/common/TitleBar';
 
 // No sales yet means there is no rate to judge, so show a dash, not a red 0%.
 const rateOf = (row) => (Number(row.sales) > 0 ? Math.round(Number(row.collected) / Number(row.sales) * 100) : null);
@@ -38,7 +39,7 @@ export default function AdminPerformance() {
   }, [range, appRefresh]);
 
   const rangeLabel = describeRange(range);
-  return <Stack gap="md"><Group justify="space-between" align="end"><Title order={1}>MR performance</Title><Badge variant="light" size="lg">{rows.length} MRs</Badge></Group>
+  return <Stack gap="md"><TitleBar title="MR performance"><MiniStat label="MRs" value={rows.length} /></TitleBar>
     <FilterBar chips={[rangeLabel && { key: 'range', label: `Invoice date: ${rangeLabel}`, onRemove: () => setRange(EMPTY_RANGE) }]} summary={rangeLabel ? null : 'Showing all time'}>
       <DateRangeFilter label="Invoice date" value={range} onChange={setRange} allLabel="All time" months firstDate={firstDate} quick={[]} />
     </FilterBar>

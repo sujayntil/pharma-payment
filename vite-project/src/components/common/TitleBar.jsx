@@ -12,18 +12,19 @@ export function MiniStat({ label, value, tone }) {
 }
 
 /**
- * Laptop list pages: the title with its summary cards and actions on one
- * line, so the pinned top stays thin. left: things right after the title
- * (e.g. tabs); children: cards and buttons on the right.
+ * Every Admin page's title row, the same everywhere: the title (and what
+ * belongs right after it, e.g. tabs or "Saved") on the left; summary cards,
+ * view switches and actions on the right, primary action last. On a phone
+ * the right side drops under the title.
  */
 export default function TitleBar({ title, left, children }) {
   return (
-    <Group justify="space-between" wrap="nowrap" gap="md" className={classes.bar}>
-      <Group gap="md" wrap="nowrap" style={{ minWidth: 0 }}>
+    <Group justify="space-between" wrap="wrap" gap="md" rowGap="xs" className={classes.bar}>
+      <Group gap="md" wrap="nowrap" align="center" style={{ minWidth: 0 }}>
         <Title order={1} className={classes.title}>{title}</Title>
         {left}
       </Group>
-      <Group gap="xs" wrap="nowrap">{children}</Group>
+      {children && <Group gap="xs" wrap="wrap" className={classes.right}>{children}</Group>}
     </Group>
   );
 }

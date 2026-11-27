@@ -42,6 +42,8 @@ import TableScroll from '../../components/common/TableScroll';
 import StickyFilters from '../../components/common/StickyFilters';
 import TitleBar, { MiniStat } from '../../components/common/TitleBar';
 import ExportMenu from '../../components/common/ExportMenu';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
 
 /*
  * Admin Invoices. Same pattern as the MR Invoices screen:
@@ -75,9 +77,10 @@ export default function AdminInvoices() {
   const [invoices, setInvoices] = useState([]); const [total, setTotal] = useState(0); const [pendingTotal, setPendingTotal] = useState(0); const [mrs, setMrs] = useState([]);
   // From the Dashboard search's "See all in Invoices": that text, across all invoices.
   const [fromSearch] = useState(() => window.history.state?.usr?.search || '');
-  const [tab, setTab] = useState(fromSearch ? 'all' : 'pending'); const [counts, setCounts] = useState({});
-  const [search, setSearch] = useState(fromSearch); const [debouncedSearch] = useDebouncedValue(search, 300);
-  const [filters, setFilters] = useState(BLANK); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
+  // Tab, search and filters are remembered (a search link brings its own).
+  const [tab, setTab] = useRememberedState('invoices:tab', fromSearch ? 'all' : 'pending', { skip: Boolean(fromSearch) }); const [counts, setCounts] = useState({});
+  const [search, setSearch] = useRememberedState('invoices:search', fromSearch, { skip: Boolean(fromSearch) }); const [debouncedSearch] = useDebouncedValue(search, 300);
+  const [filters, setFilters] = useRememberedState('invoices:filters', BLANK, { skip: Boolean(fromSearch) }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [editing, setEditing] = useState(null); const [form, setForm] = useState(null); const [deleting, setDeleting] = useState(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const isMobile = useIsMobile();
   const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [historyId, setHistoryId] = useState(null); const [historyKey, setHistoryKey] = useState(0);
@@ -175,7 +178,11 @@ export default function AdminInvoices() {
     setPage(1);
   };
   const onSearch = (value) => { setSearch(value); setPage(1); };
-  const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
+  const reset = () => {
+    const before = { filters, search };
+    setFilters(BLANK); setSearch(''); setPage(1);
+    offerUndo('Filters cleared', () => { setFilters(before.filters); setSearch(before.search); setPage(1); });
+  };
   const reload = useCallback(() => { setRefresh((value) => value + 1); setHistoryKey((value) => value + 1); }, []);
   // "Add invoice": the same form as on Import & mapping.
   const [manualOpen, setManualOpen] = useState(false);

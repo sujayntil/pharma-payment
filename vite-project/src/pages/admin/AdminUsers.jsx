@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Modal, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Menu, Modal, Paper, Select, Stack, Table, Text, TextInput } from '@mantine/core';
 import { IconBellOff, IconDots, IconPlus } from '@tabler/icons-react';
 import { adminApi } from '../../api/adminApi';
 import { useAuth } from '../../hooks/useAppStore';
@@ -7,6 +7,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import RowCard, { CardList } from '../../components/common/RowCard';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import TableScroll from '../../components/common/TableScroll';
+import TitleBar from '../../components/common/TitleBar';
 
 const emptyUser = { name: '', employee_code: '', role: 'MR', phone: '', password: '', title: 'KING' };
 const TITLES = [{ value: 'KING', label: '👑 King' }, { value: 'QUEEN', label: '👸 Queen' }];
@@ -34,13 +35,13 @@ export default function AdminUsers() {
     </Menu>
   );
   const remove = async () => { setBusy(true); setError(''); try { await adminApi.deleteUser(deleting.id); setNotice('User deleted.'); setDeleting(null); await load(); } catch (err) { setError(err.detail || err.message); } finally { setBusy(false); } };
-  return <Stack gap="md"><Group justify="space-between"><Title order={1}>Users</Title><Group gap="xs"><Button leftSection={<IconPlus size={16} />} onClick={() => { setForm(emptyUser); setCreateOpen(true); }}>Add user</Button>
+  return <Stack gap="md"><TitleBar title="Users"><Group gap="xs" wrap="nowrap"><Button leftSection={<IconPlus size={16} />} onClick={() => { setForm(emptyUser); setCreateOpen(true); }}>Add user</Button>
     {mrCount > 0 && (
       <Menu position="bottom-end" shadow="md" withinPortal>
         <Menu.Target><ActionIcon variant="default" size="lg" aria-label="More user actions"><IconDots size={16} /></ActionIcon></Menu.Target>
         <Menu.Dropdown><Menu.Item leftSection={<IconBellOff size={15} />} onClick={() => setClearing('all')}>Clear all MRs' bells</Menu.Item></Menu.Dropdown>
       </Menu>
-    )}</Group></Group>{error && <Alert color="red" onClose={() => setError('')} withCloseButton>{error}</Alert>}{notice && <Alert color="green" onClose={() => setNotice('')} withCloseButton>{notice}</Alert>}<Paper withBorder p="md">{loading ? <Group justify="center" p="xl"><Loader /></Group> : isMobile ? <CardList>{users.map((target) => (
+    )}</Group></TitleBar>{error && <Alert color="red" onClose={() => setError('')} withCloseButton>{error}</Alert>}{notice && <Alert color="green" onClose={() => setNotice('')} withCloseButton>{notice}</Alert>}<Paper withBorder p="md">{loading ? <Group justify="center" p="xl"><Loader /></Group> : isMobile ? <CardList>{users.map((target) => (
       <RowCard
         key={target.id}
         title={target.name}

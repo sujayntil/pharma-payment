@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Anchor, Badge, Box, Collapse, Group, Loader, Paper, SegmentedControl, Stack, Text, ThemeIcon, Title, UnstyledButton } from '@mantine/core';
+import { Alert, Anchor, Badge, Box, Collapse, Group, Loader, Paper, SegmentedControl, Stack, Text, ThemeIcon, UnstyledButton } from '@mantine/core';
 import DeletedItems from '../../components/audit/DeletedItems';
 import { useDebouncedValue } from '@mantine/hooks';
 import {
@@ -19,6 +19,9 @@ import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { dayOf, displayPhone, errorText, money, timeOf } from '../../utils/formatters';
 import StickyFilters from '../../components/common/StickyFilters';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
+import TitleBar from '../../components/common/TitleBar';
 
 const TYPES = [
   { value: 'collections', label: 'Collections' },
@@ -38,10 +41,9 @@ export default function AdminAuditLog({ initialView = 'all', deletedPreset = nul
   const [view, setView] = useState(initialView === 'deleted' ? 'deleted' : 'all');
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="center" wrap="wrap" gap="sm">
-        <Title order={1}>Audit log</Title>
+      <TitleBar title="Audit log">
         <SegmentedControl value={view} onChange={setView} data={[{ value: 'all', label: 'All activity' }, { value: 'deleted', label: 'Deleted' }]} />
-      </Group>
+      </TitleBar>
       {view === 'deleted' ? <DeletedItems preset={deletedPreset} /> : <ActivityLog />}
     </Stack>
   );
@@ -61,8 +63,8 @@ function ActivityLog() {
   const isMobile = useIsMobile();
   const appRefresh = useAppRefresh();
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(BLANK);
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useRememberedState('audit:filters', BLANK);
+  const [search, setSearch] = useRememberedState('audit:search', '');
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], total: 0 });
@@ -101,7 +103,11 @@ function ActivityLog() {
 
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
   const onSearch = (value) => { setSearch(value); setPage(1); };
-  const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
+  const reset = () => {
+    const before = { filters, search };
+    setFilters(BLANK); setSearch(''); setPage(1);
+    offerUndo('Filters cleared', () => { setFilters(before.filters); setSearch(before.search); setPage(1); });
+  };
   const range = describeRange(filters.range);
   const chips = [
     filters.userId && { key: 'user', label: `Person: ${people.find((p) => p.value === filters.userId)?.label || '…'}`, onRemove: () => update({ userId: '' }) },

@@ -24,6 +24,9 @@ export function saveToken(token, remember) {
 
 export function clearToken() {
   safe(() => { localStorage.removeItem(KEY); localStorage.removeItem(LEGACY); sessionStorage.removeItem(KEY); });
+  // Remembered page filters belong to the person signing out.
+  safe(() => [localStorage, sessionStorage].forEach((s) => Object.keys(s)
+    .filter((k) => k.startsWith('remembered:')).forEach((k) => s.removeItem(k))));
 }
 
 /** True when the login is kept on this device (localStorage), i.e. it may be renewed. */

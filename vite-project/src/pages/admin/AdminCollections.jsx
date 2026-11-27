@@ -30,6 +30,8 @@ import TableScroll from '../../components/common/TableScroll';
 import StickyFilters from '../../components/common/StickyFilters';
 import TitleBar, { MiniStat } from '../../components/common/TitleBar';
 import ExportMenu from '../../components/common/ExportMenu';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
 
 /**
  * Second line of a phone collection card, kept to one short line:
@@ -56,8 +58,9 @@ export default function AdminCollections({ preset = null }) {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [rows, setRows] = useState([]); const [total, setTotal] = useState(0); const [count, setCount] = useState(0); const [mrs, setMrs] = useState([]);
-  const [search, setSearch] = useState(preset?.search || ''); const [debouncedSearch] = useDebouncedValue(search, 300);
-  const [filters, setFilters] = useState(() => ({ ...BLANK, ...(preset || {}), range: preset?.range || EMPTY_RANGE })); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
+  // Remembered; a link from elsewhere (preset) brings its own filters.
+  const [search, setSearch] = useRememberedState('collections:search', preset?.search || '', { skip: Boolean(preset) }); const [debouncedSearch] = useDebouncedValue(search, 300);
+  const [filters, setFilters] = useRememberedState('collections:filters', () => ({ ...BLANK, ...(preset || {}), range: preset?.range || EMPTY_RANGE }), { skip: Boolean(preset) }); const [page, setPage] = useState(1); const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const isMobile = useIsMobile();
   const [changingMode, setChangingMode] = useState(null); const [recording, setRecording] = useState(null); /* Disabled: Mark unpaid (use Reverse payment per collection). Re-enable if needed: const [reversing, setReversing] = useState(null); */ const [reversingPayment, setReversingPayment] = useState(null); const [historyId, setHistoryId] = useState(null);
@@ -116,7 +119,11 @@ export default function AdminCollections({ preset = null }) {
 
   const update = (patch) => { setFilters((current) => ({ ...current, ...patch })); setPage(1); };
   const onSearch = (value) => { setSearch(value); setPage(1); };
-  const reset = () => { setFilters(BLANK); setSearch(''); setPage(1); };
+  const reset = () => {
+    const before = { filters, search };
+    setFilters(BLANK); setSearch(''); setPage(1);
+    offerUndo('Filters cleared', () => { setFilters(before.filters); setSearch(before.search); setPage(1); });
+  };
   const reload = () => setRefresh((value) => value + 1);
   const panelSpace = useSidePanelSpace(Boolean(historyId));
   const mrOptions = useMemo(() => mrs.map((mr) => ({ value: String(mr.id), label: mr.name })), [mrs]);

@@ -30,6 +30,8 @@ import { errorText, money, shortDate } from '../../utils/formatters';
 import { useAppRefresh } from '../../hooks/useAppRefresh';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
 
 /*
  * MR "Invoices": one screen for what used to be "My Invoices" and "My
@@ -66,18 +68,19 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const isMobile = useIsMobile();
-  const [tab, setTab] = useState(initialTab);
-  const [only, setOnly] = useState('');
-  const [due, setDue] = useState({ due: '', days: '' }); // Overdue filter (not on the Paid tab)
-  const [customerType, setCustomerType] = useState('');
-  const [range, setRange] = useState(EMPTY_RANGE);
+  // Remembered while moving around the app (until Reset or sign-out).
+  const [tab, setTab] = useRememberedState('mr-invoices:tab', initialTab);
+  const [only, setOnly] = useRememberedState('mr-invoices:only', '');
+  const [due, setDue] = useRememberedState('mr-invoices:due', { due: '', days: '' }); // Overdue filter (not on the Paid tab)
+  const [customerType, setCustomerType] = useRememberedState('mr-invoices:type', '');
+  const [range, setRange] = useRememberedState('mr-invoices:range', EMPTY_RANGE);
   // Pending is worked oldest first; Paid and All read newest first. A sort the
   // MR picks in Filters overrides this until Reset.
-  const [sortChoice, setSortChoice] = useState(null);
+  const [sortChoice, setSortChoice] = useRememberedState('mr-invoices:sort', null);
   const defaultSort = tab === 'pending' ? 'oldest' : 'newest';
   const sort = sortChoice || defaultSort;
   const setSort = (next) => setSortChoice(next && next !== defaultSort ? next : null);
-  const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300);
+  const [search, setSearch] = useRememberedState('mr-invoices:search', ''); const [debouncedSearch] = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [data, setData] = useState({ items: [], total_count: 0, filtered_outstanding: 0 });
@@ -149,7 +152,13 @@ export default function MrInvoiceList({ initialTab = 'pending' }) {
     setPage(1);
   };
   const onSearch = (value) => { setSearch(value); setPage(1); };
-  const reset = () => { setOnly(''); setDue({ due: '', days: '' }); setCustomerType(''); setRange(EMPTY_RANGE); setSortChoice(null); setSearch(''); setPage(1); };
+  const reset = () => {
+    const before = { only, due, customerType, range, sortChoice, search };
+    setOnly(''); setDue({ due: '', days: '' }); setCustomerType(''); setRange(EMPTY_RANGE); setSortChoice(null); setSearch(''); setPage(1);
+    offerUndo('Filters cleared', () => {
+      setOnly(before.only); setDue(before.due); setCustomerType(before.customerType); setRange(before.range); setSortChoice(before.sortChoice); setSearch(before.search); setPage(1);
+    });
+  };
   const onSaved = useCallback(() => { setReload((v) => v + 1); setHistoryKey((v) => v + 1); }, []);
   const clearTicksSoon = ticks.clearSoon;
   const onTickedSaved = useCallback(() => { onSaved(); clearTicksSoon(); }, [onSaved, clearTicksSoon]);

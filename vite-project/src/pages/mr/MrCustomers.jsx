@@ -38,6 +38,8 @@ import { useAuth } from '../../hooks/useAppStore';
 import { saveResume } from '../../utils/resume';
 import { useFirstInvoiceDate } from '../../hooks/useFirstInvoiceDate';
 import TableScroll from '../../components/common/TableScroll';
+import { useRememberedState } from '../../hooks/useRememberedState';
+import { offerUndo } from '../../utils/undo';
 
 const BLANK_LEDGER = { range: EMPTY_RANGE, status: '', due: '', overdueDays: '' };
 
@@ -53,7 +55,7 @@ export default function MrCustomers({ openCustomer = null }) {
   const firstDate = useFirstInvoiceDate(); // month picker fades months before it
   const appRefresh = useAppRefresh(); // top-bar ⟳ / pull-to-refresh reloads this page in place
   const [customers, setCustomers] = useState([]); const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState(''); const [debouncedSearch] = useDebouncedValue(search, 300); const [page, setPage] = useState(1); const [customerType, setCustomerType] = useState(''); const [sort, setSort] = useState(''); const [recent, setRecent] = useState(recentCustomers);
+  const [search, setSearch] = useRememberedState('mr-customers:search', ''); const [debouncedSearch] = useDebouncedValue(search, 300); const [page, setPage] = useState(1); const [customerType, setCustomerType] = useRememberedState('mr-customers:type', ''); const [sort, setSort] = useRememberedState('mr-customers:sort', ''); const [recent, setRecent] = useState(recentCustomers);
   const [selected, setSelected] = useState(openCustomer); const [ledger, setLedger] = useState(null);
   const [ledgerSearch, setLedgerSearch] = useState(''); const [debouncedLedgerSearch] = useDebouncedValue(ledgerSearch, 300); const [ledgerFilters, setLedgerFilters] = useState(BLANK_LEDGER); const [ledgerPage, setLedgerPage] = useState(1);
   const isMobile = useIsMobile();
@@ -99,7 +101,11 @@ export default function MrCustomers({ openCustomer = null }) {
   const onSearch = (value) => { setSearch(value); setPage(1); };
   const onType = (value) => { setCustomerType(value || ''); setPage(1); };
   const onSort = (value) => { setSort(value === 'oldest' ? '' : value || ''); setPage(1); };
-  const resetList = () => { setCustomerType(''); setSort(''); setSearch(''); setPage(1); };
+  const resetList = () => {
+    const before = { customerType, sort, search };
+    setCustomerType(''); setSort(''); setSearch(''); setPage(1);
+    offerUndo('Filters cleared', () => { setCustomerType(before.customerType); setSort(before.sort); setSearch(before.search); setPage(1); });
+  };
   // Opening a customer also puts them first in the "Recent" row.
   const openLedger = (customer) => { rememberCustomer(customer); setRecent(recentCustomers()); setSelected(customer); setLedger(null); setLedgerSearch(''); setLedgerFilters(BLANK_LEDGER); setLedgerPage(1); };
   const updateLedger = (patch) => { setLedgerFilters((current) => ({ ...current, ...patch })); setLedgerPage(1); };
